@@ -118,6 +118,10 @@ export const config = {
     name: str('PC_NAME', 'Windows-PC'),
     tailscaleName: str('PC_TAILSCALE_NAME', ''),
     broadcast: str('PC_BROADCAST', '255.255.255.255'),
+    // Ausschalten per SSH (OpenSSH-Server unter Windows): Windows-Benutzername, optional feste Adresse
+    user: str('PC_USER', ''),
+    host: str('PC_HOST', ''),
+    sshPort: num('PC_SSH_PORT', 22),
   },
 
   // Leer = keine Lüftersteuerung. "auto" = ersten PWM-Kanal nehmen (nach dtoverlay=pwm).

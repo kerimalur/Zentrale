@@ -6,7 +6,7 @@ import { config, ensureDataDir } from './config.mjs';
 import { load, db, save } from './store.mjs';
 import { istAngemeldet, login, logout } from './auth.mjs';
 import { terminalUpgrade } from './terminal.mjs';
-import { schnell, mittel, langsam, sehrLangsam, speicherLauf, zeitplan, snapshot, sshNurSchluesselSetzen, manuelleSzene, laufwerkeListe, cloudJetzt } from './monitor.mjs';
+import { schnell, mittel, langsam, sehrLangsam, speicherLauf, zeitplan, snapshot, sshNurSchluesselSetzen, manuelleSzene, laufwerkeListe, cloudJetzt, tsPeers } from './monitor.mjs';
 import { ordnerLesen, ordnerGroessen } from './explorer.mjs';
 import { szeneSetzen, standardGovernorMerken, hddTimerSetzen } from './szenen.mjs';
 import { neustarten } from './collect/docker.mjs';
@@ -17,7 +17,7 @@ import { ereignis } from './ereignisse.mjs';
 import { notbetriebSetzen, dienstSchalten, piNeustarten, piAusschalten } from './steuerung.mjs';
 import { moebelLuefterModus } from './moebelLuefter.mjs';
 import { statusBerichtSchreiben } from './statusbericht.mjs';
-import { pcWecken } from './pc.mjs';
+import { pcWecken, pcAusschalten, pcSchluesselZeile } from './pc.mjs';
 
 ensureDataDir();
 load();
@@ -168,6 +168,13 @@ async function api(req, res, url) {
     await pcWecken();
     return json(res, 200, { ok: true });
   }
+  if (p === '/api/pc/ausschalten' && m === 'POST') {
+    const b = await body(req);
+    if (b.bestaetigt !== true) return json(res, 400, { fehler: 'Bitte bestätigen' });
+    await pcAusschalten(tsPeers());
+    return json(res, 200, { ok: true });
+  }
+  if (p === '/api/pc/schluessel' && m === 'GET') return json(res, 200, { zeile: pcSchluesselZeile() });
   if (p === '/api/pi/neustart' && m === 'POST') {
     const b = await body(req);
     if (b.bestaetigt !== true) return json(res, 400, { fehler: 'Bitte bestätigen' });

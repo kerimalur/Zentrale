@@ -230,6 +230,8 @@ export interface PcStatus {
   geraet: string | null;
   zuletzt: string | null;
   gewecktUm: number | null;
+  ausBereit: boolean;
+  ausUm: number | null;
 }
 
 export interface Steuerung {

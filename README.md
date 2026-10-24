@@ -255,3 +255,10 @@ Voraussetzungen (einmalig):
 - Windows: Geräte-Manager → LAN-Karte → Energieverwaltung «Gerät kann den Computer aktivieren» + «Nur Magic Packet», Erweitert «Wake on Magic Packet» an; Schnellstart aus
 - BIOS (MSI): Erweitert → Energieverwaltung → ErP Ready **aus**; Erweitert → Einrichtung der Reaktivierungsereignisse → **Fortsetzung durch PCIe-Geräte an**
 - `.env`: `PC_MAC=` MAC der LAN-Karte (PowerShell `Get-NetAdapter`). Optional `PC_NAME`, `PC_TAILSCALE_NAME` (sonst das einzige eigene Windows-Gerät in Tailscale), `PC_BROADCAST`
+
+**Ausschalten** (Knopf erscheint, wenn eingerichtet): Die Zentrale verbindet sich per SSH mit dem PC und führt `shutdown /s /t 30` aus.
+1. Windows: OpenSSH-Server installieren und starten (PowerShell als Administrator):
+   `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0` · `Start-Service sshd` · `Set-Service sshd -StartupType Automatic`
+2. Übersicht → Windows-PC → «Ausschalten einrichten»: die angezeigte Zeile in `C:\ProgramData\ssh\administrators_authorized_keys` einfügen. Sie erlaubt **nur** `shutdown` und nur Verbindungen aus dem Tailscale-Netz (100.64.0.0/10).
+3. `.env`: `PC_USER=` Windows-Benutzername, dann neu starten.
+Den Host-Schlüssel des PCs merkt sich die Zentrale beim ersten Ausschalten (`data/pc/hostkey.sha256`); ändert er sich, verweigert sie die Verbindung.

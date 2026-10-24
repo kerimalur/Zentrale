@@ -313,6 +313,7 @@ function inNachtFenster(e, min = minutenJetzt()) {
 
 // Wenn du nachts selbst eine Szene wählst, übersteuert die Automatik das nicht.
 export const laufwerkeListe = () => z.host?.laufwerke || [];
+export const tsPeers = () => z.ts?.peers || [];
 
 export function manuelleSzene() {
   if (inNachtFenster(db().einstellungen)) { db().letzteAutoNacht = Date.now(); save(); }
