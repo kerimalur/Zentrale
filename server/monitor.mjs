@@ -19,6 +19,7 @@ import { gaesteAbgleichen, gaesteStatus } from './gaeste.mjs';
 import { aufHost, tagKey, uhrzeit, minutenJetzt, zuMinuten, eingehaengt } from './util.mjs';
 import { abgleichen, ausgeschaltet, steuerungSnapshot } from './steuerung.mjs';
 import { qbDaten, qbAllesStoppen, vpnPruefen, arrDaten, seerrDaten } from './collect/medien.mjs';
+import { pcStatus } from './pc.mjs';
 
 const z = {
   host: null,
@@ -634,6 +635,7 @@ export function snapshot() {
     },
     medien: medienSnapshot(),
     steuerung: steuerungSnapshot(z.container, z.ts ? true : z.fehler.tailscale ? false : null),
+    pc: pcStatus(z.ts?.peers),
     hostName: config.hostName,
     hinweise,
   };

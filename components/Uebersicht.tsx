@@ -4,6 +4,7 @@ import type { Zustand, Dienst, Ereignis } from '@/lib/types';
 import { senden } from '@/lib/api';
 import { komma, uhr, zahl } from '@/lib/format';
 import { Icon, Ring, Verlauf, type IconName } from './ui';
+import { PcKarte } from './Pc';
 
 export const APP_FARBE: Record<Dienst['id'], string> = {
   nextcloud: '#2457f5',
@@ -84,6 +85,7 @@ export function Uebersicht({ z, aktualisieren }: { z: Zustand; aktualisieren: ()
       </section>
 
       <div className="rechts">
+        <PcKarte z={z} aktualisieren={aktualisieren} />
         <section className="karte in" style={{ animationDelay: '180ms', flex: 1 }} aria-label="Ereignisse">
           <h2 className="karte-titel">Ereignisse & Fehler</h2>
           {z.ereignisse.length === 0 && <p className="leise" style={{ fontSize: 13 }}>Noch keine Ereignisse.</p>}

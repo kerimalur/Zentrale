@@ -250,3 +250,13 @@ Probleme mit Schlüsseln oder Diensten stehen auch im Dashboard unter **Konsole 
 - Alle 15 Min schreibt die Zentrale `Zentrale-Status.md` in den Ordner «Homelab» des Obsidian-Vaults (gesucht unter `STATUS_BASIS`, Standard `/mnt/daten/syncthing`, dort, wo `Homelab/Meine Specs.md` liegt). Syncthing bringt ihn auf PC und Handy.
 - Inhalt: Dienste, Updates, Pi-Werte, Möbel/Lüfter, Backup, VPN, Pi-hole, Laufwerke, Nextcloud-Uploads und -Fehler, Hinweise, Ereignisse 24 Std. Keine Passwörter, Schlüssel oder Gast-Zugänge.
 - `.env`: `STATUS_ORDNER=/pfad/zum/Homelab` (fester Ordner) oder `STATUS_BERICHT=aus`.
+
+## Windows-PC einschalten (Wake-on-LAN)
+
+Übersicht → Karte **Windows-PC** → **Einschalten**. Die Zentrale schickt ein «Magic Packet» ins Heimnetz. Ob der PC läuft, sieht sie an Tailscale: Sobald Windows gestartet ist, steht dort «läuft» und unter Ereignisse «Windows-PC ist eingeschaltet».
+
+Voraussetzungen (einmalig):
+- PC per **LAN-Kabel** im Heimnetz (über WLAN klappt Wake-on-LAN fast nie)
+- Windows: Geräte-Manager → LAN-Karte → Energieverwaltung «Gerät kann den Computer aktivieren» + «Nur Magic Packet», Erweitert «Wake on Magic Packet» an; Schnellstart aus
+- BIOS (MSI): Erweitert → Energieverwaltung → ErP Ready **aus**; Erweitert → Einrichtung der Reaktivierungsereignisse → **Fortsetzung durch PCIe-Geräte an**
+- `.env`: `PC_MAC=` MAC der LAN-Karte (PowerShell `Get-NetAdapter`). Optional `PC_NAME`, `PC_TAILSCALE_NAME` (sonst das einzige eigene Windows-Gerät in Tailscale), `PC_BROADCAST`

@@ -112,6 +112,14 @@ export const config = {
     filmabendDrosseln: str('FILMABEND_DROSSELN', 'ja') !== 'nein',
   },
 
+  // Windows-PC per Wake-on-LAN: MAC-Adresse der LAN-Karte (nicht WLAN). Online-Status kommt von Tailscale.
+  pc: {
+    mac: str('PC_MAC', ''),
+    name: str('PC_NAME', 'Windows-PC'),
+    tailscaleName: str('PC_TAILSCALE_NAME', ''),
+    broadcast: str('PC_BROADCAST', '255.255.255.255'),
+  },
+
   // Leer = keine Lüftersteuerung. "auto" = ersten PWM-Kanal nehmen (nach dtoverlay=pwm).
   luefter: { pwmPfad: str('LUEFTER_PWM', '') },
 };

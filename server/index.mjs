@@ -17,6 +17,7 @@ import { ereignis } from './ereignisse.mjs';
 import { notbetriebSetzen, dienstSchalten, piNeustarten, piAusschalten } from './steuerung.mjs';
 import { moebelLuefterModus } from './moebelLuefter.mjs';
 import { statusBerichtSchreiben } from './statusbericht.mjs';
+import { pcWecken } from './pc.mjs';
 
 ensureDataDir();
 load();
@@ -161,6 +162,11 @@ async function api(req, res, url) {
     const r = await dienstSchalten(schalt[1], !!b.an);
     await schnell().catch(() => {});
     return json(res, 200, r);
+  }
+  // ---------- Windows-PC einschalten (Wake-on-LAN) ----------
+  if (p === '/api/pc/wecken' && m === 'POST') {
+    await pcWecken();
+    return json(res, 200, { ok: true });
   }
   if (p === '/api/pi/neustart' && m === 'POST') {
     const b = await body(req);

@@ -197,6 +197,7 @@ export interface Zustand {
   faehigkeiten: { telegram: boolean; hddSchlaf: boolean; luefter: boolean; moebel: boolean; sshNurSchluessel: boolean | null; backup: boolean; shelly: boolean };
   medien: Medien | null;
   steuerung: Steuerung;
+  pc: PcStatus;
   hostName: string;
   hinweise: string[];
 }
@@ -220,6 +221,15 @@ export interface Cloud {
   laufend?: { nutzer: string; bytes: number; seit: number; zuletzt: number }[];
   haengend?: number;
   fehler?: { zeit: number; app: string; text: string; anzahl: number; stufe: 'fehler' | 'schwer' }[];
+}
+
+export interface PcStatus {
+  eingerichtet: boolean;
+  name: string;
+  online: boolean | null;
+  geraet: string | null;
+  zuletzt: string | null;
+  gewecktUm: number | null;
 }
 
 export interface Steuerung {
