@@ -1,0 +1,30 @@
+{
+  "name": "zentrale",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kerims Zentrale – Dashboard für den Raspberry Pi homelabkerim",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3031",
+    "build": "next build",
+    "start": "node server/index.mjs",
+    "check": "tsc --noEmit && node --check server/index.mjs"
+  },
+  "dependencies": {
+    "ssh2": "^1.17.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.2.0",
+    "@fontsource/jetbrains-mono": "^5.2.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "next": "^15.5.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "typescript": "^5.9.0"
+  }
+}

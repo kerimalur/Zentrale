@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+data/
+.env
+*.tar.gz
+tsconfig.tsbuildinfo
+Passw*rter.md
+*.key
+*.pem

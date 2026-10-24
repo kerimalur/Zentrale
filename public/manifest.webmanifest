@@ -1,0 +1,9 @@
+{
+  "name": "Kerims Zentrale",
+  "short_name": "Zentrale",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f2f4f8",
+  "theme_color": "#2457f5",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

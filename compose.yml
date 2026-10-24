@@ -1,0 +1,24 @@
+# Kerims Zentrale
+# Läuft im Host-Netz und hört nur auf 127.0.0.1:3030.
+# Von aussen nur über "tailscale serve" (https, Port 8443) erreichbar.
+services:
+  zentrale:
+    build: .
+    image: zentrale:latest
+    container_name: zentrale
+    restart: unless-stopped
+    network_mode: host # erreicht alle Dienste über localhost, sieht den Netzverkehr des Pi
+    pid: host # Zugriff auf das Dateisystem und die Befehle des Pi (Laufwerke, SSH-Einstellung, Updates)
+    privileged: true # CPU-Modus, Lüfter (PWM), HDD schlafen legen
+    env_file: .env
+    environment:
+      - TZ=Europe/Zurich
+    volumes:
+      - ./data:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/tailscale:/var/run/tailscale
+    logging:
+      driver: json-file
+      options:
+        max-size: 5m
+        max-file: "2"
