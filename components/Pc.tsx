@@ -16,7 +16,7 @@ export function PcKarte({ z, aktualisieren }: { z: Zustand; aktualisieren: () =>
   const status = !pc.eingerichtet
     ? 'PC_MAC fehlt in der .env'
     : pc.online === true
-      ? 'läuft'
+      ? 'läuft (Tailscale meldet «aus» erst 2–5 Min nach dem Herunterfahren)'
       : startet
         ? `startet … (Signal ${relativ(pc.gewecktUm)})`
         : pc.online === false
@@ -53,10 +53,10 @@ export function PcKarte({ z, aktualisieren }: { z: Zustand; aktualisieren: () =>
         <button
           className="press knopf-klein"
           onClick={wecken}
-          disabled={laedt || !pc.eingerichtet || pc.online === true}
+          disabled={laedt || !pc.eingerichtet}
           aria-label={`${pc.name} einschalten`}
         >
-          {laedt ? 'Sende …' : pc.online === true ? 'An' : startet ? 'Nochmal' : 'Einschalten'}
+          {laedt ? 'Sende …' : startet ? 'Nochmal' : 'Einschalten'}
         </button>
       </div>
       {fehler && <div className="fehlerbox" role="alert">{fehler}</div>}
