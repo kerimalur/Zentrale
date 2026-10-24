@@ -16,7 +16,7 @@ export function PcKarte({ z, aktualisieren }: { z: Zustand; aktualisieren: () =>
   const status = !pc.eingerichtet
     ? 'PC_MAC fehlt in der .env'
     : pc.online === true
-      ? 'läuft (Tailscale meldet «aus» erst 2–5 Min nach dem Herunterfahren)'
+      ? 'läuft'
       : startet
         ? `startet … (Signal ${relativ(pc.gewecktUm)})`
         : pc.online === false
