@@ -83,6 +83,7 @@ cd /mnt/daten/zentrale && docker compose up -d --force-recreate
 | qBittorrent | dein Login der qBittorrent-Weboberfläche (`http://homelabkerim.taila4b96b.ts.net:8085`) | `QBIT_USER`, `QBIT_PASSWORT` |
 | Sonarr / Radarr / Lidarr / Prowlarr | jeweilige App → **Settings → General → API Key** | `SONARR_API_KEY`, `RADARR_API_KEY`, `LIDARR_API_KEY`, `PROWLARR_API_KEY` |
 | Seerr | Seerr → **Settings → General → API Key** | `SEERR_API_KEY` |
+| Bazarr | Bazarr → **Settings → General → Security → API Key** | `BAZARR_API_KEY` |
 
 Für die Drosselung beim Filmabend in qBittorrent unter **Optionen → Geschwindigkeit → Alternative Geschwindigkeitsbegrenzungen** z. B. 2 MiB/s Download eintragen. Die Zentrale schaltet beim Filmabend darauf um und danach wieder zurück.
 

@@ -103,6 +103,8 @@ export const config = {
       { id: 'sonarr', name: 'Sonarr', container: 'sonarr', port: num('SONARR_PORT', 8989), api: 'v3', key: str('SONARR_API_KEY') },
       { id: 'radarr', name: 'Radarr', container: 'radarr', port: num('RADARR_PORT', 7878), api: 'v3', key: str('RADARR_API_KEY') },
       { id: 'lidarr', name: 'Lidarr', container: 'lidarr', port: num('LIDARR_PORT', 8686), api: 'v1', key: str('LIDARR_API_KEY') },
+      // Bazarr (Untertitel): eigene API ohne Versionsnummer im Pfad
+      { id: 'bazarr', name: 'Bazarr', container: 'bazarr', port: num('BAZARR_PORT', 6767), api: '', key: str('BAZARR_API_KEY') },
       { id: 'prowlarr', name: 'Prowlarr', container: 'prowlarr', port: num('PROWLARR_PORT', 9696), api: 'v1', key: str('PROWLARR_API_KEY') },
     ],
     seerr: { container: 'seerr', port: num('SEERR_PORT', 5055), key: str('SEERR_API_KEY') },

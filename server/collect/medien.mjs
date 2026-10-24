@@ -134,13 +134,44 @@ export async function vpnPruefen() {
 
 // ---------- Arr-Apps ----------
 async function arrApi(app, pfad) {
-  return holenJson(`${basis(app.port)}/api/${app.api}${pfad}`, { headers: { 'X-Api-Key': app.key }, timeout: 15_000 });
+  return holenJson(`${basis(app.port)}/api${app.api ? '/' + app.api : ''}${pfad}`, { headers: { 'X-Api-Key': app.key }, timeout: 15_000 });
+}
+
+// Bazarr: fehlende Untertitel (Folgen/Filme), Warnungen und gesperrte Anbieter (z. B. Tageslimit erreicht).
+async function bazarrDaten(app) {
+  const [status, health, badges, anbieter] = await Promise.all([
+    arrApi(app, '/system/status'),
+    arrApi(app, '/system/health').catch(() => null),
+    arrApi(app, '/badges'),
+    arrApi(app, '/providers').catch(() => null),
+  ]);
+  const folgen = Number(badges?.episodes) || 0;
+  const filme = Number(badges?.movies) || 0;
+  const warnungen = [
+    ...(health?.data || []).map((h) => ({ typ: 'warning', text: `${h.object ? h.object + ': ' : ''}${h.issue || ''}`.trim() })),
+    ...(anbieter?.data || []).map((p) => ({ typ: 'warning', text: `${p.name} pausiert: ${p.status || 'gesperrt'}${p.retry ? ` (wieder ab ${p.retry})` : ''}` })),
+  ].filter((w) => w.text);
+  return {
+    id: app.id,
+    version: status?.data?.bazarr_version || '',
+    warnungen,
+    warteschlange: 0,
+    anzahl: folgen + filme,
+    anzahlLabel: folgen + filme === 1 ? 'Untertitel fehlt' : 'Untertitel fehlen',
+    vorhanden: null,
+    gesamt: null,
+    detail: `Folgen ${folgen} · Filme ${filme}`,
+    fehlt: [],
+    demnaechst: [],
+    neu: [],
+  };
 }
 
 const isoTag = (d) => d.toISOString().slice(0, 10);
 
 export async function arrDaten(app) {
   if (!app.key) return null;
+  if (app.id === 'bazarr') return bazarrDaten(app);
   const jetzt = new Date();
   const bis = new Date(Date.now() + 14 * 86400_000);
   const [health, status] = await Promise.all([arrApi(app, '/health'), arrApi(app, '/system/status')]);
