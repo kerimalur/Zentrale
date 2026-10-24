@@ -151,14 +151,9 @@ Ein Shelly-Messstecker (z. B. Shelly Plug S Gen3) zwischen Steckdose und Mehrfac
 ---
 
 ## Aktualisieren
-Neue Version vom PC kopieren (die Einstellungen und Daten bleiben erhalten):
-```powershell
-scp -r "$env:USERPROFILE\Documents\Organisation\Homelab\zentrale" kerim@homelabkerim:~/zentrale-neu
-```
+Der Code liegt im privaten GitHub-Repo `kerimalur/Zentrale`. Auf dem Pi (Einstellungen in `.env` und `data/` bleiben erhalten):
 ```bash
-rsync -a --exclude data --exclude .env ~/zentrale-neu/ /mnt/daten/zentrale/
-rm -rf ~/zentrale-neu
-cd /mnt/daten/zentrale && docker compose up -d --build
+cd /mnt/daten/zentrale && git pull && docker compose up -d --build
 ```
 
 ---
