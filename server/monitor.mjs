@@ -16,7 +16,7 @@ import { cloudDaten } from './collect/cloud.mjs';
 import { szeneSetzen, szenenListe } from './szenen.mjs';
 import { backupStarten, backupEingerichtet, formatBytes } from './backup.mjs';
 import { gaesteAbgleichen, gaesteStatus } from './gaeste.mjs';
-import { aufHost, tagKey, uhrzeit, minutenJetzt, zuMinuten } from './util.mjs';
+import { aufHost, tagKey, uhrzeit, minutenJetzt, zuMinuten, eingehaengt } from './util.mjs';
 import { abgleichen, ausgeschaltet, steuerungSnapshot } from './steuerung.mjs';
 import { qbDaten, qbAllesStoppen, vpnPruefen, arrDaten, seerrDaten } from './collect/medien.mjs';
 
@@ -99,6 +99,14 @@ export async function schnell() {
   }
   const tage = Object.keys(db().verfuegbarkeit).sort();
   while (tage.length > 31) delete db().verfuegbarkeit[tage.shift()];
+
+  // Pflicht-Laufwerke (z. B. EVO mit Nextcloud-Daten und Filmen)
+  for (const m of config.pflichtMounts) {
+    const k = 'mount-' + m;
+    const da = eingehaengt(m);
+    if (!da && !alarmAktiv[k]) { alarmAktiv[k] = true; ereignis('fehler', `${m} ist nicht eingehängt – Nextcloud/Filme nicht verfügbar. USB-Kabel prüfen, dann «sudo mount -a» und betroffene Container neu starten.`, { telegram: true, schluessel: k }); }
+    if (da && alarmAktiv[k]) { alarmAktiv[k] = false; ereignis('ok', `${m} ist wieder eingehängt`, { telegram: true, schluessel: k + '-ok' }); }
+  }
 
   // Temperatur und Spannung
   const t = z.host?.temp;

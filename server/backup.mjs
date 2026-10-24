@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config, hostPath } from './config.mjs';
 import { db, save } from './store.mjs';
-import { ausfuehren, tagKey } from './util.mjs';
+import { ausfuehren, tagKey, eingehaengt } from './util.mjs';
 import { container, pausieren, fortsetzen, execZuDatei } from './collect/docker.mjs';
 import { vaultwardenDaten } from './collect/services.mjs';
 import { ereignis } from './ereignisse.mjs';
@@ -24,6 +24,9 @@ export async function backupStarten() {
   let zielDev, quelleDev;
   try { zielDev = fs.statSync(ziel).dev; quelleDev = fs.statSync(quelle).dev; } catch { throw new Error('Backup-Laufwerk ist nicht eingehängt'); }
   if (zielDev === quelleDev || zielDev === fs.statSync(hostPath('/')).dev) throw new Error('Backup-Ziel liegt nicht auf der Backup-HDD (nicht eingehängt?)');
+  // Fehlt z. B. die EVO, wären Nextcloud-Daten und Filme leer – dann würde das Backup sie als «gelöscht» behandeln.
+  const fehlend = config.pflichtMounts.filter((m) => !eingehaengt(m));
+  if (fehlend.length) throw new Error(`Backup abgebrochen: ${fehlend.join(', ')} ist nicht eingehängt`);
 
   b.laeuft = true;
   save();

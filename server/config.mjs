@@ -48,6 +48,8 @@ export const config = {
   // Möbel-Lüfter über Relais an GPIO 23 (Pin 16). NC verdrahtet: Relais an = Lüfter aus (fällt der Pi aus, laufen die Lüfter).
   // Statusbericht: wird im Ordner «Homelab» des Obsidian-Vaults unter diesem Syncthing-Ordner gesucht.
   statusBasis: str('STATUS_BASIS', '/mnt/daten/syncthing'),
+  // Laufwerke, die eingehängt sein müssen (sonst Alarm, und das Backup startet nicht).
+  pflichtMounts: str('PFLICHT_MOUNTS', '/mnt/evo,/mnt/daten').split(',').map((s) => s.trim()).filter(Boolean),
   relais: { gpio: str('RELAIS_GPIO', '23'), nc: str('RELAIS_NC', 'ja') !== 'nein' },
   vaultwarden: { daten: str('VAULTWARDEN_DATEN', '/mnt/daten/vaultwarden') },
   kuma: { apiKey: str('KUMA_API_KEY') },

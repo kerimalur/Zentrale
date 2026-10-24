@@ -2,7 +2,8 @@
 import http from 'node:http';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
-import { config } from './config.mjs';
+import path from 'node:path';
+import { config, hostPath } from './config.mjs';
 
 export async function holen(url, { timeout = 4000, ...opts } = {}) {
   const ctrl = new AbortController();
@@ -85,3 +86,12 @@ export const zuMinuten = (hhmm) => {
 };
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Ist unter diesem Pfad auf dem Pi ein eigenes Laufwerk eingehängt? (anderes Gerät als der übergeordnete Ordner)
+export function eingehaengt(pfad) {
+  try {
+    return fs.statSync(hostPath(pfad)).dev !== fs.statSync(hostPath(path.dirname(pfad))).dev;
+  } catch {
+    return false;
+  }
+}
