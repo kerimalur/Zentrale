@@ -67,6 +67,8 @@ export const config = {
     ziel: str('BACKUP_ZIEL'),
     disk: str('BACKUP_DISK'),
     zeit: str('BACKUP_ZEIT', '03:00'),
+    // Einhängepunkt der Backup-HDD (Alarm + automatisch einhängen, wenn sie wieder da ist)
+    mount: str('BACKUP_MOUNT', '/mnt/backup'),
     quelle: str('BACKUP_QUELLE', '/mnt/daten'),
     ausschliessen: str('BACKUP_AUSSCHLIESSEN', '').split(',').map((s) => s.trim()).filter(Boolean),
   },

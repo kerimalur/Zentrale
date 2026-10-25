@@ -102,6 +102,22 @@ export async function schnell() {
   const tage = Object.keys(db().verfuegbarkeit).sort();
   while (tage.length > 31) delete db().verfuegbarkeit[tage.shift()];
 
+  // Backup-HDD: hat ein eigenes Netzteil und einen Schalter – ist sie aus, merkt man es sonst erst, wenn das Backup fehlt.
+  if (backupEingerichtet() && config.backup.mount) {
+    const m = config.backup.mount;
+    if (!eingehaengt(m)) {
+      // Ist sie wieder angeschlossen, selbst einhängen (fstab-Eintrag mit nofail), höchstens alle 2 Min versuchen.
+      if (Date.now() - (alarmAktiv.backupMountVersuch || 0) > 120_000) {
+        alarmAktiv.backupMountVersuch = Date.now();
+        await aufHost('mount', [m], { timeout: 15_000 }).catch(() => {});
+      }
+    }
+    const da = eingehaengt(m);
+    z.backupHdd = da;
+    if (!da && !alarmAktiv.backupHdd) { alarmAktiv.backupHdd = true; ereignis('warnung', `Backup-HDD (${m}) fehlt – ist sie ausgeschaltet? Gehäuse einschalten, die Zentrale hängt sie dann selbst ein.`, { telegram: true, schluessel: 'backup-hdd' }); }
+    if (da && alarmAktiv.backupHdd) { alarmAktiv.backupHdd = false; ereignis('ok', 'Backup-HDD ist wieder da', { telegram: true, schluessel: 'backup-hdd-ok' }); }
+  }
+
   // Pflicht-Laufwerke (z. B. EVO mit Nextcloud-Daten und Filmen)
   for (const m of config.pflichtMounts) {
     const k = 'mount-' + m;
@@ -577,6 +593,7 @@ export function snapshot() {
   if (!config.tailscale.apiKey) hinweise.push('TS_API_KEY fehlt – Gäste deaktiviert');
   if (!telegramBereit()) hinweise.push('TELEGRAM_BOT_TOKEN/CHAT_ID fehlen – keine Alarme aufs Handy');
   if (!config.energie.shellyUrl) hinweise.push('SHELLY_URL fehlt – Strom wird geschätzt');
+  if (z.backupHdd === false) hinweise.push(`Backup-HDD (${config.backup.mount}) fehlt – Gehäuse eingeschaltet? Das nächste Backup fällt sonst aus`);
   const mc = config.medien;
   const gibt = (n) => z.container.some((c) => c.name === n);
   if (gibt(mc.downloadContainer) && !mc.qbit.passwort) hinweise.push('QBIT_PASSWORT fehlt – Downloads fehlen');
