@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { senden } from '@/lib/api';
-import type { Zustand } from '@/lib/types';
+import type { ContainerUpdate, ContainerUpdates, UpdateArt, Zustand } from '@/lib/types';
 import { bytes, komma, laufzeit } from '@/lib/format';
 import type { ReactNode } from 'react';
 import { Ring, Verlauf } from './ui';
@@ -106,7 +106,68 @@ export function System({ z, aktualisieren }: { z: Zustand; aktualisieren: () => 
           </div>
         ))}
       </section>
+
+      <ContainerUpdatesKarte u={z.containerUpdates} />
     </div>
+  );
+}
+
+const ART: Record<UpdateArt, { text: string; bg: string; fg: string }> = {
+  major: { text: 'Major', bg: '#fdecea', fg: '#b91c1c' },
+  minor: { text: 'Minor', bg: '#fdf1dc', fg: '#b45309' },
+  patch: { text: 'Patch', bg: '#e3f5ea', fg: '#15803d' },
+  prerelease: { text: 'Vorabversion', bg: '#f1e8fd', fg: '#7e3fd6' },
+  image: { text: 'Neues Image', bg: '#e8eefe', fg: '#1d4ed8' },
+  unbekannt: { text: 'Update', bg: 'var(--bg)', fg: 'var(--ink)' },
+};
+
+function befehl(c: ContainerUpdate) {
+  if (!c.ordner || !c.dienst) return null;
+  return `cd ${c.ordner} && docker compose pull ${c.dienst} && docker compose up -d ${c.dienst}`;
+}
+
+function ContainerUpdatesKarte({ u }: { u: ContainerUpdates | undefined }) {
+  const [kopiert, setKopiert] = useState<string | null>(null);
+  if (!u) return null;
+  async function kopieren(name: string, text: string) {
+    try { await navigator.clipboard.writeText(text); setKopiert(name); setTimeout(() => setKopiert(null), 2000); } catch { window.prompt('Befehl kopieren:', text); }
+  }
+  const zeitText = u.zeit ? new Date(u.zeit).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' }) : null;
+  return (
+    <section className="karte cupdates in" style={{ animationDelay: '380ms' }} aria-label="Container-Updates">
+      <h2 className="karte-titel">
+        Container-Updates{' '}
+        <small>
+          {u.bereit ? `${u.liste.length === 0 ? 'alles aktuell' : `${u.liste.length} verfügbar`} · ${u.gesamt} überwacht${zeitText ? ` · Stand ${zeitText}` : ''}` : u.grund}
+        </small>
+      </h2>
+      {u.bereit && u.liste.length === 0 && <div className="leise" style={{ fontSize: 14, padding: '6px 0' }}>Alle Container laufen mit dem neusten Image.</div>}
+      {u.liste.map((c) => {
+        const a = ART[c.art || 'unbekannt'];
+        const b = befehl(c);
+        return (
+          <div key={c.name} className="zeile" style={{ flexWrap: 'wrap' }}>
+            <span className="pille" style={{ background: a.bg, color: a.fg, fontWeight: 600 }}>{a.text}</span>
+            <span style={{ flex: '1 1 180px', minWidth: 0 }}>
+              <span style={{ display: 'block', fontSize: 15, fontWeight: 600 }}>{c.name}</span>
+              <span className="leise" style={{ display: 'block', fontSize: 12, overflowWrap: 'anywhere' }}>
+                {c.image}:{c.tag}
+                {c.art !== 'image' && c.von && c.nach ? ` · ${c.von} → ${c.nach}` : c.art === 'image' ? ' · gleicher Tag, neueres Image' : ''}
+              </span>
+            </span>
+            {c.link && <a className="knopf-klein" href={c.link} target="_blank" rel="noreferrer">Änderungen</a>}
+            {b && <button className="knopf-klein press" onClick={() => kopieren(c.name, b)} title={b}>{kopiert === c.name ? 'Kopiert ✓' : 'Befehl kopieren'}</button>}
+          </div>
+        );
+      })}
+      {u.liste.some((c) => c.art === 'major') && (
+        <div className="leise" style={{ fontSize: 12, lineHeight: 1.4, marginTop: 10 }}>
+          Major-Updates können Einstellungen ändern – vorher «Änderungen» lesen und ein Backup haben. Nextcloud immer nur eine Hauptversion auf einmal.
+        </div>
+      )}
+      {u.fehler.length > 0 && <div className="leise" style={{ fontSize: 12, marginTop: 10 }}>Nicht prüfbar: {u.fehler.map((f) => f.name).join(', ')}</div>}
+      <a className="leise" href={u.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, display: 'inline-block', marginTop: 12 }}>In What&apos;s Up Docker öffnen →</a>
+    </section>
   );
 }
 

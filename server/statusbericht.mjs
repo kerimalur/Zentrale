@@ -45,6 +45,8 @@ export function berichtText(s) {
   z.push(`- **Dienste:** ${s.dienste.filter((d) => d.status === 'online').length}/${s.dienste.length} online${stoerung.length ? ` · gestört: ${stoerung.map((d) => d.name).join(', ')}` : ''}`);
   if (s.pi) z.push(`- **Pi:** CPU ${z1(s.pi.cpu)} % · RAM ${gb(s.pi.ramBenutzt)} / ${gb(s.pi.ramTotal)} · ${z1(s.pi.temp?.toFixed?.(0))} °C · Unterspannung: ${s.pi.unterspannung ? 'JA' : 'nein'} · Container ${s.pi.container.laufen}/${s.pi.container.gesamt}`);
   if (s.pi) z.push(`- **Updates:** ${s.pi.updates === null ? 'wird geprüft' : s.pi.updates === 0 ? 'alles aktuell' : `${s.pi.updates} verfügbar (sudo apt update && sudo apt full-upgrade)`}`);
+  const cu = s.containerUpdates;
+  if (cu) z.push(`- **Container-Updates:** ${!cu.bereit ? cu.grund : cu.liste.length === 0 ? 'alles aktuell' : `${cu.liste.length} verfügbar (${cu.liste.map((c) => c.name).join(', ')})`}`);
   const m = s.moebel;
   if (m.vorhanden) z.push(`- **Möbel:** ${m.temp === null ? 'kein Wert' : `${z1(m.temp)} °C`} (24 Std ${z1(m.min24)}–${z1(m.max24)} °C) · Lüfter ${m.luefter.an === null ? '?' : m.luefter.an ? 'an' : 'aus'} (${m.luefter.modus}) – ${m.luefter.grund}`);
   const b = s.backup;
@@ -60,6 +62,16 @@ export function berichtText(s) {
   z.push('## Laufwerke', '', '| Laufwerk | Mount | belegt | frei | Gesundheit |', '|---|---|---|---|---|');
   for (const l of s.laufwerke) z.push(`| ${zelle(l.name)} | ${l.mount} | ${gb(l.benutzt)} / ${gb(l.gross)} | ${gb(l.frei)}${l.schlaeft ? ' (schläft)' : ''} | ${l.gesundheit ? `${l.gesundheit.text}${l.gesundheit.temp !== null ? `, ${l.gesundheit.temp} °C` : ''}` : '—'} |`);
   z.push('');
+
+  if (cu?.bereit && cu.liste.length) {
+    z.push('## Container-Updates', '', '| Container | Art | Version | Befehl |', '|---|---|---|---|');
+    for (const c of cu.liste) {
+      const ver = c.art === 'image' ? 'neues Image (gleicher Tag)' : `${c.von || '?'} → ${c.nach || '?'}`;
+      const cmd = c.ordner && c.dienst ? `\`cd ${c.ordner} && docker compose pull ${c.dienst} && docker compose up -d ${c.dienst}\`` : '—';
+      z.push(`| ${zelle(c.name)} | ${c.art} | ${zelle(ver)} | ${cmd} |`);
+    }
+    z.push('');
+  }
 
   const c = s.cloud;
   z.push('## Nextcloud', '');

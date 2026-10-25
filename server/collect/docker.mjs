@@ -29,6 +29,9 @@ export async function container() {
     image: c.Image,
     state: c.State, // running | paused | exited | restarting ...
     status: c.Status,
+    // Docker Compose: Ordner und Dienstname – für den Update-Befehl
+    ordner: c.Labels?.['com.docker.compose.project.working_dir'] || null,
+    dienst: c.Labels?.['com.docker.compose.service'] || null,
   }));
 }
 

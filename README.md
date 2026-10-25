@@ -275,3 +275,17 @@ Den Host-Schlüssel des PCs merkt sich die Zentrale beim ersten Ausschalten (`da
 ## Plattengesundheit (Scrutiny)
 
 Scrutiny läuft als eigener Container (`/mnt/daten/scrutiny`, Port 8095) und liest die SMART-Werte aller Platten (Messung täglich 02:55). Die Zentrale zeigt unter **Speicher** pro Platte «gesund» / «auffällige Werte» / «SMART meldet einen Fehler», Temperatur und Betriebstage, und meldet, wenn eine Platte schlechter wird. Zuordnung über die WWN (`/dev/disk/by-id/wwn-…`). Optional `.env`: `SCRUTINY_PORT`, `SCRUTINY_URL`.
+
+## Container-Updates (What's Up Docker)
+
+What's Up Docker läuft als eigener Container (`/mnt/daten/wud`, Port 3010, mit Anmeldung) und prüft jeden Morgen um 6 Uhr, ob es für die Container neuere Images gibt. Docker sieht WUD nur über einen Socket-Proxy, der nur lesen darf.
+
+Die Zentrale zeigt unter **System → Container-Updates**, was es gibt (Major/Minor/Patch oder «neues Image» bei gleichem Tag), mit Link zu den Änderungen und einem Knopf, der den passenden Befehl kopiert:
+
+```bash
+cd <Compose-Ordner> && docker compose pull <dienst> && docker compose up -d <dienst>
+```
+
+Aktualisiert wird **nie automatisch** – du entscheidest. Neue Updates erscheinen einmal unter Ereignisse und im Statusbericht.
+
+Einrichten: In WUD oben rechts **Profil → Generate Token**, nur **Read** ankreuzen, Ablauf «Never». Den Token (`wud_…`) in die `.env` der Zentrale als `WUD_TOKEN=` eintragen, nicht in den Chat. Optional: `WUD_PORT` (3010), `WUD_URL`.

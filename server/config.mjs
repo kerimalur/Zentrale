@@ -128,6 +128,9 @@ export const config = {
   // Scrutiny (SMART der Platten), läuft im eigenen Container, Port auf dem Pi
   scrutiny: { port: num('SCRUTINY_PORT', 8095), url: str('SCRUTINY_URL', '') },
 
+  // What's Up Docker (Container-Updates). Token nur mit Bereich «Read» (WUD → Profil → Generate Token).
+  wud: { port: num('WUD_PORT', 3010), url: str('WUD_URL', ''), token: str('WUD_TOKEN', '') },
+
   // Philips-Fernseher (JointSpace-API v6). MAC = WLAN-MAC, zum Aufwecken aus dem Standby.
   tv: {
     ip: str('TV_IP', ''),

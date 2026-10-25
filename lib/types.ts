@@ -145,6 +145,30 @@ export interface Medien {
   filmabendDrosseln: boolean;
 }
 
+export type UpdateArt = 'major' | 'minor' | 'patch' | 'prerelease' | 'image' | 'unbekannt';
+
+export interface ContainerUpdate {
+  name: string;
+  image: string;
+  tag: string;
+  art: UpdateArt | null;
+  von: string | null;
+  nach: string | null;
+  link: string | null;
+  ordner: string | null;
+  dienst: string | null;
+}
+
+export interface ContainerUpdates {
+  bereit: boolean;
+  grund: string | null;
+  url: string;
+  liste: ContainerUpdate[];
+  gesamt: number;
+  zeit: number | null;
+  fehler: { name: string; text: string }[];
+}
+
 export interface Zustand {
   zeit: number;
   uhrzeit: string;
@@ -181,6 +205,7 @@ export interface Zustand {
   anschluesse: { port: string; geraet: string; info: string; ok: boolean | null }[];
   laufwerke: Laufwerk[];
   scrutinyUrl: string;
+  containerUpdates: ContainerUpdates;
   speicher: { kategorien: { name: string; bytes: number }[]; zeit: number };
   netz: {
     geraete: Geraet[];

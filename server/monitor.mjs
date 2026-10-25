@@ -22,6 +22,7 @@ import { qbDaten, qbAllesStoppen, vpnPruefen, arrDaten, seerrDaten } from './col
 import { pcStatus } from './pc.mjs';
 import { tvSnapshot } from './tv.mjs';
 import { scrutinyDaten } from './collect/scrutiny.mjs';
+import { wudDaten } from './collect/wud.mjs';
 
 const z = {
   host: null,
@@ -43,6 +44,7 @@ const z = {
   medien: { qb: null, vpn: null, arr: {}, seerr: null },
   moebel: null, // { id, temp, zeit } – letzter gültiger Wert des DS18B20
   cloud: null, // Nextcloud-Übersicht (Uploads, Ordner, Fehler)
+  wud: null, // What's Up Docker: Container mit neuerem Image
   fehler: {}, // Quelle -> letzte Fehlermeldung
 };
 const fehlversuche = {};
@@ -319,6 +321,23 @@ export async function langsam() {
         ereignis('ok', `Platte ${p.modell || p.wwn} wieder gesund`);
       }
       vorher[p.wwn] = p.status;
+    }
+  }
+
+  // Container-Updates aus What's Up Docker: jedes neue Update einmal als Ereignis melden.
+  if (config.wud.token) {
+    const w = await sicher('wud', wudDaten);
+    if (w) {
+      z.wud = w;
+      const erstesMal = !db().wudBekannt; // beim ersten Abruf nicht alles auf einmal melden
+      const bekannt = db().wudBekannt || {};
+      const jetzt = {};
+      for (const u of w.updates) {
+        const k = `${u.name}|${u.nach}`;
+        jetzt[k] = true;
+        if (!erstesMal && !bekannt[k]) ereignis('info', `Update verfügbar: ${u.name} · ${u.art === 'image' ? 'neues Image (gleicher Tag)' : `${u.von} → ${u.nach}`}`);
+      }
+      db().wudBekannt = jetzt;
     }
   }
 
@@ -619,6 +638,7 @@ export function snapshot() {
   if (gibt(mc.downloadContainer) && !mc.qbit.passwort) hinweise.push('QBIT_PASSWORT fehlt – Downloads fehlen');
   for (const a of mc.arr) if (gibt(a.container) && !a.key) hinweise.push(`${a.id.toUpperCase()}_API_KEY fehlt – ${a.name} fehlt`);
   if (gibt(mc.seerr.container) && !mc.seerr.key) hinweise.push('SEERR_API_KEY fehlt – Anfragen fehlen');
+  if (gibt('wud') && !config.wud.token) hinweise.push('WUD_TOKEN fehlt – Container-Updates fehlen');
   for (const [q, f] of Object.entries(z.fehler)) hinweise.push(`${q}: ${f}`);
 
   return {
@@ -649,6 +669,7 @@ export function snapshot() {
       };
     }),
     scrutinyUrl: config.scrutiny.url || `http://${config.hostName}:${config.scrutiny.port}`,
+    containerUpdates: containerUpdatesSnapshot(),
     speicher: { kategorien: kats, zeit: speicherKategorien().zeit },
     netz: {
       geraete,
@@ -768,4 +789,16 @@ function medienSnapshot() {
 
 function parseNamen() {
   try { return Object.fromEntries(Object.entries(JSON.parse(process.env.GERAETE_NAMEN || '{}')).map(([k, v]) => [k.toLowerCase(), v])); } catch { return {}; }
+}
+
+// Container-Updates für Oberfläche und Statusbericht (mit Compose-Ordner für den Update-Befehl).
+function containerUpdatesSnapshot() {
+  const url = config.wud.url || `http://${config.hostName}:${config.wud.port}`;
+  if (!config.wud.token) return { bereit: false, grund: 'WUD_TOKEN fehlt in .env', url, liste: [], gesamt: 0, zeit: null, fehler: [] };
+  if (!z.wud) return { bereit: false, grund: z.fehler.wud || 'Wird geladen …', url, liste: [], gesamt: 0, zeit: null, fehler: [] };
+  const liste = z.wud.updates.map((u) => {
+    const c = z.container.find((x) => x.name === u.name);
+    return { ...u, ordner: c?.ordner || null, dienst: c?.dienst || null };
+  });
+  return { bereit: true, grund: z.fehler.wud || null, url, liste, gesamt: z.wud.gesamt, zeit: z.wud.zeit, fehler: z.wud.fehler };
 }
