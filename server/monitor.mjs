@@ -534,7 +534,10 @@ export function snapshot() {
   // Anschlüsse
   const anschluesse = [];
   const lw = host?.laufwerke || [];
+  const gezeigt = new Set();
   for (const l of lw) {
+    if (gezeigt.has(l.geraet)) continue; // eine SSD mit System + Daten nur einmal als Anschluss
+    gezeigt.add(l.geraet);
     if (l.typ === 'sd') anschluesse.push({ port: 'SD', geraet: 'SD-Karte', info: `${formatBytes(l.gross)} · System`, ok: true });
     else if (l.usb) anschluesse.push({ port: l.usb.port, geraet: l.name, info: `${l.modell || l.usb.produkt}${l.usb.uasp ? ' · UASP' : ''}${l.typ === 'hdd' ? (l.schlaeft ? ' · schläft' : ' · wach') : ''}`, ok: l.typ === 'hdd' && l.schlaeft ? null : true });
   }

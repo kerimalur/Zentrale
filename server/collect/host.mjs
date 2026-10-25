@@ -116,18 +116,20 @@ function usbInfoFuer(sysPfad) {
 
 async function laufwerke() {
   const mounts = lesen('/proc/1/mounts', '') || lesen('/proc/mounts', '');
-  const proGeraet = new Map();
+  // Pro Partition ein Eintrag (eine SSD kann System und Daten enthalten). Bind-Mounts derselben Partition
+  // (z. B. EVO-Ordner unter /mnt/daten) zählen nicht extra: es gilt der kürzeste Einhängepunkt.
+  const proPartition = new Map();
   for (const z of mounts.split('\n')) {
     const [dev, mp, typ] = z.split(' ');
     if (!dev || !/^\/dev\/(sd[a-z]+\d*|mmcblk\d+p\d+|nvme\d+n\d+p\d+)$/.test(dev)) continue;
     if (mp.startsWith('/boot')) continue;
     const name = dev.replace('/dev/', '');
-    const disk = name.startsWith('mmcblk') || name.startsWith('nvme') ? name.replace(/p\d+$/, '') : name.replace(/\d+$/, '');
-    if (!proGeraet.has(disk)) proGeraet.set(disk, []);
-    proGeraet.get(disk).push({ partition: name, mount: mp.replace(/\\040/g, ' '), typ });
+    if (!proPartition.has(name)) proPartition.set(name, []);
+    proPartition.get(name).push({ partition: name, mount: mp.replace(/\\040/g, ' '), typ });
   }
   const out = [];
-  for (const [disk, parts] of proGeraet) {
+  for (const [partition, parts] of proPartition) {
+    const disk = partition.startsWith('mmcblk') || partition.startsWith('nvme') ? partition.replace(/p\d+$/, '') : partition.replace(/\d+$/, '');
     const haupt = parts.sort((a, b) => a.mount.length - b.mount.length)[0];
     let gross = 0, frei = 0;
     try {
@@ -140,10 +142,15 @@ async function laufwerke() {
     const modell = istSd ? 'SD-Karte' : [lesen(`${sys}/device/vendor`), lesen(`${sys}/device/model`)].filter(Boolean).join(' ').replace(/\s+/g, ' ');
     const usb = istSd ? null : usbInfoFuer(sys);
     const hdd = lesen(`${sys}/queue/rotational`) === '1';
+    // Name: aus LAUFWERK_NAMEN, sonst Modell. Für «/» nie «SD-Karte», wenn das System inzwischen auf einer SSD liegt.
+    let name = config.laufwerkNamen[haupt.mount] || null;
+    if (haupt.mount === '/' && name && /sd-karte/i.test(name) && !istSd) name = null;
+    if (!name && haupt.mount === '/') name = istSd ? 'SD-Karte (System)' : `${modell || 'SSD'} · System`;
     out.push({
       geraet: disk,
+      partition,
       mount: haupt.mount,
-      name: config.laufwerkNamen[haupt.mount] || modell || haupt.mount,
+      name: name || modell || haupt.mount,
       modell,
       typ: istSd ? 'sd' : hdd ? 'hdd' : 'ssd',
       gross,

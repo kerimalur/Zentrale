@@ -84,8 +84,7 @@ export const config = {
 
   // Namen für Laufwerke nach Einhängepunkt.
   laufwerkNamen: parseJson(str('LAUFWERK_NAMEN'), {
-    '/': 'SD-Karte (System)',
-    '/mnt/daten': 'System-SSD 128 GB',
+    '/mnt/daten': 'Kingston SSD · Daten',
   }),
 
   // Szenen: welche Container pausiert werden und welcher CPU-Modus gilt.
