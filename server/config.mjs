@@ -124,6 +124,14 @@ export const config = {
     sshPort: num('PC_SSH_PORT', 22),
   },
 
+  // Philips-Fernseher (JointSpace-API v6). MAC = WLAN-MAC, zum Aufwecken aus dem Standby.
+  tv: {
+    ip: str('TV_IP', ''),
+    mac: str('TV_MAC', ''),
+    name: str('TV_NAME', 'Fernseher'),
+    broadcast: str('TV_BROADCAST', ''),
+  },
+
   // Leer = keine Lüftersteuerung. "auto" = ersten PWM-Kanal nehmen (nach dtoverlay=pwm).
   luefter: { pwmPfad: str('LUEFTER_PWM', '') },
 };

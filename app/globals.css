@@ -370,3 +370,14 @@ button.szene-chip { font-family: inherit; line-height: inherit; }
   .cloud-held, .cloud-breit { grid-column: auto; border-radius: 24px; padding: 20px; }
   .cloud-zahlen b { font-size: 20px; }
 }
+
+/* Fernseher-Fernbedienung */
+.fb { display: flex; flex-direction: column; gap: 10px; }
+.fb-reihe { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.fb-kreuz { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 260px; width: 100%; align-self: center; }
+.fb-taste { border: 0; border-radius: 14px; min-height: 48px; background: var(--bg); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; display: grid; place-items: center; transition: transform .1s var(--ease), background-color .15s; touch-action: manipulation; }
+.fb-taste:active { transform: scale(.94); background: #dfe4ef; }
+.fb-taste:disabled { opacity: .45; cursor: default; }
+.fb-taste.ok { background: var(--accent); color: #fff; border-radius: 50%; aspect-ratio: 1; min-height: 0; }
+.fb-taste.leer { visibility: hidden; }
+.fb-regler { width: 100%; accent-color: var(--accent); }

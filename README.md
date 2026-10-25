@@ -262,3 +262,12 @@ Voraussetzungen (einmalig):
 2. Übersicht → Windows-PC → «Ausschalten einrichten»: die angezeigte Zeile in `C:\ProgramData\ssh\administrators_authorized_keys` einfügen. Sie erlaubt **nur** `shutdown` und nur Verbindungen aus dem Tailscale-Netz (100.64.0.0/10).
 3. `.env`: `PC_USER=` Windows-Benutzername, dann neu starten.
 Den Host-Schlüssel des PCs merkt sich die Zentrale beim ersten Ausschalten (`data/pc/hostkey.sha256`); ändert er sich, verweigert sie die Verbindung.
+
+## Fernseher (Philips, JointSpace-API)
+
+Übersicht → Karte **Fernseher**: Ein/Aus, Lautstärke, Fernbedienung (Pfeiltasten, OK, Zurück, Home, Quelle, Programme, Play/Pause). Die Zentrale spricht direkt mit der API des Fernsehers (Port 1925, ohne Kopplung).
+
+- `.env`: `TV_IP=` (TV: Einstellungen → Netzwerk) und `TV_MAC=` (WLAN-MAC, auf dem Pi: `ip neigh show <TV_IP>`)
+- TV: **Einstellungen → Netzwerk → «Mit Wi-Fi (WoWLAN) einschalten»** an
+- Einschalten klappt nur aus dem normalen Standby. Nach längerer Zeit fällt der Fernseher in einen tiefen Standby, dann meldet die Karte das – Fernbedienung nehmen (oder später eine IR-LED am Pi)
+- Die API hat keine Anmeldung: Jedes Gerät im WLAN kann den Fernseher so steuern. Die Zentrale selbst ist nur mit Login erreichbar.

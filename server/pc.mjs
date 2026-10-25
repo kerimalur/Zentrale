@@ -32,6 +32,12 @@ function udpSenden(paket, ziel, port) {
   });
 }
 
+// Magic Packet an mehrere Ziele (Broadcast und/oder direkte Adresse), je dreimal an Port 9 und 7.
+export async function wolSenden(mac, ziele) {
+  const paket = magicPacket(mac);
+  for (let i = 0; i < 3; i++) for (const ziel of ziele) for (const port of [9, 7]) await udpSenden(paket, ziel, port).catch(() => {});
+}
+
 export async function pcWecken() {
   if (!pcEingerichtet()) {
     const e = new Error('PC_MAC fehlt oder ist ungültig (.env)');

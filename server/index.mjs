@@ -18,6 +18,7 @@ import { notbetriebSetzen, dienstSchalten, piNeustarten, piAusschalten } from '.
 import { moebelLuefterModus } from './moebelLuefter.mjs';
 import { statusBerichtSchreiben } from './statusbericht.mjs';
 import { pcWecken, pcAusschalten, pcSchluesselZeile } from './pc.mjs';
+import { tvAbfragen, tvTaste, tvLautstaerke, tvEinschalten } from './tv.mjs';
 
 ensureDataDir();
 load();
@@ -175,6 +176,19 @@ async function api(req, res, url) {
     return json(res, 200, { ok: true });
   }
   if (p === '/api/pc/schluessel' && m === 'GET') return json(res, 200, { zeile: pcSchluesselZeile() });
+
+  // ---------- Fernseher ----------
+  if (p === '/api/tv/taste' && m === 'POST') {
+    const b = await body(req);
+    await tvTaste(String(b.taste || ''));
+    return json(res, 200, { ok: true });
+  }
+  if (p === '/api/tv/lautstaerke' && m === 'POST') {
+    const b = await body(req);
+    await tvLautstaerke(b.wert);
+    return json(res, 200, { ok: true });
+  }
+  if (p === '/api/tv/an' && m === 'POST') return json(res, 200, await tvEinschalten());
   if (p === '/api/pi/neustart' && m === 'POST') {
     const b = await body(req);
     if (b.bestaetigt !== true) return json(res, 400, { fehler: 'Bitte bestätigen' });
@@ -258,6 +272,7 @@ alle(5 * 60_000, langsam);
 alle(6 * 3600_000, sehrLangsam);
 alle(30 * 60_000, speicherLauf);
 alle(20_000, zeitplan, false);
+alle(15_000, tvAbfragen);
 // Statusbericht für Obsidian (alle 15 Min, erstmals 2 Min nach dem Start, wenn alle Daten da sind).
 let berichtFehler = null;
 const bericht = async () => {

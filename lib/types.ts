@@ -198,6 +198,7 @@ export interface Zustand {
   medien: Medien | null;
   steuerung: Steuerung;
   pc: PcStatus;
+  tv: TvStatus;
   hostName: string;
   hinweise: string[];
 }
@@ -232,6 +233,16 @@ export interface PcStatus {
   gewecktUm: number | null;
   ausBereit: boolean;
   ausUm: number | null;
+}
+
+export interface TvStatus {
+  eingerichtet: boolean;
+  name: string;
+  an: boolean | null;
+  lautstaerke: number | null;
+  stumm: boolean | null;
+  schaltetEin: boolean;
+  kannWecken: boolean;
 }
 
 export interface Steuerung {
