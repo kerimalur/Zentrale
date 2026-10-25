@@ -57,8 +57,8 @@ export function berichtText(s) {
   for (const d of s.dienste) z.push(`| ${d.name} | ${d.status}${d.ausGrund ? ` (${d.ausGrund})` : ''} | ${d.ms === null ? '—' : d.ms + ' ms'} | ${zelle(d.kennzahl)} ${zelle(d.label)} |`);
   z.push('');
 
-  z.push('## Laufwerke', '', '| Laufwerk | Mount | belegt | frei |', '|---|---|---|---|');
-  for (const l of s.laufwerke) z.push(`| ${zelle(l.name)} | ${l.mount} | ${gb(l.benutzt)} / ${gb(l.gross)} | ${gb(l.frei)}${l.schlaeft ? ' (schläft)' : ''} |`);
+  z.push('## Laufwerke', '', '| Laufwerk | Mount | belegt | frei | Gesundheit |', '|---|---|---|---|---|');
+  for (const l of s.laufwerke) z.push(`| ${zelle(l.name)} | ${l.mount} | ${gb(l.benutzt)} / ${gb(l.gross)} | ${gb(l.frei)}${l.schlaeft ? ' (schläft)' : ''} | ${l.gesundheit ? `${l.gesundheit.text}${l.gesundheit.temp !== null ? `, ${l.gesundheit.temp} °C` : ''}` : '—'} |`);
   z.push('');
 
   const c = s.cloud;

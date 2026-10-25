@@ -30,6 +30,7 @@ export interface Laufwerk {
   frei: number;
   port: string;
   schlaeft: boolean | null;
+  gesundheit: { stufe: 'ok' | 'warnung' | 'fehler'; text: string; temp: number | null; stunden: number | null; zeit: string | null } | null;
 }
 
 export interface Geraet {
@@ -179,6 +180,7 @@ export interface Zustand {
   cloud: Cloud;
   anschluesse: { port: string; geraet: string; info: string; ok: boolean | null }[];
   laufwerke: Laufwerk[];
+  scrutinyUrl: string;
   speicher: { kategorien: { name: string; bytes: number }[]; zeit: number };
   netz: {
     geraete: Geraet[];

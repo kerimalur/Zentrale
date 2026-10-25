@@ -125,6 +125,9 @@ export const config = {
     sshPort: num('PC_SSH_PORT', 22),
   },
 
+  // Scrutiny (SMART der Platten), läuft im eigenen Container, Port auf dem Pi
+  scrutiny: { port: num('SCRUTINY_PORT', 8095), url: str('SCRUTINY_URL', '') },
+
   // Philips-Fernseher (JointSpace-API v6). MAC = WLAN-MAC, zum Aufwecken aus dem Standby.
   tv: {
     ip: str('TV_IP', ''),

@@ -271,3 +271,7 @@ Den Host-Schlüssel des PCs merkt sich die Zentrale beim ersten Ausschalten (`da
 - TV: **Einstellungen → Netzwerk → «Mit Wi-Fi (WoWLAN) einschalten»** an
 - Einschalten klappt nur aus dem normalen Standby. Nach längerer Zeit fällt der Fernseher in einen tiefen Standby, dann meldet die Karte das – Fernbedienung nehmen (oder später eine IR-LED am Pi)
 - Die API hat keine Anmeldung: Jedes Gerät im WLAN kann den Fernseher so steuern. Die Zentrale selbst ist nur mit Login erreichbar.
+
+## Plattengesundheit (Scrutiny)
+
+Scrutiny läuft als eigener Container (`/mnt/daten/scrutiny`, Port 8095) und liest die SMART-Werte aller Platten (Messung täglich 02:55). Die Zentrale zeigt unter **Speicher** pro Platte «gesund» / «auffällige Werte» / «SMART meldet einen Fehler», Temperatur und Betriebstage, und meldet, wenn eine Platte schlechter wird. Zuordnung über die WWN (`/dev/disk/by-id/wwn-…`). Optional `.env`: `SCRUTINY_PORT`, `SCRUTINY_URL`.

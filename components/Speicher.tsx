@@ -14,6 +14,8 @@ const SYNC_FARBE: Record<SyncZeile['art'], [string, string]> = {
   info: ['#2457f5', '#2457f5'],
 };
 
+const GESUND_FARBE: Record<'ok' | 'warnung' | 'fehler', string> = { ok: '#16a34a', warnung: '#b45309', fehler: '#b42318' };
+
 export function Speicher({ z }: { z: Zustand }) {
   const [offen, setOffen] = useState<string | null>(null);
   const kats = z.speicher.kategorien;
@@ -34,6 +36,15 @@ export function Speicher({ z }: { z: Zustand }) {
                 <span className="pille" style={l.schlaeft ? { background: '#f0f2f7', color: 'var(--muted)' } : voll ? { background: '#fdecea', color: '#b42318' } : { background: '#e7f6ec', color: '#15803d' }}>{voll ? 'fast voll' : zustand}</span>
               </div>
               <div className="leise" style={{ fontSize: 13 }}>{[l.modell, l.port, l.mount].filter(Boolean).join(' · ')}</div>
+              {l.gesundheit && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                  <span className="punkt" style={{ width: 8, height: 8, flexShrink: 0, background: GESUND_FARBE[l.gesundheit.stufe] }} />
+                  <span style={{ fontWeight: 600, color: l.gesundheit.stufe === 'ok' ? undefined : GESUND_FARBE[l.gesundheit.stufe] }}>{l.gesundheit.text}</span>
+                  <span className="leise">
+                    {[l.gesundheit.temp !== null ? `${l.gesundheit.temp} °C` : null, l.gesundheit.stunden !== null ? `${Math.round(l.gesundheit.stunden / 24)} Tage in Betrieb` : null].filter(Boolean).join(' · ')}
+                  </span>
+                </div>
+              )}
               <div className="balken" style={{ height: 12, borderRadius: 6 }}><span className="gx" style={{ width: `${Math.max(1, p)}%`, background: voll ? '#dc2626' : 'var(--accent)' }} /></div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                 <span style={{ fontWeight: 600 }}>{bytes(l.benutzt)} / {bytes(l.gross)}</span>
@@ -44,6 +55,12 @@ export function Speicher({ z }: { z: Zustand }) {
           );
         })}
       </div>
+
+      {z.laufwerke.some((l) => l.gesundheit) && (
+        <a className="leise" href={z.scrutinyUrl} target="_blank" rel="noreferrer" style={{ fontSize: 13, alignSelf: 'flex-start' }}>
+          Plattengesundheit im Detail (Scrutiny) →
+        </a>
+      )}
 
       <div className="speicher-unten">
         <section className="karte in" style={{ animationDelay: '200ms', display: 'flex', flexDirection: 'column', gap: 18 }} aria-label="Speicherverbrauch">

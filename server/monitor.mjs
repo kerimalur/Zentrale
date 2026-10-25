@@ -21,6 +21,7 @@ import { abgleichen, ausgeschaltet, steuerungSnapshot } from './steuerung.mjs';
 import { qbDaten, qbAllesStoppen, vpnPruefen, arrDaten, seerrDaten } from './collect/medien.mjs';
 import { pcStatus } from './pc.mjs';
 import { tvSnapshot } from './tv.mjs';
+import { scrutinyDaten } from './collect/scrutiny.mjs';
 
 const z = {
   host: null,
@@ -305,6 +306,22 @@ export async function langsam() {
       if (p.verbunden) alarmAktiv[kk] = false;
     }
   }
+  // Plattengesundheit aus Scrutiny: melden, wenn eine Platte schlechter wird (nicht bei jedem Durchlauf).
+  const sc = await sicher('scrutiny', scrutinyDaten);
+  if (sc) {
+    z.scrutiny = sc;
+    const vorher = (db().plattenStatus ||= {});
+    for (const p of sc) {
+      const alt = vorher[p.wwn];
+      if (alt !== undefined && p.status !== alt && p.status > alt) {
+        ereignis(p.stufe === 'fehler' ? 'fehler' : 'warnung', `Platte ${p.modell || p.wwn}: ${p.text}`, { telegram: true, schluessel: 'platte-' + p.wwn });
+      } else if (alt !== undefined && p.status === 0 && alt > 0) {
+        ereignis('ok', `Platte ${p.modell || p.wwn} wieder gesund`);
+      }
+      vorher[p.wwn] = p.status;
+    }
+  }
+
   await medienLangsam();
   await sicher('gaeste', gaesteAbgleichen);
   z.gaeste = await sicher('gaeste-status', () => gaesteStatus());
@@ -623,7 +640,15 @@ export function snapshot() {
     moebel: moebelSnapshot(),
     cloud: z.cloud || { bereit: false, grund: z.fehler['nextcloud-uebersicht'] || 'Wird geladen …' },
     anschluesse,
-    laufwerke: lw.map((l) => ({ name: l.name, modell: l.modell, mount: l.mount, typ: l.typ, gross: l.gross, benutzt: l.benutzt, frei: l.frei, port: l.usb?.port || (l.typ === 'sd' ? 'SD' : ''), schlaeft: l.schlaeft })),
+    laufwerke: lw.map((l) => {
+      const g = (z.scrutiny || []).find((s) => s.geraet && s.geraet === l.geraet);
+      return {
+        name: l.name, modell: l.modell, mount: l.mount, typ: l.typ, gross: l.gross, benutzt: l.benutzt, frei: l.frei,
+        port: l.usb?.port || (l.typ === 'sd' ? 'SD' : ''), schlaeft: l.schlaeft,
+        gesundheit: g ? { stufe: g.stufe, text: g.text, temp: g.temp, stunden: g.stunden, zeit: g.zeit } : null,
+      };
+    }),
+    scrutinyUrl: config.scrutiny.url || `http://${config.hostName}:${config.scrutiny.port}`,
     speicher: { kategorien: kats, zeit: speicherKategorien().zeit },
     netz: {
       geraete,
