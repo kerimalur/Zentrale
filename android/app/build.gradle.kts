@@ -8,7 +8,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "ch.kerim.fokus"
+        applicationId = "ch.kerim.zentrale.fokus"
         minSdk = 26
         targetSdk = 34
         versionCode = 1
