@@ -102,16 +102,22 @@ export async function tagescheckBauen(s, { seit, zeit, manuell = false } = {}) {
   if (werte.length) zeilen.push('', werte.join(' · '));
   for (const i of infos) zeilen.push(i.text);
 
-  // Neu seit der letzten Meldung (Ereignisse der Zentrale)
-  const neu = (db().ereignisse || []).filter((e) => e.t > seit && ['fehler', 'warnung', 'ok', 'film', 'gast'].includes(e.art));
+  // Neu seit der letzten Meldung: nur Fehler und Warnungen, gleiche Texte zusammengefasst
+  const neu = (db().ereignisse || []).filter((e) => e.t > seit && (e.art === 'fehler' || e.art === 'warnung'));
   if (neu.length) {
-    const zaehl = (a) => neu.filter((e) => e.art === a).length;
-    const teile = [zaehl('fehler') && `${zaehl('fehler')} ${zaehl('fehler') === 1 ? 'Fehler' : 'Fehler'}`, zaehl('warnung') && `${zaehl('warnung')} ${zaehl('warnung') === 1 ? 'Warnung' : 'Warnungen'}`, zaehl('ok') && `${zaehl('ok')} wieder ok`, zaehl('film') && `${zaehl('film')} ${zaehl('film') === 1 ? 'Film' : 'Filme'}`, zaehl('gast') && `${zaehl('gast')} ${zaehl('gast') === 1 ? 'Gast' : 'Gäste'}`].filter(Boolean);
-    zeilen.push('', `Neu seit ${seit ? zeitFormat(seit) : 'dem letzten Check'}: ${teile.join(', ')}`);
-    for (const e of neu.slice(0, 4)) zeilen.push(`• ${zeitFormat(e.t)} ${e.text.length > 90 ? e.text.slice(0, 87) + '…' : e.text}`);
-    if (neu.length > 4) zeilen.push(`… und ${neu.length - 4} weitere`);
-  } else if (!manuell) {
-    zeilen.push('', 'Nichts Neues seit dem letzten Check');
+    const gruppen = new Map();
+    for (const e of neu) {
+      const g = gruppen.get(e.text) || { text: e.text, art: e.art, anzahl: 0, t: e.t };
+      g.anzahl++;
+      gruppen.set(e.text, g);
+    }
+    const liste = [...gruppen.values()];
+    zeilen.push('', `Neu seit ${seit ? zeitFormat(seit) : 'dem letzten Check'}:`);
+    for (const g of liste.slice(0, 3)) {
+      const t = g.text.length > 80 ? g.text.slice(0, 77) + '…' : g.text;
+      zeilen.push(`• ${t}${g.anzahl > 1 ? ` (${g.anzahl}×)` : ''}`);
+    }
+    if (liste.length > 3) zeilen.push(`(+${liste.length - 3} weitere in der Zentrale)`);
   }
 
   return {
