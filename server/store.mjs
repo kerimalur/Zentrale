@@ -13,6 +13,8 @@ const standard = () => ({
     nachtVon: '23:00',
     nachtBis: '07:00',
     telegram: true,
+    checkAn: true, // Tages-Check aufs Handy (ntfy/Telegram)
+    checkZeiten: ['08:00', '13:00', '19:00'],
     hddSchlaf: true,
     luefterAusUnter: 50,
     moebelWarnAb: 40, // Warnung, wenn es im Möbel wärmer wird (°C)

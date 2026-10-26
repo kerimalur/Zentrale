@@ -195,6 +195,8 @@ Standard **aus**. Ein-/ausschalten unter **Einstellungen → Backup**. „Backup
 
 Hinweis: Uptime Kuma merkt nicht, dass Dienste absichtlich pausiert sind. Die Zentrale selbst schickt dafür keine Fehler-Alarme. Wenn du in Kuma Alarme aktivierst, kommen sie aber trotzdem.
 
+**Tages-Check (ntfy):** um 8, 13 und 19 Uhr (in Einstellungen → Allgemein änderbar, «Jetzt senden» zum Testen) kommt eine Kurznachricht: «Alles gut» oder die Probleme (Dienste, VPN, Pi-/Möbel-Temperatur, Platz, Backup, Syncthing), dazu Updates und was seit dem letzten Check passiert ist. Neue Prüfungen (Trading, Garmin, …) hängen sich mit `registrierePruefung()` in `server/tagescheck.mjs` ein.
+
 **Alarme (ntfy, optional Telegram)**: Dienst nicht erreichbar / wieder da, Container hat sich selbst neu gestartet, Pi über 75 °C, Unterspannung, Laufwerk über 90 % voll, Syncthing-Fehler, Backup fehlgeschlagen, Probleme beim Entfernen von Gästen. Gleiche Meldungen höchstens alle 30 Minuten.
 
 **Medien-Seite**

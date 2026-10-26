@@ -118,6 +118,7 @@ export function EinstellungenKarte({ z, aktualisieren }: { z: Zustand; aktualisi
   const [e, setE] = useState<Einstellungen>(z.einstellungen);
   const [sshFrage, setSshFrage] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
+  const [checkInfo, setCheckInfo] = useState<string | null>(null);
   const f = z.faehigkeiten;
 
   useEffect(() => { setE(z.einstellungen); }, [z.einstellungen]);
@@ -127,6 +128,21 @@ export function EinstellungenKarte({ z, aktualisieren }: { z: Zustand; aktualisi
     setE(neu);
     setFehler(null);
     try { await senden('/api/einstellungen', teil); aktualisieren(); } catch (err) { setFehler((err as Error).message); }
+  }
+
+  async function checkJetzt() {
+    setCheckInfo('Sende …');
+    try {
+      const r = await senden('/api/tagescheck', {}) as { ok?: boolean; grund?: string | null };
+      setCheckInfo(r?.ok ? 'Gesendet – schau aufs Handy' : r?.grund || 'Senden fehlgeschlagen');
+    } catch (err) { setCheckInfo((err as Error).message); }
+  }
+
+  function zeitAendern(i: number, wert: string) {
+    if (!wert) return;
+    const liste = [...e.checkZeiten];
+    liste[i] = wert;
+    setzen({ checkZeiten: liste });
   }
 
   async function ssh() {
@@ -148,6 +164,16 @@ export function EinstellungenKarte({ z, aktualisieren }: { z: Zustand; aktualisi
         </div>
       )}
       <Schalter an={e.telegram && f.telegram} deaktiviert={!f.telegram} onClick={() => setzen({ telegram: !e.telegram })} titel="Alarme aufs Handy" unter={f.telegram ? 'bei Fehlern und Ausfällen (ntfy/Telegram)' : 'ntfy oder Telegram noch nicht eingerichtet (.env)'} />
+      <Schalter an={e.checkAn && f.telegram} deaktiviert={!f.telegram} onClick={() => setzen({ checkAn: !e.checkAn })} titel="Tages-Check aufs Handy" unter={f.telegram ? `${e.checkZeiten.join(' · ')} – «Alles gut» oder die Probleme, dazu was neu ist` : 'ntfy oder Telegram noch nicht eingerichtet (.env)'} />
+      {e.checkAn && f.telegram && (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '10px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
+          {e.checkZeiten.map((zeit, i) => (
+            <input key={i} className="zeitfeld" type="time" aria-label={`Check ${i + 1}`} value={zeit} onChange={(x) => zeitAendern(i, x.target.value)} />
+          ))}
+          <button className="press knopf-klein" onClick={checkJetzt}>Jetzt senden</button>
+          {checkInfo && <span style={{ color: 'var(--muted)' }}>{checkInfo}</span>}
+        </div>
+      )}
       {z.moebel.luefter.vorhanden && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
           <span style={{ flex: 1 }}>

@@ -20,6 +20,7 @@ import { statusBerichtSchreiben } from './statusbericht.mjs';
 import { pcWecken, pcAusschalten, pcSchluesselZeile } from './pc.mjs';
 import { tvAbfragen, tvTaste, tvLautstaerke, tvEinschalten } from './tv.mjs';
 import { garminDaten, garminHistorie } from './collect/garmin.mjs';
+import { tagescheckSenden } from './tagescheck.mjs';
 
 ensureDataDir();
 load();
@@ -120,6 +121,11 @@ async function api(req, res, url) {
     if (zeit(b.nachtVon)) e.nachtVon = b.nachtVon;
     if (zeit(b.nachtBis)) e.nachtBis = b.nachtBis;
     if (typeof b.telegram === 'boolean') e.telegram = b.telegram;
+    if (typeof b.checkAn === 'boolean') e.checkAn = b.checkAn;
+    if (Array.isArray(b.checkZeiten)) {
+      const ok = [...new Set(b.checkZeiten.map(String).filter(zeit))].sort().slice(0, 6);
+      if (ok.length) e.checkZeiten = ok;
+    }
     if (typeof b.backupAuto === 'boolean') e.backupAuto = b.backupAuto;
     if (Number.isFinite(b.moebelWarnAb) && b.moebelWarnAb >= 30 && b.moebelWarnAb <= 60) e.moebelWarnAb = Math.round(b.moebelWarnAb);
     if (Number.isFinite(b.luefterAnAb) && b.luefterAnAb >= 20 && b.luefterAnAb <= 45) e.luefterAnAb = Math.round(b.luefterAnAb);
@@ -127,6 +133,10 @@ async function api(req, res, url) {
     if (Number.isFinite(b.luefterAusUnter) && b.luefterAusUnter >= 35 && b.luefterAusUnter <= 65) e.luefterAusUnter = Math.round(b.luefterAusUnter);
     save();
     return json(res, 200, { ok: true, einstellungen: e });
+  }
+
+  if (p === '/api/tagescheck' && m === 'POST') {
+    return json(res, 200, await tagescheckSenden(snapshot(), { manuell: true }));
   }
 
   if (p === '/api/ssh-nur-schluessel' && m === 'POST') {

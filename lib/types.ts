@@ -73,6 +73,8 @@ export interface Einstellungen {
   nachtVon: string;
   nachtBis: string;
   telegram: boolean;
+  checkAn: boolean;
+  checkZeiten: string[];
   hddSchlaf: boolean;
   luefterAusUnter: number;
   backupAuto: boolean;

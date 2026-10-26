@@ -24,7 +24,7 @@ export function telegramBereit() {
   return telegramOk() || ntfyOk();
 }
 
-async function ueberNtfy(text, art) {
+async function ueberNtfy(text, art, titel = 'Zentrale') {
   const { prio, tags } = {
     fehler: { prio: '4', tags: 'rotating_light' },
     warnung: { prio: '3', tags: 'warning' },
@@ -33,7 +33,7 @@ async function ueberNtfy(text, art) {
   const { res } = await holen(`${config.ntfy.url}/${encodeURIComponent(config.ntfy.topic)}`, {
     method: 'POST',
     timeout: 8000,
-    headers: { Authorization: `Bearer ${config.ntfy.token}`, Title: 'Zentrale', Priority: prio, Tags: tags },
+    headers: { Authorization: `Bearer ${config.ntfy.token}`, Title: titel, Priority: prio, Tags: tags },
     body: text,
   });
   return res.ok;
@@ -44,10 +44,15 @@ export async function melden(text, schluessel, art = 'warnung') {
   const jetzt = Date.now();
   if (schluessel && jetzt - (zuletztGemeldet.get(schluessel) || 0) < 30 * 60_000) return false;
   if (schluessel) zuletztGemeldet.set(schluessel, jetzt);
+  return nachrichtSenden(text, art);
+}
+
+// Sendet auf allen eingerichteten Kanälen (ohne Wiederholungs-Sperre, ohne Schalter) – für Tages-Check und Tests.
+export async function nachrichtSenden(text, art = 'info', titel = 'Zentrale') {
   const symbol = { fehler: '🔴', warnung: '🟠', ok: '🟢', info: 'ℹ️', gast: '👤', nacht: '🌙', film: '🎬' }[art] || '•';
   let gesendet = false;
   if (ntfyOk()) {
-    try { gesendet = (await ueberNtfy(text, art)) || gesendet; } catch (e) { console.error('[ntfy]', e.message); }
+    try { gesendet = (await ueberNtfy(text, art, titel)) || gesendet; } catch (e) { console.error('[ntfy]', e.message); }
   }
   if (telegramOk()) {
     try {
@@ -55,7 +60,7 @@ export async function melden(text, schluessel, art = 'warnung') {
         method: 'POST',
         timeout: 8000,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: config.telegram.chatId, text: `${symbol} Zentrale · ${text}`, disable_web_page_preview: true }),
+        body: JSON.stringify({ chat_id: config.telegram.chatId, text: `${symbol} ${titel}\n${text}`, disable_web_page_preview: true }),
       });
       gesendet = res.ok || gesendet;
     } catch (e) {

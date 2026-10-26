@@ -23,6 +23,7 @@ import { pcStatus } from './pc.mjs';
 import { tvSnapshot } from './tv.mjs';
 import { scrutinyDaten } from './collect/scrutiny.mjs';
 import { wudDaten } from './collect/wud.mjs';
+import { tagescheckSenden, checkZeiten } from './tagescheck.mjs';
 
 const z = {
   host: null,
@@ -396,6 +397,11 @@ export async function zeitplan() {
     if (!inNacht && db().szene.id === 'nacht' && db().szene.auto) await szeneSetzen('normal', { auto: true }).catch(() => {});
   }
   if (backupEingerichtet() && db().einstellungen.backupAuto && min === zuMinuten(config.backup.zeit)) await einmal('backup', () => backupStarten().catch(() => {}));
+  if (e.checkAn && telegramBereit()) {
+    for (const zeit of checkZeiten()) {
+      if (min === zuMinuten(zeit)) await einmal('check-' + zeit, () => tagescheckSenden(snapshot(), { zeit }).catch((x) => console.error('[tagescheck]', x.message)));
+    }
+  }
 }
 
 // ---------- Hilfen ----------
