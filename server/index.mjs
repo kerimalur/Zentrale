@@ -21,6 +21,7 @@ import { pcWecken, pcAusschalten, pcSchluesselZeile } from './pc.mjs';
 import { tvAbfragen, tvTaste, tvLautstaerke, tvEinschalten } from './tv.mjs';
 import { garminDaten, garminHistorie } from './collect/garmin.mjs';
 import { tagescheckSenden } from './tagescheck.mjs';
+import { fokusZustand, fokusLauf, koppelcodeErzeugen, koppeln, geraetVonToken, geraetEntfernen, geraetSetzen as fokusGeraetSetzen, bericht as fokusBericht, sperreSetzen, sperreLoeschen, kategorieSetzen, piholeSync } from './fokus.mjs';
 import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
 ensureDataDir();
@@ -83,12 +84,53 @@ async function api(req, res, url) {
   }
   if (p === '/api/me') return json(res, 200, { angemeldet: istAngemeldet(req) });
 
+  // ---------- Fokus-Agenten (Geräte-Token statt Anmeldung) ----------
+  if (p === '/api/fokus/agent/koppeln' && m === 'POST') {
+    const b = await body(req);
+    const r = koppeln({ code: b.code, name: b.name, art: b.art });
+    return r.fehler ? json(res, r.status || 400, { fehler: r.fehler }) : json(res, 200, r);
+  }
+  if (p === '/api/fokus/agent/bericht' && m === 'POST') {
+    const g = geraetVonToken(req);
+    if (!g) return json(res, 401, { fehler: 'Ungültiges Token' });
+    return json(res, 200, fokusBericht(g, await body(req), req));
+  }
+
   if (!istAngemeldet(req)) return json(res, 401, { fehler: 'Nicht angemeldet' });
   // Schutz gegen fremde Seiten: Änderungen nur mit eigenem Header.
   if (m !== 'GET' && req.headers['x-zentrale'] !== '1') return json(res, 403, { fehler: 'Verboten' });
 
   if (p === '/api/logout' && m === 'POST') return json(res, 200, { ok: true }, { 'Set-Cookie': logout(req) });
   if (p === '/api/state' && m === 'GET') return json(res, 200, snapshot());
+
+  // ---------- Fokus (Tab «Fokus») ----------
+  if (p === '/api/fokus' && m === 'GET') return json(res, 200, fokusZustand(url.searchParams.get('tag')));
+  if (p === '/api/fokus/koppelcode' && m === 'POST') return json(res, 200, koppelcodeErzeugen());
+  if (p === '/api/fokus/geraet' && m === 'POST') {
+    const b = await body(req);
+    const ok = fokusGeraetSetzen(String(b.id || ''), { name: b.name, websperre: b.websperre });
+    if (ok) piholeSync().catch(() => {});
+    return ok ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Gerät nicht gefunden' });
+  }
+  if (p === '/api/fokus/geraet' && m === 'DELETE') {
+    const b = await body(req);
+    const ok = geraetEntfernen(String(b.id || ''));
+    if (ok) piholeSync().catch(() => {});
+    return ok ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Gerät nicht gefunden' });
+  }
+  if (p === '/api/fokus/kategorie' && m === 'POST') {
+    const b = await body(req);
+    return kategorieSetzen(String(b.key || ''), String(b.kategorie || '')) ? json(res, 200, { ok: true }) : json(res, 400, { fehler: 'Ungültig' });
+  }
+  if (p === '/api/fokus/sperre' && m === 'POST') {
+    const r = sperreSetzen(await body(req));
+    return r.fehler ? json(res, 400, { fehler: r.fehler }) : json(res, 200, r);
+  }
+  if (p === '/api/fokus/sperre' && m === 'DELETE') {
+    const b = await body(req);
+    return sperreLoeschen(String(b.id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
+  }
+  if (p === '/api/fokus/pihole' && m === 'POST') { await piholeSync(true); return json(res, 200, fokusZustand().pihole); }
 
   // ---------- Netzwerk (Tab «Netz» → Heimnetz, Ports & Zugriff) ----------
   if (p === '/api/netzwerk' && m === 'GET') return json(res, 200, await netzwerkZustand());
@@ -320,6 +362,7 @@ alle(20_000, zeitplan, false);
 alle(15_000, tvAbfragen);
 // Netz-Wache: neue Geräte im Heimnetz und Port-Scans gegen den Pi (liest nur, schickt nichts los).
 setTimeout(() => alle(30_000, netzwache, false), 20_000);
+setTimeout(() => alle(60_000, fokusLauf, false), 25_000);
 // Statusbericht für Obsidian (alle 15 Min, erstmals 2 Min nach dem Start, wenn alle Daten da sind).
 let berichtFehler = null;
 const bericht = async () => {

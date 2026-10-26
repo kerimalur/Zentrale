@@ -44,6 +44,23 @@ async function piholeApi(p, nochmal = true) {
   }
 }
 
+// Schreibende Pi-hole-Aufrufe (Gruppen, Domains, Clients). Gibt {status, json} zurück, wirft nur bei Netzfehlern.
+export async function piholeAnfrage(method, p, body, nochmal = true) {
+  if (!config.pihole.passwort) throw new Error('PIHOLE_PASSWORT fehlt');
+  if (!piSid || Date.now() > piSidBis) await piholeAuth();
+  const { res } = await holen(basis(dienst('pihole').port) + '/api' + p, {
+    method,
+    timeout: 8000,
+    headers: { 'X-FTL-SID': piSid, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if ((res.status === 401 || res.status === 403) && nochmal) { piSid = null; return piholeAnfrage(method, p, body, false); }
+  const text = await res.text();
+  let json = null;
+  try { json = text ? JSON.parse(text) : null; } catch {}
+  return { status: res.status, json };
+}
+
 export async function piholeDaten() {
   const [sum, top] = await Promise.all([piholeApi('/stats/summary'), piholeApi('/stats/top_clients?count=50').catch(() => null)]);
   return {

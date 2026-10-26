@@ -621,3 +621,31 @@ button.szene-chip { font-family: inherit; line-height: inherit; }
   .nw-reiter button { font-size: 12px; padding: 7px 2px; }
 }
 @media (prefers-reduced-motion: reduce) { .nw-scrim, .nw-popup { animation: none; } }
+
+/* ---------- Fokus (Präfix fk-) ---------- */
+.fk-kopf { display: flex; flex-direction: column; gap: 14px; }
+.fk-tag { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.fk-summen { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.fk-summen div { background: var(--bg); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; position: relative; }
+.fk-summen b { font-size: 18px; letter-spacing: -0.02em; } .fk-summen small { color: var(--muted); font-size: 12px; }
+.fk-punkt { width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-block; }
+.fk-summen .fk-punkt { position: absolute; top: 12px; right: 12px; }
+.fk-balken { display: flex; height: 12px; border-radius: 999px; overflow: hidden; background: var(--track); gap: 2px; }
+.fk-balken span { display: block; height: 100%; } .fk-balken .leer { width: 100%; background: var(--track); }
+.fk-geraete { display: flex; flex-direction: column; gap: 8px; }
+.fk-geraet { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 16px; border: 0; background: var(--bg); font: inherit; color: inherit; cursor: pointer; width: 100%; }
+.fk-mini { display: flex; width: 70px; height: 5px; border-radius: 999px; overflow: hidden; background: var(--track); margin-top: 6px; margin-left: auto; }
+.fk-zwei { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.fk-stunden { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; height: 110px; align-items: end; margin-bottom: 6px; }
+.fk-stunden div { height: 100%; display: flex; align-items: flex-end; }
+.fk-stunden span { display: block; width: 100%; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 2px; }
+.fk-tage { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; height: 110px; margin-bottom: 6px; }
+.fk-tagbalken { display: flex; align-items: flex-end; border: 0; background: transparent; padding: 0; cursor: pointer; height: 100%; }
+.fk-tagbalken span { display: flex; flex-direction: column; width: 100%; border-radius: 4px; overflow: hidden; min-height: 2px; }
+.fk-tagbalken i { display: block; min-height: 0; }
+.fk-zeilbalken { height: 5px; background: var(--track); border-radius: 999px; overflow: hidden; margin-top: 6px; }
+.fk-zeilbalken span { display: block; height: 100%; border-radius: 999px; }
+.fk-code { font-size: 44px; font-weight: 800; letter-spacing: .12em; text-align: center; padding: 12px 0; background: var(--bg); border-radius: 16px; font-variant-numeric: tabular-nums; }
+.fk-zeiten { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.nw-feld select { font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--track); background: #fff; color: var(--ink); min-height: 40px; }
+@media (max-width: 720px) { .fk-zwei { grid-template-columns: 1fr; } .fk-code { font-size: 36px; } }
