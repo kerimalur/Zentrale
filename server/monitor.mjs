@@ -1,6 +1,6 @@
 // Sammelt regelmässig alle Daten, erkennt Störungen, führt Zeitpläne aus und baut den Gesamtstand.
 import net from 'node:net';
-import { config } from './config.mjs';
+import { config, webUrl } from './config.mjs';
 import { db, save } from './store.mjs';
 import { sammleHost } from './collect/host.mjs';
 import { container, details } from './collect/docker.mjs';
@@ -478,7 +478,7 @@ function dienstUrl(d) {
   const ov = process.env[`${d.id.toUpperCase()}_URL`];
   if (ov) return ov;
   if (d.id === 'vaultwarden') return `https://${config.hostName}/`;
-  return `http://${config.hostName}:${d.port}${d.pfad || '/'}`;
+  return webUrl(d.port, d.pfad || '/');
 }
 
 function kennzahlen(d, kats) {
@@ -675,7 +675,7 @@ export function snapshot() {
         gesundheit: g ? { stufe: g.stufe, text: g.text, temp: g.temp, stunden: g.stunden, zeit: g.zeit } : null,
       };
     }),
-    scrutinyUrl: config.scrutiny.url || `http://${config.hostName}:${config.scrutiny.port}`,
+    scrutinyUrl: config.scrutiny.url || webUrl(config.scrutiny.port),
     containerUpdates: containerUpdatesSnapshot(),
     speicher: { kategorien: kats, zeit: speicherKategorien().zeit },
     netz: {
@@ -739,7 +739,7 @@ function moebelSnapshot() {
 function medienSnapshot() {
   const m = config.medien;
   const c = (n) => z.container.find((x) => x.name === n) || null;
-  const url = (port) => `http://${config.hostName}:${port}`;
+  const url = (port) => webUrl(port);
   const apps = [
     { id: 'qbittorrent', name: 'qBittorrent', container: m.downloadContainer, url: url(m.qbit.port) },
     { id: 'gluetun', name: 'Gluetun (VPN)', container: m.vpnContainer, url: null },
@@ -800,7 +800,7 @@ function parseNamen() {
 
 // Container-Updates für Oberfläche und Statusbericht (mit Compose-Ordner für den Update-Befehl).
 function containerUpdatesSnapshot() {
-  const url = config.wud.url || `http://${config.hostName}:${config.wud.port}`;
+  const url = config.wud.url || webUrl(config.wud.port);
   if (!config.wud.token) return { bereit: false, grund: 'WUD_TOKEN fehlt in .env', url, liste: [], gesamt: 0, zeit: null, fehler: [] };
   if (!z.wud) return { bereit: false, grund: z.fehler.wud || 'Wird geladen …', url, liste: [], gesamt: 0, zeit: null, fehler: [] };
   const liste = z.wud.updates.map((u) => {

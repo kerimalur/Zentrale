@@ -14,6 +14,9 @@ const num = (k, d) => {
 export const HOST_ROOT = str('HOST_ROOT', '/proc/1/root');
 export const hostPath = (p) => path.join(HOST_ROOT, p);
 
+// Link auf einen Dienst: mit HTTPS_LINKS=1 über Caddy (https://Host:Port+10000), sonst direkt per http.
+export const webUrl = (port, pfad = '/') => (process.env.HTTPS_LINKS === '1' ? `https://${str('HOST_NAME', 'homelabkerim.taila4b96b.ts.net')}:${port + 10000}${pfad}` : `http://${str('HOST_NAME', 'homelabkerim.taila4b96b.ts.net')}:${port}${pfad}`);
+
 export const config = {
   port: num('PORT', 3030),
   bind: str('BIND', '127.0.0.1'),

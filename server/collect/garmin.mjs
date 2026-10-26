@@ -1,7 +1,7 @@
 // Garmin-Daten aus der InfluxDB von garmin-grafana (/mnt/daten/garmin-grafana).
 // Nur lesen. Die Datenbank ist nur auf 127.0.0.1:8086 des Pi erreichbar.
 // Wird nur abgefragt, wenn jemand den Tab «Gesundheit» offen hat (Zwischenspeicher 60 s).
-import { config } from '../config.mjs';
+import { config, webUrl } from '../config.mjs';
 import { holen } from '../util.mjs';
 
 const TZ = 'Europe/Zurich';
@@ -158,7 +158,7 @@ async function laden() {
     zeit: Date.now(),
     geraet: sync[0]?.geraet || null,
     letzterSync: sync[0]?.time || null,
-    grafanaUrl: config.garmin.grafanaUrl || `http://${config.hostName}:${config.garmin.grafanaPort}`,
+    grafanaUrl: config.garmin.grafanaUrl || webUrl(config.garmin.grafanaPort),
     bodyBattery: {
       jetzt: runden(bbJetzt[0]?.bb),
       zeit: bbJetzt[0]?.time || null,
