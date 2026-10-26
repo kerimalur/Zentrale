@@ -23,7 +23,7 @@ import { pcStatus } from './pc.mjs';
 import { tvSnapshot } from './tv.mjs';
 import { scrutinyDaten } from './collect/scrutiny.mjs';
 import { wudDaten } from './collect/wud.mjs';
-import { tagescheckSenden, checkZeiten } from './tagescheck.mjs';
+import { tagescheckSenden, checkZeiten, neuesAbgleichen, KERN_UPDATES } from './tagescheck.mjs';
 
 const z = {
   host: null,
@@ -199,6 +199,7 @@ export async function mittel() {
     z.health[c.name] = d.health;
   }
   await medienMittel();
+  try { await neuesAbgleichen(medienSnapshot()?.neu || []); } catch (e) { console.error('[neues]', e.message); }
 }
 
 // Nextcloud-Übersicht neu laden (auch per Knopf in der Zentrale).
@@ -336,7 +337,7 @@ export async function langsam() {
       for (const u of w.updates) {
         const k = `${u.name}|${u.nach}`;
         jetzt[k] = true;
-        if (!erstesMal && !bekannt[k]) ereignis('info', `Update verfügbar: ${u.name} · ${u.art === 'image' ? 'neues Image (gleicher Tag)' : `${u.von} → ${u.nach}`}`);
+        if (!erstesMal && !bekannt[k]) ereignis('info', `Update verfügbar: ${u.name} · ${u.art === 'image' ? 'neues Image (gleicher Tag)' : `${u.von} → ${u.nach}`}`, KERN_UPDATES.test(u.name) ? { telegram: true, schluessel: 'upd-' + k } : {});
       }
       db().wudBekannt = jetzt;
     }

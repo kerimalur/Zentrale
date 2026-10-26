@@ -1,13 +1,18 @@
-// Tages-Check: kurze Zusammenfassung aufs Handy (Standard 8, 13 und 19 Uhr) –
-// «Alles gut» oder die Probleme, dazu was seit der letzten Meldung passiert ist.
+// Meldungen aufs Handy in zwei Stufen:
+//  1) SOFORT: alles Wichtige (Ausfälle, Fehler, Warnungen, Updates der Kernsysteme, neue Folgen/Filme der Favoriten,
+//     später Trading) – kommt direkt, über ereignis(..., { telegram: true }) bzw. sofortMelden().
+//  2) ZWISCHENBERICHT (Standard 8, 13, 19 Uhr): «Alles okay» + Nebensächliches, das trotzdem interessiert
+//     (neue Filme/Folgen, Garmin, offene Updates). Was schon sofort kam, steht hier nicht nochmal.
 //
 // Neue Prüfungen (Trading, Garmin, …) einhängen mit registrierePruefung():
 //   registrierePruefung('trading', async (snap) => [{ stufe: 'warnung', text: 'Prop-Firm: Tagesverlust bei 80 %' }]);
 // Rückgabe: Liste von { stufe: 'fehler' | 'warnung' | 'info' | 'ok', text }.
 //   fehler/warnung = Problem (Check wird «nicht alles gut»), info = nur eine Zeile, ok = zählt als Hinweis «alles gut».
 import { db, save } from './store.mjs';
-import { nachrichtSenden, telegramBereit } from './ereignisse.mjs';
-import { uhrzeit } from './util.mjs';
+import { nachrichtSenden, telegramBereit, melden } from './ereignisse.mjs';
+import { uhrzeit, tagKey } from './util.mjs';
+import { garminDaten } from './collect/garmin.mjs';
+import { dauer } from './garminText.mjs';
 
 export const STANDARD_ZEITEN = ['08:00', '13:00', '19:00'];
 const GRUPPEN = { '08:00': 'Morgen', '13:00': 'Mittag', '19:00': 'Abend' };
@@ -71,8 +76,42 @@ function eingebaut(s) {
   return r;
 }
 
-// ---------- Text bauen ----------
-export async function tagescheckBauen(s, { seit, zeit, manuell = false } = {}) {
+// ---------- Sofort melden (für neue Module: Trading, Garmin, …) ----------
+// sofortMelden('Prop-Firm: Tagesverlust bei 80 %', { art: 'warnung', schluessel: 'prop-verlust' })
+export const sofortMelden = (text, { art = 'warnung', schluessel = null } = {}) => melden(text, schluessel || text, art);
+
+// Updates dieser Container sind wichtig genug für eine Sofort-Meldung (Rest: nur im Zwischenbericht).
+export const KERN_UPDATES = /nextcloud|vaultwarden|tailscale|authelia|caddy|pihole|pi-hole|gluetun/i;
+
+// ---------- Neue Filme/Folgen ----------
+// Erster Abruf: alles als «bekannt» merken (nichts melden). Danach: Favoriten sofort, der Rest in den Zwischenbericht.
+export async function neuesAbgleichen(neu) {
+  const d = db();
+  if (!Array.isArray(neu)) return;
+  if (!d.neuGesehen) {
+    if (!neu.length) return; // Daten noch nicht geladen → später baselinen, sonst käme alles Alte als «neu»
+    d.neuGesehen = neu.map((x) => x.id);
+    d.neuOffen = [];
+    save();
+    return;
+  }
+  const gesehen = new Set(d.neuGesehen);
+  const frisch = neu.filter((x) => x.id && !gesehen.has(x.id));
+  if (!frisch.length) return;
+  const fav = (d.einstellungen.favoriten || []).map((f) => f.toLowerCase());
+  for (const x of frisch) {
+    d.neuGesehen.push(x.id);
+    const istFavorit = fav.some((f) => String(x.titel || '').toLowerCase().includes(f));
+    if (istFavorit) await sofortMelden(`${x.art === 'film' ? '🎬 Neuer Film' : '📺 Neue Folge'}: ${x.titel}`, { art: 'ok', schluessel: 'neu-' + x.id });
+    else (d.neuOffen ||= []).push({ titel: x.titel, art: x.art });
+  }
+  if (d.neuGesehen.length > 300) d.neuGesehen = d.neuGesehen.slice(-300);
+  if ((d.neuOffen || []).length > 100) d.neuOffen = d.neuOffen.slice(-100);
+  save();
+}
+
+// ---------- Zwischenbericht bauen ----------
+export async function tagescheckBauen(s, { zeit, manuell = false } = {}) {
   const alle = eingebaut(s);
   for (const [name, fn] of pruefungen) {
     try {
@@ -83,47 +122,34 @@ export async function tagescheckBauen(s, { seit, zeit, manuell = false } = {}) {
     }
   }
 
-  const fehler = alle.filter((x) => x.stufe === 'fehler');
-  const warnungen = alle.filter((x) => x.stufe === 'warnung');
+  const probleme = alle.filter((x) => x.stufe === 'fehler' || x.stufe === 'warnung');
   const infos = alle.filter((x) => x.stufe === 'info');
-  const probleme = [...fehler, ...warnungen];
+  const fehler = probleme.some((x) => x.stufe === 'fehler');
 
+  // Probleme kamen schon sofort aufs Handy – hier nur der Stand: alles okay oder was noch offen ist.
   const zeilen = [];
-  if (!probleme.length) zeilen.push('✅ Alles gut');
-  else zeilen.push(`${fehler.length ? '🔴' : '🟠'} ${probleme.length} ${probleme.length === 1 ? 'Problem' : 'Probleme'}`);
-  for (const p of probleme) zeilen.push(`• ${p.text}`);
-
-  const werte = [];
-  if (s.pi?.temp != null) werte.push(`Pi ${Math.round(s.pi.temp)} °C`);
-  if (s.moebel?.temp != null) werte.push(`Möbel ${s.moebel.temp.toFixed(1)} °C`);
-  const evo = (s.laufwerke || []).filter((l) => l.gross > 0).map((l) => Math.round((l.benutzt / l.gross) * 100));
-  if (evo.length) werte.push(`Platz max. ${Math.max(...evo)} % belegt`);
-  if (s.backup?.letzte?.ok) werte.push(`Backup ${zeitFormat(s.backup.letzte.zeit)} ok`);
-  if (werte.length) zeilen.push('', werte.join(' · '));
-  for (const i of infos) zeilen.push(i.text);
-
-  // Neu seit der letzten Meldung: nur Fehler und Warnungen, gleiche Texte zusammengefasst
-  const neu = (db().ereignisse || []).filter((e) => e.t > seit && (e.art === 'fehler' || e.art === 'warnung'));
-  if (neu.length) {
-    const gruppen = new Map();
-    for (const e of neu) {
-      const g = gruppen.get(e.text) || { text: e.text, art: e.art, anzahl: 0, t: e.t };
-      g.anzahl++;
-      gruppen.set(e.text, g);
-    }
-    const liste = [...gruppen.values()];
-    zeilen.push('', `Neu seit ${seit ? zeitFormat(seit) : 'dem letzten Check'}:`);
-    for (const g of liste.slice(0, 3)) {
-      const t = g.text.length > 80 ? g.text.slice(0, 77) + '…' : g.text;
-      zeilen.push(`• ${t}${g.anzahl > 1 ? ` (${g.anzahl}×)` : ''}`);
-    }
-    if (liste.length > 3) zeilen.push(`(+${liste.length - 3} weitere in der Zentrale)`);
+  if (!probleme.length) zeilen.push('✅ Alles okay');
+  else {
+    zeilen.push(`${fehler ? '🔴' : '🟠'} Noch offen (schon gemeldet):`);
+    for (const p of probleme.slice(0, 4)) zeilen.push(`• ${p.text}`);
+    if (probleme.length > 4) zeilen.push(`(+${probleme.length - 4} weitere)`);
   }
+
+  // Neu & interessant (Filme/Folgen, Garmin, offene Updates …)
+  const offen = db().neuOffen || [];
+  const neues = [];
+  const filme = offen.filter((x) => x.art === 'film').map((x) => x.titel);
+  const folgen = offen.filter((x) => x.art !== 'film').map((x) => x.titel);
+  const liste = (a, n = 3) => a.slice(0, n).join(', ') + (a.length > n ? ` (+${a.length - n})` : '');
+  if (filme.length) neues.push(`🎬 Neue Filme: ${liste(filme)}`);
+  if (folgen.length) neues.push(`📺 Neue Folgen: ${liste(folgen)}`);
+  for (const i of infos) neues.push(i.text);
+  if (neues.length) zeilen.push('', ...neues);
 
   return {
     titel: titelFuer(zeit, manuell),
     text: zeilen.join('\n'),
-    art: fehler.length ? 'fehler' : warnungen.length ? 'warnung' : 'ok',
+    art: probleme.length ? (fehler ? 'fehler' : 'warnung') : 'ok',
     probleme: probleme.length,
   };
 }
@@ -132,11 +158,11 @@ export async function tagescheckBauen(s, { seit, zeit, manuell = false } = {}) {
 export async function tagescheckSenden(snap, { zeit = null, manuell = false } = {}) {
   if (!telegramBereit()) return { ok: false, grund: 'Kein Kanal eingerichtet (NTFY_URL/NTFY_TOKEN in .env)' };
   const d = db();
-  const seit = d.letzterCheck || Date.now() - 8 * 3600_000;
-  const c = await tagescheckBauen(snap, { seit, zeit, manuell });
+  const c = await tagescheckBauen(snap, { zeit, manuell });
   const ok = await nachrichtSenden(c.text, c.art, c.titel);
   if (ok) {
     d.letzterCheck = Date.now();
+    d.neuOffen = []; // im Bericht gezeigt → beim nächsten nicht nochmal
     save();
   }
   return { ok, grund: ok ? null : 'Senden fehlgeschlagen', vorschau: c.text };
@@ -146,3 +172,24 @@ export const checkZeiten = () => {
   const z = db().einstellungen.checkZeiten;
   return Array.isArray(z) && z.length ? z : STANDARD_ZEITEN;
 };
+
+// ---------- Garmin: eine Zeile im Zwischenbericht, Ausfall der Synchronisation sofort ----------
+registrierePruefung('garmin', async () => {
+  let g;
+  try { g = await garminDaten(); } catch { return []; }
+  if (!g?.bereit) return [];
+  const r = [];
+  const teile = [];
+  if (g.letzteNacht) teile.push(`😴 ${dauer(g.letzteNacht.dauerS)}${g.letzteNacht.score ? ` (Score ${g.letzteNacht.score})` : ''}`);
+  if (g.heute?.schritte != null) teile.push(`🚶 ${g.heute.schritte.toLocaleString('de-CH')} Schritte`);
+  if (g.bodyBattery?.jetzt != null) teile.push(`🔋 ${g.bodyBattery.jetzt}`);
+  if (teile.length) r.push({ stufe: 'info', text: `Garmin: ${teile.join(' · ')}` });
+  // Uhr seit über 2 Tagen nicht synchronisiert → einmal pro Tag sofort melden
+  const alter = g.letzterSync ? Date.now() - new Date(g.letzterSync).getTime() : null;
+  if (alter !== null && alter > 2 * 86400_000 && db().garminSyncGemeldet !== tagKey()) {
+    db().garminSyncGemeldet = tagKey();
+    save();
+    await sofortMelden(`Garmin: Uhr seit ${Math.floor(alter / 86400_000)} Tagen nicht synchronisiert`, { art: 'warnung', schluessel: 'garmin-sync' });
+  }
+  return r;
+});

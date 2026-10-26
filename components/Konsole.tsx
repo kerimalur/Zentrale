@@ -119,9 +119,10 @@ export function EinstellungenKarte({ z, aktualisieren }: { z: Zustand; aktualisi
   const [sshFrage, setSshFrage] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const [checkInfo, setCheckInfo] = useState<string | null>(null);
+  const [favText, setFavText] = useState((z.einstellungen.favoriten || []).join(', '));
   const f = z.faehigkeiten;
 
-  useEffect(() => { setE(z.einstellungen); }, [z.einstellungen]);
+  useEffect(() => { setE(z.einstellungen); setFavText((z.einstellungen.favoriten || []).join(', ')); }, [z.einstellungen]);
 
   async function setzen(teil: Partial<Einstellungen>) {
     const neu = { ...e, ...teil };
@@ -164,7 +165,7 @@ export function EinstellungenKarte({ z, aktualisieren }: { z: Zustand; aktualisi
         </div>
       )}
       <Schalter an={e.telegram && f.telegram} deaktiviert={!f.telegram} onClick={() => setzen({ telegram: !e.telegram })} titel="Alarme aufs Handy" unter={f.telegram ? 'bei Fehlern und Ausfällen (ntfy/Telegram)' : 'ntfy oder Telegram noch nicht eingerichtet (.env)'} />
-      <Schalter an={e.checkAn && f.telegram} deaktiviert={!f.telegram} onClick={() => setzen({ checkAn: !e.checkAn })} titel="Tages-Check aufs Handy" unter={f.telegram ? `${e.checkZeiten.join(' · ')} – «Alles gut» oder die Probleme, dazu was neu ist` : 'ntfy oder Telegram noch nicht eingerichtet (.env)'} />
+      <Schalter an={e.checkAn && f.telegram} deaktiviert={!f.telegram} onClick={() => setzen({ checkAn: !e.checkAn })} titel="Zwischenbericht aufs Handy" unter={f.telegram ? `${e.checkZeiten.join(' · ')} – «Alles okay» und Neues; Wichtiges kommt sofort` : 'ntfy oder Telegram noch nicht eingerichtet (.env)'} />
       {e.checkAn && f.telegram && (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '10px 0', borderBottom: '1px solid var(--line)', fontSize: 13 }}>
           {e.checkZeiten.map((zeit, i) => (
@@ -172,6 +173,15 @@ export function EinstellungenKarte({ z, aktualisieren }: { z: Zustand; aktualisi
           ))}
           <button className="press knopf-klein" onClick={checkJetzt}>Jetzt senden</button>
           {checkInfo && <span style={{ color: 'var(--muted)' }}>{checkInfo}</span>}
+        </div>
+      )}
+      {f.telegram && (
+        <div style={{ padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
+          <label style={{ display: 'block', fontSize: 15, fontWeight: 600 }} htmlFor="favoriten">Lieblingsserien und -filme</label>
+          <span style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>Neue Folgen und Filme davon kommen sofort aufs Handy, alles andere im Zwischenbericht. Mit Komma trennen.</span>
+          <input id="favoriten" className="zeitfeld" style={{ width: '100%' }} type="text" value={favText} placeholder="z. B. Severance, Dune"
+            onChange={(x) => setFavText(x.target.value)}
+            onBlur={() => setzen({ favoriten: favText.split(',').map((t) => t.trim()).filter(Boolean) })} />
         </div>
       )}
       {z.moebel.luefter.vorhanden && (

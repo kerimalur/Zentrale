@@ -122,6 +122,7 @@ async function api(req, res, url) {
     if (zeit(b.nachtBis)) e.nachtBis = b.nachtBis;
     if (typeof b.telegram === 'boolean') e.telegram = b.telegram;
     if (typeof b.checkAn === 'boolean') e.checkAn = b.checkAn;
+    if (Array.isArray(b.favoriten)) e.favoriten = [...new Set(b.favoriten.map((x) => String(x).trim().slice(0, 60)).filter(Boolean))].slice(0, 30);
     if (Array.isArray(b.checkZeiten)) {
       const ok = [...new Set(b.checkZeiten.map(String).filter(zeit))].sort().slice(0, 6);
       if (ok.length) e.checkZeiten = ok;

@@ -75,6 +75,7 @@ export interface Einstellungen {
   telegram: boolean;
   checkAn: boolean;
   checkZeiten: string[];
+  favoriten: string[];
   hddSchlaf: boolean;
   luefterAusUnter: number;
   backupAuto: boolean;

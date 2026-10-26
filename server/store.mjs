@@ -15,6 +15,7 @@ const standard = () => ({
     telegram: true,
     checkAn: true, // Tages-Check aufs Handy (ntfy/Telegram)
     checkZeiten: ['08:00', '13:00', '19:00'],
+    favoriten: [], // Lieblingsserien/-filme: neue Folgen/Filme davon kommen sofort aufs Handy
     hddSchlaf: true,
     luefterAusUnter: 50,
     moebelWarnAb: 40, // Warnung, wenn es im Möbel wärmer wird (°C)
