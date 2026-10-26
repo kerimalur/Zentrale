@@ -36,11 +36,14 @@ object Api {
         throw Exception(a.json?.optString("fehler")?.takeIf { it.isNotEmpty() } ?: "Fehler ${a.status}")
     }
 
+    fun diagnose(s: Speicher, text: String): Antwort =
+        post("${s.adresse}/api/fokus/agent/diagnose", s.token, JSONObject().put("text", text))
+
     /** Sendet die gesammelte Zeit und liefert die aktuellen Sperren zurück. */
     fun bericht(s: Speicher, zeiten: Map<String, Int>, jetzt: String?): Antwort {
         val eintraege = JSONArray()
         for ((name, sek) in zeiten) eintraege.put(JSONObject().put("art", "app").put("name", name).put("sek", sek))
-        val body = JSONObject().put("version", "android-1.0").put("eintraege", eintraege)
+        val body = JSONObject().put("version", "android-1.1").put("eintraege", eintraege)
         if (jetzt != null) body.put("jetzt", JSONObject().put("art", "app").put("name", jetzt))
         return post("${s.adresse}/api/fokus/agent/bericht", s.token, body)
     }

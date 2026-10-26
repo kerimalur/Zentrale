@@ -30,6 +30,7 @@ export function Fokus() {
   const [sperrePopup, setSperrePopup] = useState<FSperre | 'neu' | null>(null);
   const [eintrag, setEintrag] = useState<FEintrag | null>(null);
   const [geraet, setGeraet] = useState<FGeraet | null>(null);
+  const [diag, setDiag] = useState(false);
 
   const laden = useCallback(async () => {
     try { setD(await holen<FokusZustand>('/api/fokus' + (tag ? `?tag=${tag}` : ''))); setFehler(null); }
@@ -166,6 +167,13 @@ export function Fokus() {
         </div>
       </section>
 
+      {d.diagnose && (
+        <section className="karte in" aria-label="Inspektor">
+          <h2 className="karte-titel">Inspektor-Ergebnis <small>{d.diagnose.geraet} · {relativ(d.diagnose.zeit)}</small></h2>
+          <button className="knopf-klein press" onClick={() => setDiag(true)}>Anzeigen und kopieren</button>
+        </section>
+      )}
+      {diag && d.diagnose && <DiagnosePopup text={d.diagnose.text} onClose={() => setDiag(false)} />}
       {koppeln && <KoppelPopup onClose={() => { setKoppeln(false); laden(); }} />}
       {sperrePopup && <SperrePopup s={sperrePopup === 'neu' ? null : sperrePopup} d={d} onClose={() => { setSperrePopup(null); laden(); }} />}
       {eintrag && <EintragPopup e={eintrag} d={d} onClose={() => { setEintrag(null); laden(); }} onSperre={(wert, typ) => { setEintrag(null); setSperrePopup({ id: '', typ, wert, modus: 'immer', von: '08:00', bis: '18:00', limitMin: 30, geraete: 'alle', an: true, aktiv: false, nutzungMin: null }); }} />}
@@ -292,6 +300,16 @@ function KoppelPopup({ onClose }: { onClose: () => void }) {
           <p className="nw-text">Gib diesen Code und die Adresse im Programm auf dem Gerät ein. Danach erscheint das Gerät hier. Die Schritte pro Gerät (Windows, Laptop, Handy) bekommst du von Claude im Chat.</p>
         </>
       )}
+    </Popup>
+  );
+}
+
+function DiagnosePopup({ text, onClose }: { text: string; onClose: () => void }) {
+  const [kopiert, setKopiert] = useState(false);
+  return (
+    <Popup titel="Inspektor-Ergebnis" unter="Welche Elemente die App auf dem Bildschirm gesehen hat (* = ausgewählt)" onClose={onClose} breit>
+      <button className="knopf-akzent press" style={{ alignSelf: 'flex-start' }} onClick={async () => { await kopieren(text); setKopiert(true); setTimeout(() => setKopiert(false), 1500); }}>{kopiert ? 'Kopiert ✓' : 'Alles kopieren'}</button>
+      <textarea readOnly value={text} style={{ width: '100%', minHeight: 300, font: '12px ui-monospace, monospace', padding: 10, borderRadius: 10, border: '1px solid var(--track)', boxSizing: 'border-box' }} />
     </Popup>
   );
 }

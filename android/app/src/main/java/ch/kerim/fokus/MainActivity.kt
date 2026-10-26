@@ -113,6 +113,11 @@ class MainActivity : Activity() {
             }
             wurzel.addView(text("Status: ${s.letzterStatus}", 14f))
             wurzel.addView(text("Sperren: ${s.sperren().length()} aktiv", 14f))
+            wurzel.addView(knopf("Inspektor starten (30 Sek)") {
+                val dienst = FokusService.instanz
+                if (dienst == null) s.letzterStatus = "Bedienungshilfe ist aus"
+                else { dienst.inspektorStarten(30); s.letzterStatus = "Inspektor läuft: jetzt die App öffnen" }
+            })
             wurzel.addView(knopf("Entkoppeln") { s.entkoppeln(); letzteAnsicht = ""; zeichnen() })
         }
     }

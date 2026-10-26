@@ -36,6 +36,61 @@ class FokusService : AccessibilityService() {
     private var letzterHinweis = 0L
     private var letzteAuswertung = 0L
 
+    // ---------- Inspektor: zeichnet auf, welche Elemente (View-IDs) die fremde App zeigt ----------
+    private var inspektorBis = 0L
+    private var inspektorLetzte = 0L
+    private var inspektorHash = 0
+    private val inspektorLog = StringBuilder()
+    private var inspektorStart = 0L
+
+    fun inspektorStarten(sekunden: Int) {
+        inspektorLog.setLength(0)
+        inspektorStart = System.currentTimeMillis()
+        inspektorBis = inspektorStart + sekunden * 1000L
+        inspektorHash = 0
+        handler.postDelayed({ inspektorFertig() }, sekunden * 1000L + 500)
+    }
+
+    private fun inspektorFertig() {
+        if (inspektorBis == 0L) return
+        inspektorBis = 0L
+        val text = inspektorLog.toString().ifEmpty { "(nichts aufgezeichnet)" }
+        netz.execute {
+            try {
+                val a = Api.diagnose(speicher, text)
+                speicher.letzterStatus = if (a.status == 200) "Inspektor gesendet" else "Inspektor-Fehler ${a.status}"
+            } catch (e: Exception) { speicher.letzterStatus = "Inspektor: Zentrale nicht erreichbar" }
+        }
+    }
+
+    private fun inspektorSammeln(pkg: String) {
+        val nun = System.currentTimeMillis()
+        if (nun - inspektorLetzte < 1200) return
+        inspektorLetzte = nun
+        val root = rootInActiveWindow ?: return
+        val ids = java.util.TreeSet<String>()
+        var anzahl = 0
+        fun gehen(n: AccessibilityNodeInfo?, tiefe: Int) {
+            if (n == null || anzahl > 1500 || tiefe > 40) return
+            anzahl++
+            val id = n.viewIdResourceName?.substringAfter(":id/")
+            val desc = n.contentDescription?.toString()?.take(24)
+            if (id != null) {
+                val teile = StringBuilder(id)
+                if (n.isSelected) teile.append('*')
+                if (!desc.isNullOrEmpty() && (n.isSelected || n.isClickable)) teile.append(" [").append(desc).append(']')
+                ids.add(teile.toString())
+            }
+            for (i in 0 until n.childCount) gehen(n.getChild(i), tiefe + 1)
+        }
+        gehen(root, 0)
+        val h = ids.hashCode()
+        if (h == inspektorHash) return
+        inspektorHash = h
+        inspektorLog.append("--- +").append((nun - inspektorStart) / 1000).append("s ").append(pkg).append('\n')
+        inspektorLog.append(ids.take(150).joinToString("\n")).append('\n')
+    }
+
     private val ticker = object : Runnable {
         override fun run() {
             try { zaehlen() } catch (_: Exception) {}
@@ -43,8 +98,11 @@ class FokusService : AccessibilityService() {
         }
     }
 
+    companion object { @Volatile var instanz: FokusService? = null }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
+        instanz = this
         speicher = Speicher(this)
         try {
             val alt = speicher.puffer
@@ -57,6 +115,7 @@ class FokusService : AccessibilityService() {
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        instanz = null
         handler.removeCallbacks(ticker)
         speichern()
         return super.onUnbind(intent)
@@ -146,6 +205,11 @@ class FokusService : AccessibilityService() {
 
     // ---------- Sperren ----------
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event != null && inspektorBis > System.currentTimeMillis()) {
+            val ip = event.packageName?.toString()
+            if (ip != null && ip != packageName) inspektorSammeln(ip)
+            return
+        }
         if (event == null || !::speicher.isInitialized || !speicher.gekoppelt) return
         val nun = System.currentTimeMillis()
         if (nun - letzteAuswertung < 350) return

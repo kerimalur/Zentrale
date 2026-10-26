@@ -21,7 +21,7 @@ import { pcWecken, pcAusschalten, pcSchluesselZeile } from './pc.mjs';
 import { tvAbfragen, tvTaste, tvLautstaerke, tvEinschalten } from './tv.mjs';
 import { garminDaten, garminHistorie } from './collect/garmin.mjs';
 import { tagescheckSenden } from './tagescheck.mjs';
-import { fokusZustand, fokusLauf, koppelcodeErzeugen, koppeln, geraetVonToken, geraetEntfernen, geraetSetzen as fokusGeraetSetzen, bericht as fokusBericht, sperreSetzen, sperreLoeschen, kategorieSetzen, piholeSync } from './fokus.mjs';
+import { fokusZustand, fokusLauf, koppelcodeErzeugen, koppeln, geraetVonToken, geraetEntfernen, geraetSetzen as fokusGeraetSetzen, bericht as fokusBericht, diagnoseSpeichern, sperreSetzen, sperreLoeschen, kategorieSetzen, piholeSync } from './fokus.mjs';
 import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
 ensureDataDir();
@@ -89,6 +89,11 @@ async function api(req, res, url) {
     const b = await body(req);
     const r = koppeln({ code: b.code, name: b.name, art: b.art });
     return r.fehler ? json(res, r.status || 400, { fehler: r.fehler }) : json(res, 200, r);
+  }
+  if (p === '/api/fokus/agent/diagnose' && m === 'POST') {
+    const g = geraetVonToken(req);
+    if (!g) return json(res, 401, { fehler: 'Ungültiges Token' });
+    return json(res, 200, diagnoseSpeichern(g, (await body(req)).text));
   }
   if (p === '/api/fokus/agent/bericht' && m === 'POST') {
     const g = geraetVonToken(req);

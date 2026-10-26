@@ -15,4 +15,5 @@ export interface FokusZustand {
   bereiche: Record<string, string>;
   pihole: { gruppe: number | null; fehler: string | null; zeit: number; domains: number; clients: number };
   code: { bis: number } | null;
+  diagnose: { zeit: number; geraet: string; text: string } | null;
 }

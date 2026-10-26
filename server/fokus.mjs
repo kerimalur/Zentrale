@@ -83,6 +83,13 @@ export function koppeln({ code, name, art }) {
   return { id, token };
 }
 
+export function diagnoseSpeichern(g, text) {
+  const f = fokusDb();
+  f.diagnose = { zeit: jetzt(), geraet: g.name, text: String(text || '').slice(0, 60_000) };
+  save();
+  return { ok: true };
+}
+
 export function geraetVonToken(req) {
   const m = /^Bearer ([0-9a-f]{64})$/.exec(String(req.headers.authorization || ''));
   if (!m) return null;
@@ -347,6 +354,7 @@ export function fokusZustand(tagParam) {
     bereiche: BEREICHE,
     pihole: { gruppe: f.pihole.gruppe, fehler: f.pihole.fehler, zeit: f.pihole.zeit, domains: f.pihole.domains || 0, clients: f.pihole.clients || 0 },
     code: f.code && f.code.bis > nun ? { bis: f.code.bis } : null,
+    diagnose: f.diagnose || null,
   };
 }
 
