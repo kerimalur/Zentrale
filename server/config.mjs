@@ -131,6 +131,17 @@ export const config = {
   // What's Up Docker (Container-Updates). Token nur mit Bereich «Read» (WUD → Profil → Generate Token).
   wud: { port: num('WUD_PORT', 3010), url: str('WUD_URL', ''), token: str('WUD_TOKEN', '') },
 
+  // Garmin (garmin-grafana): InfluxDB nur lesend über 127.0.0.1, Grafana für Details.
+  garmin: {
+    influxPort: num('GARMIN_INFLUX_PORT', 8086),
+    db: str('GARMIN_INFLUX_DB', 'GarminStats'),
+    user: str('GARMIN_INFLUX_USER', 'influxdb_user'),
+    passwort: str('GARMIN_INFLUX_PASSWORD', ''),
+    grafanaPort: num('GARMIN_GRAFANA_PORT', 3020),
+    grafanaUrl: str('GARMIN_GRAFANA_URL', ''),
+    schritteZiel: num('GARMIN_SCHRITTE_ZIEL', 10000),
+  },
+
   // Philips-Fernseher (JointSpace-API v6). MAC = WLAN-MAC, zum Aufwecken aus dem Standby.
   tv: {
     ip: str('TV_IP', ''),

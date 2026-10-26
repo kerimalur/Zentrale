@@ -62,7 +62,7 @@ input { font: inherit; }
 
 @media (prefers-reduced-motion: reduce) {
   .in, .pop, .slide { animation: fade .2s ease both; }
-  .ring, .spark, .area, .live, .ping, .orbit, .float, .gx, .gy { animation: none; }
+  .ring, .spark, .area, .live, .ping, .orbit, .float, .gx, .gy, .ges-schlag svg, .ges-endpunkt, .ges-skelett { animation: none; }
   .spark { stroke-dashoffset: 0; }
   .arc, .press, .kachel, .kachel-ico, .knopf, .spur { transition: none; }
 }
@@ -203,6 +203,70 @@ input { font: inherit; }
 .login-karte { width: 100%; max-width: 400px; background: #fff; border-radius: 32px; padding: 32px; display: flex; flex-direction: column; gap: 18px; }
 .login-karte input { border: 1px solid #d5dae5; border-radius: 14px; padding: 13px 14px; font-size: 16px; min-height: 48px; }
 
+
+/* ---------- Gesundheit (Garmin) ---------- */
+@keyframes schlag { 0%, 100% { transform: scale(1); } 12% { transform: scale(1.22); } 24% { transform: scale(1); } 36% { transform: scale(1.14); } 48% { transform: scale(1); } }
+@keyframes schimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes puls { 0% { box-shadow: 0 0 0 0 rgba(255,255,255,.7); } 100% { box-shadow: 0 0 0 10px rgba(255,255,255,0); } }
+.ges { display: flex; flex-direction: column; gap: 16px; }
+.ges-oben { display: grid; grid-template-columns: 1.15fr 1.1fr 1fr 1fr; gap: 16px; }
+.ges-mitte { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.ges-unten { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+.ges-skelett { min-height: 280px; background: linear-gradient(90deg, #fff 0%, #f4f6fa 50%, #fff 100%); background-size: 200% 100%; animation: schimmer 1.4s ease-in-out infinite, fade .4s ease both; }
+.ges-leer { display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13px; min-height: 60px; }
+.ges-bb { position: relative; overflow: hidden; color: #fff; border-radius: 32px; padding: 22px 22px 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; transition: background .6s ease; }
+.ges-bb::after { content: ''; position: absolute; right: -60px; top: -60px; width: 200px; height: 200px; border-radius: 50%; background: rgba(255,255,255,.08); pointer-events: none; }
+.ges-bb-kopf { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; }
+.ges-bb-zeit { margin-left: auto; font-size: 12px; font-weight: 400; opacity: .85; }
+.ges-ico-hell { width: 34px; height: 34px; border-radius: 11px; background: rgba(255,255,255,.2); display: inline-flex; align-items: center; justify-content: center; }
+.ges-bb-wert { display: flex; align-items: center; gap: 18px; }
+.ges-bb-zahlen { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+.ges-bb-zahlen > div { background: rgba(255,255,255,.16); border-radius: 16px; padding: 9px 12px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.ges-bb-zahlen span { font-size: 12px; opacity: .9; }
+.ges-bb-zahlen b { font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }
+.ges-bb-fuss { display: flex; justify-content: space-between; font-size: 11px; opacity: .8; margin-top: -6px; }
+.ges-endpunkt { position: absolute; width: 10px; height: 10px; border-radius: 50%; transform: translate(-50%, -50%); animation: pop .45s var(--ease) both, puls 1.8s ease-out 1.4s infinite; }
+.ges-kachel { display: flex; flex-direction: column; gap: 14px; }
+.ges-kopf { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; }
+.ges-ico { width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.ges-schlag svg { animation: schlag 1.6s ease-in-out infinite; transform-origin: center; }
+.ges-riesig { font-size: 46px; font-weight: 800; letter-spacing: -0.05em; line-height: 1; }
+.ges-gross { font-size: 28px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.05; }
+.ges-einheit { font-size: 15px; font-weight: 600; color: var(--muted); margin-left: 5px; }
+.ges-einheit.klein { font-size: 12px; }
+.ges-phasen { display: flex; gap: 3px; border-radius: 999px; overflow: hidden; }
+.ges-phasen > span { display: block; height: 100%; }
+.ges-legende { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.ges-legende span { display: inline-flex; align-items: center; gap: 5px; }
+.ges-legende i, .ges-reihe-kopf i { width: 8px; height: 8px; border-radius: 3px; display: inline-block; }
+.ges-legende b { color: var(--ink); font-weight: 600; }
+.ges-heute { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 6px; }
+.ges-heute-wert { background: var(--bg); border-radius: 20px; padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ges-reihe-kopf { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.ges-reihe-kopf span { display: inline-flex; align-items: center; gap: 6px; }
+.ges-reihe-kopf .leise { font-weight: 400; font-size: 12px; }
+.ges-stress { display: flex; align-items: flex-end; gap: 1px; height: 64px; }
+.ges-stress > span { flex: 1; min-width: 1px; border-radius: 2px 2px 0 0; }
+.ges-saeulen-box { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.ges-saeulen { position: relative; display: flex; align-items: flex-end; gap: 4px; }
+.ges-saeule { flex: 1; height: 100%; display: flex; align-items: flex-end; min-width: 0; }
+.ges-saeule > span { display: block; width: 100%; border-radius: 6px 6px 3px 3px; transition: filter .2s ease; }
+.ges-saeule:hover > span { filter: brightness(1.12); }
+.ges-ziel { position: absolute; left: 0; right: 0; border-top: 2px dashed #cbd2df; pointer-events: none; z-index: 2; }
+.ges-ziel span { position: absolute; right: 0; top: -21px; font-size: 11px; font-weight: 600; color: var(--muted); background: #fff; padding: 1px 6px; border-radius: 6px; box-shadow: 0 1px 4px rgba(21,26,38,.12); }
+.ges-mini { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.ges-mini > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ges-mini span { font-size: 11px; color: var(--muted); }
+.ges-mini b { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ges-saeulen-achse { display: flex; gap: 4px; font-size: 10px; color: var(--muted); }
+.ges-saeulen-achse span { flex: 1; min-width: 0; white-space: nowrap; overflow: visible; }
+.ges-akt-ico { width: 38px; height: 38px; border-radius: 13px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.ges-fuss { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 30px; }
+.ges-fuss > div { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.ges-fuss b { font-size: 15px; }
+.ges-fuss-aktionen { margin-left: auto; flex-direction: row !important; gap: 8px !important; flex-wrap: wrap; }
+.ges-fuss-aktionen a { text-decoration: none; display: inline-flex; align-items: center; }
+
 /* ---------- Responsiv ---------- */
 @media (max-width: 1240px) {
   .ueb { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: 'status rechts' 'apps apps'; }
@@ -210,6 +274,9 @@ input { font: inherit; }
   .sys { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .anschluesse { grid-column: span 2; }
   .konsole, .gaeste, .netz-unten { grid-template-columns: 1fr; }
+  .ges-oben { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ges-unten { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .ges-unten > :first-child { grid-column: 1 / -1; }
 }
 @media (max-width: 760px) {
   .seite { padding: 18px 16px 40px; gap: 16px; }
@@ -234,6 +301,10 @@ input { font: inherit; }
   .speicher-unten, .legende-gitter { grid-template-columns: 1fr; }
   .verkehr { gap: 5px; height: 180px; }
   .terminal { min-height: 520px; padding: 16px; }
+  .ges-oben, .ges-mitte, .ges-unten { grid-template-columns: 1fr; }
+  .ges-heute, .ges-mini { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ges-riesig { font-size: 40px; }
+  .ges-fuss-aktionen { margin-left: 0; }
   .karte { border-radius: 24px; padding: 18px; }
 }
 

@@ -289,3 +289,16 @@ cd <Compose-Ordner> && docker compose pull <dienst> && docker compose up -d <die
 Aktualisiert wird **nie automatisch** – du entscheidest. Neue Updates erscheinen einmal unter Ereignisse und im Statusbericht.
 
 Einrichten: In WUD oben rechts **Profil → Generate Token**, nur **Read** ankreuzen, Ablauf «Never». Den Token (`wud_…`) in die `.env` der Zentrale als `WUD_TOKEN=` eintragen, nicht in den Chat. Optional: `WUD_PORT` (3010), `WUD_URL`.
+
+## Gesundheit (Garmin)
+
+Tab **Gesundheit** zeigt die Daten deiner Garmin-Uhr aus garmin-grafana (`/mnt/daten/garmin-grafana`): Body Battery mit 24-Std-Verlauf, letzte Nacht (Score, Dauer, Phasen), HRV mit 7-Nächte-Vergleich, Ruhepuls mit 30-Tage-Vergleich, Schritte, Intensitätsminuten der Woche, Kalorien, Stockwerke, Puls und Stress der letzten 24 Std, Schlaf und Schritte der letzten 30 Tage, die letzten Aktivitäten, VO₂max und Fitnessalter. Grafana bleibt für Detailanalysen.
+
+Die Zentrale liest nur, und nur solange der Tab offen ist (jede Minute, Zwischenspeicher 60 s). Dafür muss die InfluxDB von garmin-grafana **nur lokal** erreichbar sein, in deren `compose.yml` beim Dienst `influxdb`:
+
+```yaml
+    ports:
+      - "127.0.0.1:8086:8086"
+```
+
+`.env` der Zentrale: `GARMIN_INFLUX_PASSWORD=` (gleicher Wert wie `INFLUXDB_PASSWORD` in garmin-grafana). Optional: `GARMIN_INFLUX_PORT` (8086), `GARMIN_GRAFANA_PORT` (3020), `GARMIN_GRAFANA_URL`, `GARMIN_SCHRITTE_ZIEL` (10000).

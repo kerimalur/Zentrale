@@ -293,3 +293,40 @@ export interface ExplorerOrdner {
   anzahl: number;
   gekuerzt: boolean;
 }
+
+// ---------- Garmin (Tab «Gesundheit», /api/garmin) ----------
+export interface GarminPunkt { t: number; v: number }
+export interface GarminNacht {
+  tag: string; ende: number; start: number; dauerS: number; tiefS: number; leichtS: number; remS: number; wachS: number;
+  score: number | null; hrv: number | null; ruhepuls: number | null; bbPlus: number | null; aufgewacht: number | null; atmung: number | null; spo2: number | null;
+}
+export interface GarminTag {
+  tag: string; schritte: number | null; kcalAktiv: number | null; distanzM: number | null; ruhepuls: number | null; intensitaet: number;
+  stockwerke: number | null; bbGeladen: number | null; bbVerbraucht: number | null; bbMax: number | null; bbMin: number | null; stressProzent: number | null;
+}
+export interface GarminAktivitaet {
+  zeit: number; name: string; typ: string; dauerS: number | null; distanzM: number | null; pulsSchnitt: number | null; pulsMax: number | null;
+  kcal: number | null; effekt: number | null; last: number | null;
+}
+export type Garmin =
+  | { bereit: false; grund: string }
+  | {
+      bereit: true;
+      zeit: number;
+      geraet: string | null;
+      letzterSync: number | null;
+      grafanaUrl: string;
+      bodyBattery: { jetzt: number | null; zeit: number | null; verlauf: GarminPunkt[]; geladen: number | null; verbraucht: number | null };
+      puls: { verlauf: GarminPunkt[]; ruhe: number | null; ruhe30: number | null };
+      stress: { verlauf: GarminPunkt[]; schnitt: number | null };
+      hrv: { letzte: number | null; schnitt7: number | null; stufe: 'tief' | 'normal' | 'hoch' | 'unbekannt'; text: string };
+      letzteNacht: GarminNacht | null;
+      heute: (GarminTag & { schritteZiel: number }) | null;
+      wocheIntensitaet: number;
+      schlaf: GarminNacht[];
+      tage: GarminTag[];
+      aktivitaeten: GarminAktivitaet[];
+      vo2max: number | null;
+      fitnessAlter: number | null;
+      alter: number | null;
+    };
