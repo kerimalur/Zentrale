@@ -183,6 +183,9 @@ Standard **aus**. Ein-/ausschalten unter **Einstellungen → Backup**. „Backup
 | Übersicht | 6 Dienste mit Status, Antwortzeit, Kennzahl, Verlauf; Szenen; Ereignisse & Fehler | Docker, HTTP-Checks, APIs |
 | System | CPU, RAM, Temperatur, Lüfter, Energie + 24-Std-Verlauf, Anschlüsse (USB 2/3, UASP, LAN, Netzteil), Updates | /proc, /sys, Docker, apt |
 | Netz | Geräte mit Download/Upload heute + DNS-Anfragen, Datenverkehr 24 Std, Ping | Tailscale, Pi-hole |
+| Netz → Heimnetz | Alle Geräte im Haus (ARP, mDNS, SSDP, Hersteller), Zuordnung (Meins/Familie/Gast), «Ports prüfen» pro Gerät, wer beim Pi anklopft (Scan-Erkennung), Tailnet-Geräte | /proc/net/arp, Multicast, nf_conntrack, Tailscale |
+| Netz → Ports & Zugriff | Alle lauschenden Ports mit Container/Prozess, wer durchkommt (Heimnetz/Tailnet), Firewall- und Tailscale-Regeln, «Weg einer Anfrage» | /proc/net, ufw, iptables, Tailscale-ACL (mit `TS_API_KEY` live) |
+| Netz → Lernen | Lektionen, Glossar mit Pop-ups, Geschichten aus dem Homelab, Selbsttest, Anleitung «Dienst freigeben» | fest eingebaut |
 | Medien | VPN-Schutz, Downloads, Arr-Stack, Demnächst, Neu, Seerr | qBittorrent, Docker exec, *arr-APIs, Seerr |
 | Speicher | Laufwerke, Speicher pro Bereich, Syncthing-Status pro Gerät, Backup | statfs, du, Syncthing, rsync |
 | Gäste | Einladen, Ablauf, Entfernen, Zugriffsregeln | Tailscale-API, Jellyfin-API |

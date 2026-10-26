@@ -2,8 +2,43 @@
 import type { Zustand } from '@/lib/types';
 import { bytes, relativ, zahl } from '@/lib/format';
 import { Icon } from './ui';
+import { useEffect, useState } from 'react';
+import { NetzHeim } from './NetzHeim';
+import { NetzPorts } from './NetzPorts';
+import { NetzLernen } from './NetzLernen';
+import { useNetzwerk } from './NetzBausteine';
+
+type Reiter = 'uebersicht' | 'heim' | 'ports' | 'lernen';
+const REITER: { id: Reiter; text: string }[] = [
+  { id: 'uebersicht', text: 'Übersicht' },
+  { id: 'heim', text: 'Heimnetz' },
+  { id: 'ports', text: 'Ports & Zugriff' },
+  { id: 'lernen', text: 'Lernen' },
+];
 
 export function Netz({ z }: { z: Zustand }) {
+  const [reiter, setReiter] = useState<Reiter>('uebersicht');
+  useEffect(() => {
+    try { const r = sessionStorage.getItem('netz-reiter') as Reiter | null; if (r && REITER.some((x) => x.id === r)) setReiter(r); } catch {}
+  }, []);
+  const waehlen = (r: Reiter) => { setReiter(r); try { sessionStorage.setItem('netz-reiter', r); } catch {} };
+  const { d, fehler, neuLaden } = useNetzwerk();
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="segment nw-reiter" role="tablist" aria-label="Netz-Bereiche" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        {REITER.map((r) => <button key={r.id} role="tab" aria-selected={reiter === r.id} aria-pressed={reiter === r.id} onClick={() => waehlen(r.id)}>{r.text}</button>)}
+      </div>
+      {reiter === 'uebersicht' && <NetzUebersicht z={z} />}
+      {(reiter === 'heim' || reiter === 'ports') && fehler && !d && <div className="karte fehlerbox">Netzwerk-Daten nicht ladbar: {fehler}</div>}
+      {(reiter === 'heim' || reiter === 'ports') && !d && !fehler && <div className="karte leise">Lade … die erste Abfrage liest das Netz und kann einige Sekunden dauern.</div>}
+      {reiter === 'heim' && d && <NetzHeim d={d} neuLaden={neuLaden} />}
+      {reiter === 'ports' && d && <NetzPorts d={d} />}
+      {reiter === 'lernen' && <NetzLernen gehZu={(r) => waehlen(r)} />}
+    </div>
+  );
+}
+
+function NetzUebersicht({ z }: { z: Zustand }) {
   const g = z.netz.geraete;
   const maxAktiv = Math.max(1, ...g.map((x) => x.download + x.upload));
   const maxV = Math.max(1, ...z.netz.verkehr.map((v) => Math.max(v.down, v.up)));

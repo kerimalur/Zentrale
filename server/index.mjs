@@ -21,6 +21,7 @@ import { pcWecken, pcAusschalten, pcSchluesselZeile } from './pc.mjs';
 import { tvAbfragen, tvTaste, tvLautstaerke, tvEinschalten } from './tv.mjs';
 import { garminDaten, garminHistorie } from './collect/garmin.mjs';
 import { tagescheckSenden } from './tagescheck.mjs';
+import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
 ensureDataDir();
 load();
@@ -88,6 +89,22 @@ async function api(req, res, url) {
 
   if (p === '/api/logout' && m === 'POST') return json(res, 200, { ok: true }, { 'Set-Cookie': logout(req) });
   if (p === '/api/state' && m === 'GET') return json(res, 200, snapshot());
+
+  // ---------- Netzwerk (Tab «Netz» → Heimnetz, Ports & Zugriff) ----------
+  if (p === '/api/netzwerk' && m === 'GET') return json(res, 200, await netzwerkZustand());
+  if (p === '/api/netzwerk/suchen' && m === 'POST') return json(res, 200, await netzwerkSuchen());
+  if (p === '/api/netzwerk/ports' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await portsPruefen(String(b.ip || '')));
+  }
+  if (p === '/api/netzwerk/geraet' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, { ok: true, geraet: geraetSetzen({ mac: b.mac, name: b.name, besitzer: b.besitzer }) });
+  }
+  if (p === '/api/netzwerk/wache' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, { ok: true, an: wacheSetzen(!!b.an) });
+  }
 
   // ---------- Garmin (Tab «Gesundheit») ----------
   if (p === '/api/garmin/historie' && m === 'GET') {
@@ -301,6 +318,8 @@ alle(6 * 3600_000, sehrLangsam);
 alle(30 * 60_000, speicherLauf);
 alle(20_000, zeitplan, false);
 alle(15_000, tvAbfragen);
+// Netz-Wache: neue Geräte im Heimnetz und Port-Scans gegen den Pi (liest nur, schickt nichts los).
+setTimeout(() => alle(30_000, netzwache, false), 20_000);
 // Statusbericht für Obsidian (alle 15 Min, erstmals 2 Min nach dem Start, wenn alle Daten da sind).
 let berichtFehler = null;
 const bericht = async () => {

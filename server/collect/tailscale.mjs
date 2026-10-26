@@ -69,6 +69,8 @@ export async function nutzerEntfernen(userId) {
   return null;
 }
 
+export const aclLesen = () => tsApi('GET', '/tailnet/-/acl');
+
 // Prüft, ob die Zugriffsregeln Gäste wirklich einschränken.
 export async function aclPruefen(piIp, ichLogin) {
   const acl = await tsApi('GET', '/tailnet/-/acl');
