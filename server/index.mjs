@@ -19,7 +19,7 @@ import { moebelLuefterModus } from './moebelLuefter.mjs';
 import { statusBerichtSchreiben } from './statusbericht.mjs';
 import { pcWecken, pcAusschalten, pcSchluesselZeile } from './pc.mjs';
 import { tvAbfragen, tvTaste, tvLautstaerke, tvEinschalten } from './tv.mjs';
-import { garminDaten } from './collect/garmin.mjs';
+import { garminDaten, garminHistorie } from './collect/garmin.mjs';
 
 ensureDataDir();
 load();
@@ -89,6 +89,13 @@ async function api(req, res, url) {
   if (p === '/api/state' && m === 'GET') return json(res, 200, snapshot());
 
   // ---------- Garmin (Tab «Gesundheit») ----------
+  if (p === '/api/garmin/historie' && m === 'GET') {
+    try {
+      return json(res, 200, await garminHistorie({ frisch: url.searchParams.get('frisch') === '1' }));
+    } catch (e) {
+      return json(res, 200, { bereit: false, grund: e.message });
+    }
+  }
   if (p === '/api/garmin' && m === 'GET') {
     try {
       return json(res, 200, await garminDaten({ frisch: url.searchParams.get('frisch') === '1' }));

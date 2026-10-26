@@ -59,8 +59,8 @@ async function laden() {
     'SELECT mean("BodyBatteryLevel") AS v FROM "BodyBatteryIntraday" WHERE time > now() - 24h GROUP BY time(15m) fill(none)',
     'SELECT mean("HeartRate") AS v FROM "HeartRateIntraday" WHERE time > now() - 24h GROUP BY time(15m) fill(none)',
     'SELECT mean("stressLevel") AS v FROM "StressIntraday" WHERE time > now() - 24h AND "stressLevel" >= 0 GROUP BY time(15m) fill(none)',
-    'SELECT "sleepTimeSeconds","deepSleepSeconds","lightSleepSeconds","remSleepSeconds","awakeSleepSeconds","sleepScore","avgOvernightHrv","restingHeartRate","bodyBatteryChange","awakeCount","averageRespirationValue","averageSpO2Value" FROM "SleepSummary" WHERE time > now() - 35d',
-    'SELECT "totalSteps","activeKilocalories","totalDistanceMeters","restingHeartRate","moderateIntensityMinutes","vigorousIntensityMinutes","floorsAscended","bodyBatteryChargedValue","bodyBatteryDrainedValue","bodyBatteryHighestValue","bodyBatteryLowestValue","stressPercentage","highStressDuration" FROM "DailyStats" WHERE time > now() - 35d',
+    'SELECT "sleepTimeSeconds","deepSleepSeconds","lightSleepSeconds","remSleepSeconds","awakeSleepSeconds","sleepScore","avgOvernightHrv","restingHeartRate","bodyBatteryChange","awakeCount","averageRespirationValue","averageSpO2Value" FROM "SleepSummary" WHERE time > now() - 65d',
+    'SELECT "totalSteps","activeKilocalories","totalDistanceMeters","restingHeartRate","moderateIntensityMinutes","vigorousIntensityMinutes","floorsAscended","bodyBatteryChargedValue","bodyBatteryDrainedValue","bodyBatteryHighestValue","bodyBatteryLowestValue","stressPercentage","highStressDuration" FROM "DailyStats" WHERE time > now() - 65d',
     'SELECT "activityName","activityType","elapsedDuration","distance","averageHR","maxHR","calories","aerobicTrainingEffect","activityTrainingLoad" FROM "ActivitySummary" WHERE "activityName" != \'END\' AND time > now() - 180d ORDER BY time DESC LIMIT 8',
     'SELECT last("VO2_max_value") AS v FROM "VO2_Max"',
     'SELECT last("fitnessAge") AS fa, last("chronologicalAge") AS ca FROM "FitnessAge"',
@@ -136,6 +136,23 @@ async function laden() {
   const reihe = (rows) => rows.map((r) => ({ t: r.time, v: runden(r.v) })).filter((p) => p.v !== null);
   const stress = reihe(stressVerlauf);
 
+  // ---------- Letzte 30 Tage gegen die 30 Tage davor ----------
+  const grenze = tagVon(Date.now() - 30 * 86400_000);
+  const grenze2 = tagVon(Date.now() - 60 * 86400_000);
+  const vergleich = (liste, wert) => {
+    const jetzt = mittel(liste.filter((x) => x.tag > grenze).map(wert));
+    const vorher = mittel(liste.filter((x) => x.tag > grenze2 && x.tag <= grenze).map(wert));
+    return { jetzt: jetzt === null ? null : runden(jetzt, 1), vorher: vorher === null ? null : runden(vorher, 1) };
+  };
+  const vergleich30 = {
+    schlaf: vergleich(schlaf, (s) => s.dauerS),
+    schlafScore: vergleich(schlaf, (s) => s.score),
+    hrv: vergleich(schlaf, (s) => s.hrv),
+    ruhepuls: vergleich(tage, (t) => t.ruhepuls),
+    schritte: vergleich(tage, (t) => t.schritte),
+    stress: vergleich(tage, (t) => t.stressProzent),
+  };
+
   return {
     bereit: true,
     zeit: Date.now(),
@@ -155,6 +172,7 @@ async function laden() {
     letzteNacht,
     heute: heute ? { ...heute, schritteZiel: config.garmin.schritteZiel } : null,
     wocheIntensitaet,
+    vergleich30,
     schlaf: schlaf.slice(-30),
     tage: tage.slice(-30),
     aktivitaeten: aktivRoh.map((a) => ({
@@ -173,4 +191,54 @@ async function laden() {
     fitnessAlter: runden(fitAlter[0]?.fa, 1),
     alter: runden(fitAlter[0]?.ca),
   };
+}
+
+// ---------- Ganze Historie für die Detailansichten (Zwischenspeicher 15 Min) ----------
+let historieCache = null;
+
+export async function garminHistorie({ frisch = false } = {}) {
+  if (historieCache && !frisch && Date.now() - historieCache.zeit < 15 * 60_000) return historieCache.daten;
+  const [schlafRoh, tageRoh, stressRoh, aktivRoh, vo2Roh] = await abfragen([
+    'SELECT "sleepTimeSeconds","deepSleepSeconds","lightSleepSeconds","remSleepSeconds","awakeSleepSeconds","sleepScore","avgOvernightHrv","restingHeartRate","bodyBatteryChange","awakeCount" FROM "SleepSummary"',
+    'SELECT "totalSteps","activeKilocalories","totalDistanceMeters","restingHeartRate","moderateIntensityMinutes","vigorousIntensityMinutes","floorsAscended","bodyBatteryChargedValue","bodyBatteryDrainedValue","bodyBatteryHighestValue","bodyBatteryLowestValue","bodyBatteryAtWakeTime","stressPercentage" FROM "DailyStats"',
+    `SELECT mean("stressLevel") AS v FROM "StressIntraday" WHERE "stressLevel" >= 0 AND time > now() - 2000d GROUP BY time(1d) fill(none) tz('${TZ}')`,
+    'SELECT "activityName","activityType","elapsedDuration","distance","averageHR","calories","aerobicTrainingEffect","activityTrainingLoad" FROM "ActivitySummary" WHERE "activityName" != \'END\'',
+    'SELECT "VO2_max_value" AS v FROM "VO2_Max"',
+  ]);
+  const naechte = new Map();
+  for (const s of schlafRoh) {
+    if (!s.sleepTimeSeconds) continue;
+    const imBett = (s.deepSleepSeconds || 0) + (s.lightSleepSeconds || 0) + (s.remSleepSeconds || 0) + (s.awakeSleepSeconds || 0);
+    naechte.set(tagVon(s.time), {
+      tag: tagVon(s.time), ende: s.time, start: Math.round(s.time - (imBett || s.sleepTimeSeconds) * 1000),
+      dauerS: s.sleepTimeSeconds, tiefS: s.deepSleepSeconds || 0, leichtS: s.lightSleepSeconds || 0, remS: s.remSleepSeconds || 0, wachS: s.awakeSleepSeconds || 0,
+      score: runden(s.sleepScore), hrv: runden(s.avgOvernightHrv), ruhepuls: runden(s.restingHeartRate), bbPlus: runden(s.bodyBatteryChange), aufgewacht: runden(s.awakeCount),
+    });
+  }
+  const stressTag = new Map(stressRoh.map((r) => [tagVon(r.time), runden(r.v)]));
+  const tage = new Map();
+  for (const t of tageRoh) {
+    const tag = tagVon(t.time);
+    tage.set(tag, {
+      tag, schritte: runden(t.totalSteps), kcalAktiv: runden(t.activeKilocalories), distanzM: runden(t.totalDistanceMeters), ruhepuls: runden(t.restingHeartRate),
+      intensitaet: (t.moderateIntensityMinutes || 0) + 2 * (t.vigorousIntensityMinutes || 0), stockwerke: runden(t.floorsAscended),
+      bbGeladen: runden(t.bodyBatteryChargedValue), bbVerbraucht: runden(t.bodyBatteryDrainedValue), bbMax: runden(t.bodyBatteryHighestValue), bbMin: runden(t.bodyBatteryLowestValue),
+      bbWach: runden(t.bodyBatteryAtWakeTime), stressProzent: runden(t.stressPercentage), stress: stressTag.get(tag) ?? null,
+    });
+  }
+  const vo2 = new Map();
+  for (const r of vo2Roh) if (r.v) vo2.set(tagVon(r.time), runden(r.v, 1));
+  const daten = {
+    bereit: true,
+    zeit: Date.now(),
+    naechte: [...naechte.values()].sort((a, b) => a.ende - b.ende),
+    tage: [...tage.values()].sort((a, b) => a.tag.localeCompare(b.tag)),
+    aktivitaeten: aktivRoh.map((a) => ({
+      zeit: a.time, name: a.activityName || '', typ: a.activityType || 'other', dauerS: runden(a.elapsedDuration), distanzM: runden(a.distance),
+      pulsSchnitt: runden(a.averageHR), kcal: runden(a.calories), effekt: runden(a.aerobicTrainingEffect, 1), last: runden(a.activityTrainingLoad),
+    })).sort((a, b) => b.zeit - a.zeit),
+    vo2: [...vo2.entries()].map(([tag, v]) => ({ tag, v })).sort((a, b) => a.tag.localeCompare(b.tag)),
+  };
+  historieCache = { zeit: Date.now(), daten };
+  return daten;
 }
