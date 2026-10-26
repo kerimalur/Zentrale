@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fokus</string>
+    <string name="service_name">Fokus (Zentrale)</string>
+    <string name="service_beschreibung">Misst, welche App du nutzt, meldet die Zeit an deine Zentrale und setzt die dort festgelegten Sperren um. Die Daten gehen nur an deine eigene Zentrale.</string>
+</resources>

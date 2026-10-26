@@ -16,6 +16,15 @@ const BEREICHE = {
   snap_stories: 'Snapchat Stories',
   snap_spotlight: 'Snapchat Spotlight',
 };
+// Wie die Handy-App einen Bereich erkennt (View-IDs der fremden App). Liegt hier, damit sich IDs ohne neue APK korrigieren lassen.
+// selected: Knoten muss als ausgewählt markiert sein. aktion: klick (auf View-ID) oder zurueck.
+const BEREICH_REGELN = {
+  insta_reels: { paket: 'com.instagram.android', ids: ['clips_tab'], selected: true, aktion: { typ: 'klick', id: 'feed_tab' } },
+  insta_explore: { paket: 'com.instagram.android', ids: ['search_tab'], selected: true, aktion: { typ: 'klick', id: 'feed_tab' } },
+  yt_shorts: { paket: 'com.google.android.youtube', ids: ['reel_recycler', 'reel_player_page_container'], selected: false, aktion: { typ: 'zurueck' } },
+  snap_stories: { paket: 'com.snapchat.android', ids: ['df_large_story'], selected: false, aktion: { typ: 'klick', id: 'ngs_chat_icon_container' } },
+  snap_spotlight: { paket: 'com.snapchat.android', ids: ['spotlight_feed', 'ngs_spotlight_icon_container'], selected: false, aktion: { typ: 'klick', id: 'ngs_chat_icon_container' } },
+};
 const AUFBEWAHRUNG_TAGE = 400;
 const ONLINE_MS = 3 * 60_000;
 
@@ -133,7 +142,7 @@ export function bericht(g, b, req) {
   for (const ip of Array.isArray(b?.ips) ? b.ips.slice(0, 6) : []) if (gueltigeIp(String(ip))) ips.add(String(ip));
   g.ips = [...ips].slice(-6);
   save();
-  return { ok: true, sperren: sperrenFuerGeraet(g), bereiche: BEREICHE, intervall: 30 };
+  return { ok: true, sperren: sperrenFuerGeraet(g), bereiche: BEREICHE, bereichRegeln: BEREICH_REGELN, intervall: 30 };
 }
 
 // ---------- Sperren ----------
