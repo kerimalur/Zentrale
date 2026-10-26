@@ -25,15 +25,25 @@ export function istAngemeldet(req) {
   return true;
 }
 
+// Echte Client-IP: Nur wenn die Anfrage vom lokalen Proxy (tailscale serve) kommt, zählt X-Forwarded-For –
+// und dann der LETZTE Eintrag (den hängt der Proxy selbst an). Frühere Einträge kann der Client fälschen.
 export function clientIp(req) {
-  return String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const direkt = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+  const lokal = direkt === '127.0.0.1' || direkt === '::1';
+  const xff = String(req.headers['x-forwarded-for'] || '').split(',').map((x) => x.trim()).filter(Boolean);
+  return lokal && xff.length ? xff[xff.length - 1] : direkt;
 }
+
+// Zusätzlich eine Grenze über alle IPs: höchstens 20 Fehlversuche in 10 Minuten.
+const alleFehler = [];
 
 export function login(req, passwort) {
   const ip = clientIp(req);
   const jetzt = Date.now();
   const liste = (versuche.get(ip) || []).filter((t) => jetzt - t < 60_000);
+  while (alleFehler.length && jetzt - alleFehler[0] > 600_000) alleFehler.shift();
   if (liste.length >= 5) return { ok: false, fehler: 'Zu viele Versuche. Bitte 1 Minute warten.' };
+  if (alleFehler.length >= 20) return { ok: false, fehler: 'Zu viele Fehlversuche. Login für einige Minuten gesperrt.' };
   liste.push(jetzt);
   versuche.set(ip, liste);
 
@@ -41,7 +51,11 @@ export function login(req, passwort) {
   const a = Buffer.from(String(passwort || ''));
   const b = Buffer.from(config.passwort);
   const gleich = a.length === b.length && crypto.timingSafeEqual(a, b);
-  if (!gleich) return { ok: false, fehler: 'Falsches Passwort.' };
+  if (!gleich) {
+    alleFehler.push(jetzt);
+    if (alleFehler.length === 20) console.warn('[login] 20 Fehlversuche in 10 Min – Login vorübergehend gesperrt');
+    return { ok: false, fehler: 'Falsches Passwort.' };
+  }
 
   versuche.delete(ip);
   const token = crypto.randomBytes(32).toString('hex');
