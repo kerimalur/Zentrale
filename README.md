@@ -73,6 +73,7 @@ cd /mnt/daten/zentrale && docker compose up -d --force-recreate
 | Syncthing | Syncthing-Oberfläche → Aktionen → Einstellungen → Allgemein → **API-Schlüssel** | `SYNCTHING_API_KEY` |
 | Jellyfin (Filme, Streams, Gäste-Konten) | Jellyfin → Dashboard → **API-Schlüssel** → + | `JELLYFIN_API_KEY` |
 | Uptime Kuma | Kuma → Einstellungen → **API-Schlüssel** → Hinzufügen | `KUMA_API_KEY` |
+| ntfy-Alarme | ntfy-Container auf dem Pi (`/mnt/daten/ntfy`), Benutzer `zentrale` mit nur Schreibrecht auf das Topic, `ntfy token add zentrale` | `NTFY_URL=http://127.0.0.1:2586`, `NTFY_TOKEN`, `NTFY_TOPIC` |
 | Telegram-Alarme | Telegram: **@BotFather** → `/newbot` → Token. Dem neuen Bot „hallo" schreiben, dann `https://api.telegram.org/bot<TOKEN>/getUpdates` öffnen → `"chat":{"id":…}` | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` |
 | Gäste | login.tailscale.com → Settings → Keys → **Generate access token** (läuft nach höchstens 90 Tagen ab, dann neu erstellen) | `TS_API_KEY` |
 
@@ -194,7 +195,7 @@ Standard **aus**. Ein-/ausschalten unter **Einstellungen → Backup**. „Backup
 
 Hinweis: Uptime Kuma merkt nicht, dass Dienste absichtlich pausiert sind. Die Zentrale selbst schickt dafür keine Fehler-Alarme. Wenn du in Kuma Alarme aktivierst, kommen sie aber trotzdem.
 
-**Alarme (Telegram)**: Dienst nicht erreichbar / wieder da, Container hat sich selbst neu gestartet, Pi über 75 °C, Unterspannung, Laufwerk über 90 % voll, Syncthing-Fehler, Backup fehlgeschlagen, Probleme beim Entfernen von Gästen. Gleiche Meldungen höchstens alle 30 Minuten.
+**Alarme (ntfy, optional Telegram)**: Dienst nicht erreichbar / wieder da, Container hat sich selbst neu gestartet, Pi über 75 °C, Unterspannung, Laufwerk über 90 % voll, Syncthing-Fehler, Backup fehlgeschlagen, Probleme beim Entfernen von Gästen. Gleiche Meldungen höchstens alle 30 Minuten.
 
 **Medien-Seite**
 - **VPN-Prüfung (alle 3 Min):** Die Zentrale fragt *aus dem qBittorrent-Container heraus* nach der öffentlichen IP und vergleicht sie mit der IP des Pi. Gleich = Leck → alle Downloads werden sofort gestoppt + Telegram-Alarm. Keine Internetverbindung im Container = VPN getrennt (Gluetun blockiert dann alles, Downloads stehen still) → Alarm.

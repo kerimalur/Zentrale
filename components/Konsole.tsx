@@ -147,7 +147,7 @@ export function EinstellungenKarte({ z, aktualisieren }: { z: Zustand; aktualisi
           <label>bis <input className="zeitfeld" type="time" value={e.nachtBis} onChange={(x) => x.target.value && setzen({ nachtBis: x.target.value })} /></label>
         </div>
       )}
-      <Schalter an={e.telegram && f.telegram} deaktiviert={!f.telegram} onClick={() => setzen({ telegram: !e.telegram })} titel="Telegram-Alarme" unter={f.telegram ? 'bei Fehlern und Ausfällen' : 'Bot noch nicht eingerichtet (.env)'} />
+      <Schalter an={e.telegram && f.telegram} deaktiviert={!f.telegram} onClick={() => setzen({ telegram: !e.telegram })} titel="Alarme aufs Handy" unter={f.telegram ? 'bei Fehlern und Ausfällen (ntfy/Telegram)' : 'ntfy oder Telegram noch nicht eingerichtet (.env)'} />
       {z.moebel.luefter.vorhanden && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 0', borderBottom: '1px solid var(--line)' }}>
           <span style={{ flex: 1 }}>

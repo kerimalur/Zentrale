@@ -630,7 +630,7 @@ export function snapshot() {
   if (!config.syncthing.apiKey) hinweise.push('SYNCTHING_API_KEY fehlt – Synchronisation fehlt');
   if (!config.jellyfin.apiKey) hinweise.push('JELLYFIN_API_KEY fehlt – Filme/Streams fehlen');
   if (!config.tailscale.apiKey) hinweise.push('TS_API_KEY fehlt – Gäste deaktiviert');
-  if (!telegramBereit()) hinweise.push('TELEGRAM_BOT_TOKEN/CHAT_ID fehlen – keine Alarme aufs Handy');
+  if (!telegramBereit()) hinweise.push('NTFY_URL/NTFY_TOKEN (oder TELEGRAM_BOT_TOKEN/CHAT_ID) fehlen – keine Alarme aufs Handy');
   if (!config.energie.shellyUrl) hinweise.push('SHELLY_URL fehlt – Strom wird geschätzt');
   if (z.backupHdd === false) hinweise.push(`Backup-HDD (${config.backup.mount}) fehlt – Gehäuse eingeschaltet? Das nächste Backup fällt sonst aus`);
   const mc = config.medien;

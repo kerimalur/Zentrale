@@ -61,6 +61,9 @@ export const config = {
 
   telegram: { token: str('TELEGRAM_BOT_TOKEN'), chatId: str('TELEGRAM_CHAT_ID') },
 
+  // ntfy (eigener Push-Server auf dem Pi): URL + Token mit Schreibrecht auf das Topic
+  ntfy: { url: str('NTFY_URL').replace(/\/$/, ''), token: str('NTFY_TOKEN'), topic: str('NTFY_TOPIC', 'zentrale') },
+
   energie: { shellyUrl: str('SHELLY_URL').replace(/\/$/, ''), strompreis: num('STROMPREIS', 0.3) },
 
   backup: {
