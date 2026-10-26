@@ -309,12 +309,23 @@ async function api(req, res, url) {
   return json(res, 404, { fehler: 'Unbekannt' });
 }
 
+// Programme der Fokus-Agenten zum Herunterladen (enthalten keine Geheimnisse; die Zentrale ist nur im Tailnet erreichbar).
+const AGENT_DATEIEN = { '/agent/windows.ps1': 'windows.ps1', '/agent/browser/manifest.json': 'browser/manifest.json', '/agent/browser/background.js': 'browser/background.js' };
+function agentDatei(res, pfad) {
+  const rel = AGENT_DATEIEN[pfad];
+  if (!rel) { res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }); return res.end('Nicht gefunden'); }
+  const inhalt = fs.readFileSync(path.join(path.dirname(new URL(import.meta.url).pathname), 'agent', rel));
+  res.writeHead(200, { 'Content-Type': rel.endsWith('.json') ? 'application/json' : rel.endsWith('.js') ? 'text/javascript; charset=utf-8' : 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
+  res.end(inhalt);
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'no-referrer');
   const url = new URL(req.url, 'http://localhost');
   try {
+    if (url.pathname.startsWith('/agent/') && req.method === 'GET') return agentDatei(res, url.pathname);
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
     if (!OEFFENTLICH.some((r) => r.test(url.pathname)) && !istAngemeldet(req)) {
       res.writeHead(302, { Location: '/login/' });

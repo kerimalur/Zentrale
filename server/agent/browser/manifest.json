@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Fokus für die Zentrale",
+  "version": "1.0",
+  "description": "Meldet die Zeit pro Webseite an deine Zentrale.",
+  "permissions": ["tabs", "idle", "alarms", "storage"],
+  "host_permissions": ["__ADRESSE__/*"],
+  "background": { "service_worker": "background.js" }
+}
