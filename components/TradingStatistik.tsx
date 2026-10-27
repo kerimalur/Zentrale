@@ -431,26 +431,35 @@ function VerlaufChart({ b }: { b: GBeispiel }) {
   );
 }
 
-// Stand der Stundenkerzen (Dukascopy ab 2003). Solange nicht alles da ist, sind ältere Treffer nur auf Tageskerzen genau.
+// Stand der Dukascopy-Daten: Stundenkerzen (Statistik) und 5-Minuten-Kerzen (Labor), beide ab 2003.
 export function DatenHinweis({ daten }: { daten: DatenStand }) {
-  const prozent = daten.gesamt ? Math.floor((daten.da / daten.gesamt) * 100) : 0;
+  const balken = (titel: string, da: number, gesamt: number, paare: number) => {
+    const prozent = gesamt ? Math.floor((da / gesamt) * 100) : 0;
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <strong>{titel}</strong>
+          <span className="leise">{paare}/28 Paare · {prozent} %</span>
+        </div>
+        <div style={{ height: 6, borderRadius: 3, background: 'var(--linie, rgba(127,127,127,.25))', overflow: 'hidden' }}>
+          <div style={{ width: `${prozent}%`, height: '100%', background: 'var(--gruen)' }} />
+        </div>
+      </div>
+    );
+  };
+  const text = daten.gesperrtBis
+    ? `Dukascopy bremst gerade – weiter um ${new Date(daten.gesperrtBis).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })}.`
+    : daten.laeuft
+      ? `Lädt ${daten.art === 'm5' ? '5-Min-Kerzen' : 'Stundenkerzen'} ${daten.paar ?? ''}. ${daten.art === 'm5' ? 'Dauert beim ersten Mal einige Tage.' : 'Bis alles da ist, sind ältere Treffer nur auf Tageskerzen genau; danach rechnet die Statistik automatisch neu.'}`
+      : daten.fertig && daten.m5?.fertig
+        ? `Alles geladen: abgeschlossene Monate bis ${daten.bisMonat} von Dukascopy, danach Yahoo.`
+        : 'Lädt im Hintergrund weiter (startet wenige Minuten nach einem Neustart).';
   return (
-    <div className="karte" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <strong>Stundenkerzen seit 2003 {daten.fertig ? 'geladen' : 'werden geladen'}</strong>
-        <span className="leise">{daten.paareFertig}/28 Paare · {prozent} %</span>
-      </div>
-      <div style={{ height: 6, borderRadius: 3, background: 'var(--linie, rgba(127,127,127,.25))', overflow: 'hidden' }}>
-        <div style={{ width: `${prozent}%`, height: '100%', background: 'var(--gruen)' }} />
-      </div>
+    <div className="karte" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {balken('Stundenkerzen seit 2003 (Statistik)', daten.da, daten.gesamt, daten.paareFertig)}
+      {daten.m5 && balken('5-Min-Kerzen seit 2003 (Labor)', daten.m5.da, daten.m5.gesamt, daten.m5.paareFertig)}
       <small className="leise" style={{ lineHeight: 1.5 }}>
-        {daten.fertig
-          ? `Alle Treffer stundengenau, abgeschlossene Monate bis ${daten.bisMonat} von Dukascopy, danach Yahoo.`
-          : daten.gesperrtBis
-            ? `Dukascopy bremst gerade – weiter um ${new Date(daten.gesperrtBis).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })}.`
-            : daten.laeuft
-              ? `Lädt ${daten.paar ?? ''} (dauert beim ersten Mal einige Stunden). Bis alles da ist, sind ältere Treffer nur auf Tageskerzen genau; danach rechnet die Statistik automatisch neu.`
-              : 'Startet in wenigen Minuten im Hintergrund.'}
+        {text}
         {daten.fehler && !daten.gesperrtBis ? ` Letzter Fehler: ${daten.fehler}` : ''}
       </small>
     </div>

@@ -46,6 +46,7 @@ export interface TPaarKurz {
 export interface DatenStand {
   an: boolean; laeuft: boolean; paar: string | null; da: number; gesamt: number; fertig: boolean;
   paareFertig: number; fehler: string | null; gesperrtBis: number | null; bisMonat: string;
+  art: 'h1' | 'm5' | null; m5: { da: number; gesamt: number; fertig: boolean; paareFertig: number };
 }
 export interface TradingZustand {
   einstellungen: TEinstellungen;
