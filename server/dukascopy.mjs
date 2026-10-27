@@ -111,7 +111,8 @@ async function holeDatei(url) {
     if (!res.ok) return { status: res.status };
     return { status: 200, roh: Buffer.from(await res.arrayBuffer()) };
   } catch (err) {
-    return { status: 0, fehler: err.message };
+    const c = err.cause;
+    return { status: 0, fehler: c ? `${c.code || c.name || ""} ${c.message || ""}`.trim() : err.message };
   }
 }
 
