@@ -69,16 +69,16 @@ function kurve(trades, feld = 'r') {
   return out;
 }
 
-// p-Wert: Wie oft ist der Mittelwert von n zufällig gezogenen Vergleichs-Werten mindestens so gut?
-function pWert(echtMittel, n, pool, rnd, ziehungen = 4000) {
-  if (!pool.length || !n) return null;
-  let besser = 0;
-  for (let z = 0; z < ziehungen; z++) {
-    let s = 0;
-    for (let i = 0; i < n; i++) s += pool[Math.floor(rnd() * pool.length)];
-    if (s / n >= echtMittel) besser++;
-  }
-  return (besser + 1) / (ziehungen + 1);
+// p-Wert (einseitig): Ist der Mittelwert der echten Fälle höher als der der Vergleichsgruppe?
+// Welch-Test mit vorsichtigen Fallzahlen: echte Seite = unabhängige Fälle, Vergleichsseite = Anzahl Ziehungen / je Fall gezogene
+// Vergleichswerte (die sind untereinander nicht unabhängig). So wird ein zufällig günstiger Vergleichs-Pool nicht zum «Treffer».
+const phi = (z) => { const t = 1 / (1 + 0.2316419 * Math.abs(z)); const d = 0.3989423 * Math.exp((-z * z) / 2); const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274)))); return z > 0 ? 1 - p : p; };
+function varianz(a) { const m = mittel(a); return a.reduce((s, x) => s + (x - m) ** 2, 0) / Math.max(1, a.length - 1); }
+function pWelch(echt, nEcht, pool, nPool) {
+  if (echt.length < 3 || pool.length < 3 || nEcht < 2 || nPool < 2) return null;
+  const se = Math.sqrt(varianz(echt) / nEcht + varianz(pool) / nPool);
+  if (!(se > 0)) return null;
+  return 1 - phi((mittel(echt) - mittel(pool)) / se);
 }
 
 function gruppen(liste, schluessel, wert) {
@@ -114,14 +114,13 @@ export function monteCarlo(rs, laeufe = 10_000, seed = 7) {
 }
 
 // ---------- Strategie ----------
-export function strategieAuswerten({ trades, forward, nachbarn, varianten, trichter, seed = 42 }) {
-  const rnd = zufall(seed);
+export function strategieAuswerten({ trades, forward, nachbarn, varianten, trichter }) {
   const rs = trades.map((t) => t.r);
   const k = kennzahlen(rs);
   const nU = unabhaengig(trades);
   const pool = trades.flatMap((t) => t.zufall);
   const zufallMittel = mittel(pool);
-  const p = rs.length ? pWert(k.avgR, rs.length, pool, rnd) : null;
+  const p = rs.length ? pWelch(rs, nU, pool, pool.length / 3) : null;
   const bonf = 0.05 / Math.max(1, varianten);
   const mitte = trades.length ? trades[Math.floor(trades.length / 2)].tEin : 0;
   const h1 = mittel(trades.filter((t) => t.tEin < mitte).map((t) => t.r)), h2 = mittel(trades.filter((t) => t.tEin >= mitte).map((t) => t.r));
@@ -163,8 +162,7 @@ export function strategieAuswerten({ trades, forward, nachbarn, varianten, trich
 
 // ---------- Hypothese ----------
 // Ereignisse je Horizont ohne Überlappung pro Paar (Mindestabstand = Horizont), dann gegen Saison und Zufall.
-export function hypotheseAuswerten({ ereignisse, spiegel, forward, horizonte, haupt, varianten, seed = 42 }) {
-  const rnd = zufall(seed);
+export function hypotheseAuswerten({ ereignisse, spiegel, forward, horizonte, haupt, varianten }) {
   const proH = horizonte.map((h, x) => {
     const ohneUeberlapp = (liste) => {
       const out = [], letzte = new Map();
@@ -187,7 +185,7 @@ export function hypotheseAuswerten({ ereignisse, spiegel, forward, horizonte, ha
     return {
       h, n: evs.length, nUnabhaengig: unabhaengig(evs), mittel: r4(m), median: r4(quantil(rs, 0.5)), quote: rs.length ? rs.filter((v) => v > 0).length / rs.length : null,
       bereich: wilson(rs.filter((v) => v > 0).length, rs.length), saison: r4(mittel(saison)), mehrwert: m !== null && saison.length ? r4(m - mittel(saison)) : null,
-      zufall: r4(mittel(pool)), p: m !== null ? r4(pWert(m, rs.length, pool, rnd)) : null,
+      zufall: r4(mittel(pool)), p: m !== null ? r4(pWelch(rs, unabhaengig(evs), pool, pool.length / 10)) : null,
       h1: r4(mittel(evs.filter((e) => e.t < mitte).map((e) => e.r[x]))), h2: r4(mittel(evs.filter((e) => e.t >= mitte).map((e) => e.r[x]))),
       ohne: r4(ohneAusreisser(rs)), spiegel: sp.length ? r4(mittel(sp)) : null, spiegelN: sp.length, forward: fw ? { n: fw.length, mittel: r4(mittel(fw)), quote: fw.length ? fw.filter((v) => v > 0).length / fw.length : null } : null,
       proJahr: gruppen(evs, (e) => jahrVon(e.t), (e) => e.r[x]), proPaar: gruppen(evs, (e) => e.pair, (e) => e.r[x]),
@@ -215,6 +213,6 @@ export function hypotheseAuswerten({ ereignisse, spiegel, forward, horizonte, ha
   if (H.nUnabhaengig < 15) { urteil = 'Zu wenig Daten'; warum = `nur ${H.nUnabhaengig} unabhängige Fälle`; }
   else if (!(H.mittel > 0) || (H.p !== null && H.p >= 0.2)) { urteil = 'Nicht bestätigt'; warum = H.mittel > 0 ? 'nicht vom Zufall zu unterscheiden' : 'Wirkung geht nicht in die erwartete Richtung'; }
   else if (H.nUnabhaengig >= 30 && st.bonferroni === 'ja' && st.haelften === 'ja' && st.saison === 'ja' && st.forward === 'ja') { urteil = 'Bestätigt'; warum = 'genug Fälle, signifikant, beide Hälften, über der Saison, Forward hält'; }
-  else { urteil = 'Hinweis'; warum = st.forward === 'offen' && st.saison === 'ja' && st.haelften === 'ja' ? 'Backtest sieht gut aus – erst der Forward-Test entscheidet' : 'Richtung stimmt, aber zu schwach oder nicht überall'; }
+  else { urteil = 'Hinweis'; warum = st.forward === 'offen' && st.saison === 'ja' && st.haelften === 'ja' && st.zufall === 'ja' ? 'Backtest sieht gut aus – erst der Forward-Test entscheidet' : 'Richtung stimmt, aber zu schwach oder nicht überall'; }
   return { typ: 'hypothese', urteil, warum, haupt, n: H.n, nUnabhaengig: H.nUnabhaengig, varianten, horizonte: proH, raster };
 }
