@@ -8,6 +8,7 @@ import { Schalter } from './ui';
 import { SzenenKarte } from './Uebersicht';
 import { Steuerung } from './Steuerung';
 import { EinstellungenKarte } from './Konsole';
+import { SicherheitKarte } from './Sicherheit';
 
 export function Einstellungen({ z, aktualisieren }: { z: Zustand; aktualisieren: () => void }) {
   return (
@@ -15,6 +16,7 @@ export function Einstellungen({ z, aktualisieren }: { z: Zustand; aktualisieren:
       <SzenenKarte z={z} aktualisieren={aktualisieren} />
       <BackupKarte z={z} aktualisieren={aktualisieren} />
       <EinstellungenKarte z={z} aktualisieren={aktualisieren} />
+      <SicherheitKarte />
       <Steuerung z={z} aktualisieren={aktualisieren} />
     </div>
   );

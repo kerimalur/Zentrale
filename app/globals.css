@@ -768,3 +768,12 @@ button.szene-chip { font-family: inherit; line-height: inherit; }
 .ht-absender-knoepfe { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .ht-absender-knoepfe .knopf-klein { min-height: 32px; padding: 6px 10px; font-size: 12.5px; }
 .ht-gefahr { background: var(--fehler) !important; color: #fff !important; }
+
+/* ---------- Sicherheit (Zwei-Faktor) ---------- */
+.sh-einrichten { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.sh-qr { width: 180px; max-width: 100%; background: #fff; border-radius: 12px; padding: 6px; border: 1px solid var(--track); flex-shrink: 0; }
+.sh-qr svg { width: 100%; height: auto; display: block; }
+.sh-secret { font-family: var(--mono); font-size: 13px; background: var(--bg); border-radius: 8px; padding: 8px 10px; word-break: break-all; user-select: all; }
+.sh-notfall { background: #f9eeda; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; font-size: 13.5px; }
+.sh-codes { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; font-size: 14px; }
+.sh-codes span { background: #fff; border-radius: 8px; padding: 6px 8px; text-align: center; }

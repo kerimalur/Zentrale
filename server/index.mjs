@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config, ensureDataDir } from './config.mjs';
 import { load, db, save } from './store.mjs';
-import { istAngemeldet, login, logout } from './auth.mjs';
+import { istAngemeldet, login, logout, sitzungenZustand, andereAbmelden } from './auth.mjs';
+import { zweifaktorZustand, einrichtungStarten, einrichtungBestaetigen, ausschalten as zweifaktorAus, notfallNeu } from './zweifaktor.mjs';
 import { terminalUpgrade } from './terminal.mjs';
 import { schnell, mittel, langsam, sehrLangsam, speicherLauf, zeitplan, snapshot, sshNurSchluesselSetzen, manuelleSzene, laufwerkeListe, cloudJetzt, tsPeers } from './monitor.mjs';
 import { ordnerLesen, ordnerGroessen } from './explorer.mjs';
@@ -82,8 +83,8 @@ async function api(req, res, url) {
 
   if (p === '/api/login' && m === 'POST') {
     const b = await body(req);
-    const r = login(req, b.passwort);
-    return r.ok ? json(res, 200, { ok: true }, { 'Set-Cookie': r.cookie }) : json(res, 401, { ok: false, fehler: r.fehler });
+    const r = login(req, b.passwort, b.code);
+    return r.ok ? json(res, 200, { ok: true }, { 'Set-Cookie': r.cookie }) : json(res, 401, { ok: false, fehler: r.fehler, codeNoetig: !!r.codeNoetig });
   }
   if (p === '/api/me') return json(res, 200, { angemeldet: istAngemeldet(req) });
 
@@ -164,6 +165,18 @@ async function api(req, res, url) {
   if (p === '/api/trading/einstellungen' && m === 'POST') return json(res, 200, tradingEinstellungenSetzen(await body(req)));
   if (p === '/api/trading/test' && m === 'POST') return json(res, 200, await tradingTestMeldung());
   if (p === '/api/trading/neu-laden' && m === 'POST') { tradingNeuLaden(); return json(res, 200, { ok: true }); }
+
+  // ---------- Sicherheit: Zwei-Faktor und Sitzungen (Einstellungen) ----------
+  if (p === '/api/sicherheit' && m === 'GET') return json(res, 200, { zweifaktor: zweifaktorZustand(), sitzungen: sitzungenZustand(req) });
+  if (p === '/api/zweifaktor/start' && m === 'POST') return json(res, 200, einrichtungStarten());
+  if (p === '/api/zweifaktor/bestaetigen' && m === 'POST') {
+    const r = einrichtungBestaetigen((await body(req)).code);
+    andereAbmelden(req); // alte Sitzungen ohne 2FA beenden
+    return json(res, 200, r);
+  }
+  if (p === '/api/zweifaktor/aus' && m === 'POST') return json(res, 200, zweifaktorAus((await body(req)).code));
+  if (p === '/api/zweifaktor/notfall' && m === 'POST') return json(res, 200, notfallNeu((await body(req)).code));
+  if (p === '/api/sitzungen/andere-abmelden' && m === 'POST') return json(res, 200, andereAbmelden(req));
 
   // ---------- Heute (Mail aufräumen, Kalender, Aufgaben über Google) ----------
   if (p === '/api/heute' && m === 'GET') return json(res, 200, await heuteZustand(url.searchParams.get('frisch') === '1'));

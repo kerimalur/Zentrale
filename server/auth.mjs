@@ -2,9 +2,10 @@
 import crypto from 'node:crypto';
 import { config } from './config.mjs';
 import { db, save } from './store.mjs';
+import { zweifaktorAktiv, codePruefen } from './zweifaktor.mjs';
 
 const COOKIE = 'zentrale_sitzung';
-const DAUER = 30 * 24 * 3600 * 1000;
+const DAUER = 7 * 24 * 3600 * 1000; // 7 Tage, danach neu anmelden
 const versuche = new Map(); // ip -> [zeitstempel]
 
 export function parseCookies(header = '') {
@@ -37,7 +38,7 @@ export function clientIp(req) {
 // Zusätzlich eine Grenze über alle IPs: höchstens 20 Fehlversuche in 10 Minuten.
 const alleFehler = [];
 
-export function login(req, passwort) {
+export function login(req, passwort, code) {
   const ip = clientIp(req);
   const jetzt = Date.now();
   const liste = (versuche.get(ip) || []).filter((t) => jetzt - t < 60_000);
@@ -56,6 +57,14 @@ export function login(req, passwort) {
     if (alleFehler.length === 20) console.warn('[login] 20 Fehlversuche in 10 Min – Login vorübergehend gesperrt');
     return { ok: false, fehler: 'Falsches Passwort.' };
   }
+  // Zweiter Faktor: Code aus der Authenticator-App oder ein Notfall-Code.
+  if (zweifaktorAktiv()) {
+    if (!String(code || '').trim()) return { ok: false, codeNoetig: true, fehler: 'Code aus der Authenticator-App eingeben.' };
+    if (!codePruefen(code)) {
+      alleFehler.push(jetzt);
+      return { ok: false, codeNoetig: true, fehler: 'Code stimmt nicht (oder wurde schon benutzt).' };
+    }
+  }
 
   versuche.delete(ip);
   const token = crypto.randomBytes(32).toString('hex');
@@ -73,3 +82,19 @@ export function logout(req) {
 }
 
 function hash(t) { return crypto.createHash('sha256').update(t).digest('hex'); }
+
+// Sitzungen: Anzahl und «alle anderen abmelden» (z. B. nach dem Einschalten von 2FA).
+const aktuellerHash = (req) => { const t = parseCookies(req.headers.cookie)[COOKIE]; return t ? hash(t) : null; };
+export function sitzungenZustand(req) {
+  const jetzt = Date.now();
+  const alle = Object.entries(db().sitzungen).filter(([, v]) => v.bis > jetzt);
+  const eigene = aktuellerHash(req);
+  return { anzahl: alle.length, andere: alle.filter(([k]) => k !== eigene).length };
+}
+export function andereAbmelden(req) {
+  const eigene = aktuellerHash(req);
+  const s = db().sitzungen;
+  for (const k of Object.keys(s)) if (k !== eigene) delete s[k];
+  save();
+  return sitzungenZustand(req);
+}
