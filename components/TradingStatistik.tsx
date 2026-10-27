@@ -448,7 +448,7 @@ export function DatenHinweis({ daten }: { daten: DatenStand }) {
     );
   };
   const text = daten.gesperrtBis
-    ? `Dukascopy bremst gerade – weiter um ${new Date(daten.gesperrtBis).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })}.`
+    ? `Pause (${daten.fehler ?? 'Fehler'}) – neuer Versuch um ${new Date(daten.gesperrtBis).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })}.`
     : daten.laeuft
       ? `Lädt ${daten.art === 'm5' ? '5-Min-Kerzen' : 'Stundenkerzen'} ${daten.paar ?? ''}. ${daten.art === 'm5' ? 'Dauert beim ersten Mal einige Tage.' : 'Bis alles da ist, sind ältere Treffer nur auf Tageskerzen genau; danach rechnet die Statistik automatisch neu.'}`
       : daten.fertig && daten.m5?.fertig

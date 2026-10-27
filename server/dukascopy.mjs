@@ -106,7 +106,7 @@ const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function holeDatei(url) {
   try {
-    const { res } = await holen(url, { timeout: 30_000, headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux aarch64) Zentrale' } });
+    const { res } = await holen(url, { timeout: 20_000, headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux aarch64) Zentrale' } });
     if (res.status === 404) return { status: 404 };
     if (!res.ok) return { status: res.status };
     return { status: 200, roh: Buffer.from(await res.arrayBuffer()) };
@@ -115,14 +115,24 @@ async function holeDatei(url) {
   }
 }
 
-// Eine Datei holen; bremst Dukascopy (429/503), wird gewartet (30 s, dann immer länger bis 15 Min) und nochmals versucht.
-let warten = 0;
-async function holeGebremst(url) {
+// Eine Datei holen. Alles ausser 200/404 (Bremse 429/503, Zeitüberschreitung, Netzfehler, 5xx) wird mit wachsender
+// Pause erneut versucht (20 s, 40 s … höchstens 10 Min) – kein Monat wird übersprungen.
+// Das Tempo passt sich an: nach einer Bremse länger warten zwischen den Dateien, nach vielen Erfolgen wieder schneller.
+let warten = 0, tempo = 1000, erfolgeInFolge = 0;
+async function holeGebremst(url, wo) {
   for (;;) {
     const r = await holeDatei(url);
-    if (r.status !== 429 && r.status !== 503) { warten = 0; return r; }
-    warten = Math.min(warten ? warten * 2 : 30_000, 15 * 60_000);
-    zustand.fehler = `Dukascopy bremst (HTTP ${r.status})`;
+    if (r.status === 200 || r.status === 404) {
+      warten = 0;
+      if (++erfolgeInFolge >= 200 && tempo > 700) { tempo = Math.round(tempo * 0.85); erfolgeInFolge = 0; }
+      return r;
+    }
+    erfolgeInFolge = 0;
+    tempo = Math.min(Math.round(tempo * 1.5), 6000);
+    warten = Math.min(warten ? warten * 2 : 20_000, 10 * 60_000);
+    const grund = r.status === 429 || r.status === 503 ? `Dukascopy bremst (HTTP ${r.status})` : r.status ? `HTTP ${r.status}` : `Netz: ${r.fehler || 'unbekannt'}`;
+    zustand.fehler = grund;
+    console.error(`[dukascopy] ${grund} bei ${wo} – neuer Versuch in ${Math.round(warten / 1000)} s, Tempo ${tempo} ms`);
     zustand.gesperrtBis = Date.now() + warten;
     await pause(warten);
     zustand.gesperrtBis = 0;
@@ -131,14 +141,13 @@ async function holeGebremst(url) {
 
 const basisUrl = (pair, monat) => `https://datafeed.dukascopy.com/datafeed/${pair}/${Math.floor(monat / 12)}/${pad(monat % 12)}`;
 
-// Liefert die Kerzen eines Monats (Liste) oder { fehler } bei Netzproblemen. null = Monat (noch) nicht vorhanden.
+// Liefert die Kerzen eines Monats (Liste). null = Monat (noch) nicht vorhanden.
 async function monatHolen(pair, monat, art) {
   const jahr = Math.floor(monat / 12), mon = monat % 12;
   if (art === 'h1') {
-    const r = await holeGebremst(`${basisUrl(pair, monat)}/BID_candles_hour_1.bi5`);
-    await pause(1500);
+    const r = await holeGebremst(`${basisUrl(pair, monat)}/BID_candles_hour_1.bi5`, `${pair} ${mText(monat)}`);
+    await pause(tempo);
     if (r.status === 404) return null;
-    if (r.status !== 200) return { fehler: r.fehler || `HTTP ${r.status}` };
     return kerzenLesen(r.roh, Date.UTC(jahr, mon, 1) / 1000);
   }
   // m5: jeden Tag einzeln (Samstag hat nie Handel)
@@ -147,10 +156,9 @@ async function monatHolen(pair, monat, art) {
   for (let tag = 1; tag <= tage; tag++) {
     const basis = Date.UTC(jahr, mon, tag) / 1000;
     if (new Date(basis * 1000).getUTCDay() === 6) continue;
-    const r = await holeGebremst(`${basisUrl(pair, monat)}/${pad(tag)}/BID_candles_min_1.bi5`);
-    await pause(1200);
+    const r = await holeGebremst(`${basisUrl(pair, monat)}/${pad(tag)}/BID_candles_min_1.bi5`, `${pair} ${mText(monat)}-${pad(tag)}`);
+    await pause(tempo);
     if (r.status === 404) continue; // Tag ohne Datei (Feiertag, vor Start)
-    if (r.status !== 200) return { fehler: r.fehler || `HTTP ${r.status}` };
     for (const k of zuFuenfMinuten(kerzenLesen(r.roh, basis))) alle.push(k);
   }
   return alle;
@@ -158,14 +166,13 @@ async function monatHolen(pair, monat, art) {
 
 // Lädt alle fehlenden Monate: zuerst alle Stundenkerzen, dann die 5-Minuten-Kerzen.
 export async function dukascopyLauf() {
-  if (!dukascopyAn() || zustand.laeuft || Date.now() < zustand.gesperrtBis) return;
+  if (!dukascopyAn() || zustand.laeuft) return;
   zustand.laeuft = true;
   zustand.neu = 0;
   let neuH1 = 0;
   const bis = letzterFertigerMonat();
   try {
     zustand.fehler = null;
-    let fehlerInFolge = 0;
     for (const art of ['h1', 'm5']) {
       const liste = DUKA_PAARE.map((pair) => [pair, fehlend(pair, art, bis)]);
       if (art === 'm5' && DUKA_PAARE.some((pair) => fehlend(pair, 'h1', bis).filter((m) => m < bis - 2).length)) break; // Stunden zuerst komplett
@@ -177,12 +184,7 @@ export async function dukascopyLauf() {
         zustand.paar = pair;
         for (const monat of monate) {
           const r = await monatHolen(pair, monat, art);
-          if (r && r.fehler) {
-            zustand.fehler = r.fehler;
-            if (++fehlerInFolge >= 10) { zustand.gesperrtBis = Date.now() + 30 * 60_000; return; } // Netz weg: später weiter
-            continue;
-          }
-          fehlerInFolge = 0;
+          zustand.fehler = null;
           if (r === null) { if (monat < bis - 2) speichern(pair, monat, art, Buffer.alloc(0)); } // alter Monat ohne Datei: leer merken
           else { speichern(pair, monat, art, zuBuffer(r)); zustand.neu++; if (art === 'h1') neuH1++; }
           zustand.geladen++;

@@ -23,7 +23,7 @@ export function KursdatenLeiste({ onOeffnen }: { onOeffnen: () => void }) {
   if (!d || !d.an || (d.fertig && d.m5?.fertig)) return null;
   const h1 = prozent(d.da, d.gesamt), m5 = prozent(d.m5?.da ?? 0, d.m5?.gesamt ?? 0);
   const status = d.gesperrtBis
-    ? `Dukascopy bremst, weiter um ${new Date(d.gesperrtBis).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })}`
+    ? `Pause (${d.fehler ?? 'Fehler'}), neuer Versuch um ${new Date(d.gesperrtBis).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })}`
     : d.laeuft
       ? `lädt ${d.art === 'm5' ? '5-Min' : 'Stunden'} ${d.paar ?? ''}${d.restMin !== null ? ` · noch ca. ${dauerText(d.restMin)}${d.art === 'h1' ? ' (Stunden)' : ''}` : ''}`
       : 'wartet auf den nächsten Start';
