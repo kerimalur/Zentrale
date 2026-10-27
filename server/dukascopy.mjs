@@ -119,18 +119,18 @@ async function holeDatei(url) {
 // Eine Datei holen. Alles ausser 200/404 (Bremse 429/503, Zeitüberschreitung, Netzfehler, 5xx) wird mit wachsender
 // Pause erneut versucht (20 s, 40 s … höchstens 10 Min) – kein Monat wird übersprungen.
 // Das Tempo passt sich an: nach einer Bremse länger warten zwischen den Dateien, nach vielen Erfolgen wieder schneller.
-let warten = 0, tempo = 1000, erfolgeInFolge = 0;
+let warten = 0, tempo = 2000, erfolgeInFolge = 0;
 async function holeGebremst(url, wo) {
   for (;;) {
     const r = await holeDatei(url);
     if (r.status === 200 || r.status === 404) {
       warten = 0;
-      if (++erfolgeInFolge >= 200 && tempo > 700) { tempo = Math.round(tempo * 0.85); erfolgeInFolge = 0; }
+      if (++erfolgeInFolge >= 100 && tempo > 1500) { tempo = Math.round(tempo * 0.9); erfolgeInFolge = 0; } // langsam wieder schneller
       return r;
     }
     erfolgeInFolge = 0;
-    tempo = Math.min(Math.round(tempo * 1.5), 6000);
-    warten = Math.min(warten ? warten * 2 : 20_000, 10 * 60_000);
+    tempo = Math.min(Math.round(tempo * 1.6), 15_000); // Dukascopy-Grenze nicht mehr erreichen
+    warten = Math.min(warten ? warten * 2 : 60_000, 10 * 60_000);
     const grund = r.status === 429 || r.status === 503 ? `Dukascopy bremst (HTTP ${r.status})` : r.status ? `HTTP ${r.status}` : `Netz: ${r.fehler || 'unbekannt'}`;
     zustand.fehler = grund;
     console.error(`[dukascopy] ${grund} bei ${wo} – neuer Versuch in ${Math.round(warten / 1000)} s, Tempo ${tempo} ms`);
