@@ -147,7 +147,7 @@ const leer = () => ({ t: [], o: [], h: [], l: [], c: [], sd: [], quelle: [] });
 
 async function vollLaden(pair, e) {
   const jetzt = Math.floor(Date.now() / 1000);
-  const [tage, stunden] = [await yahoo(pair, `interval=1d&period1=1262304000&period2=${jetzt}`), await yahoo(pair, 'interval=1h&range=730d')];
+  const [tage, stunden] = [await yahoo(pair, `interval=1d&period1=1072915200&period2=${jetzt}`), await yahoo(pair, 'interval=1h&range=730d')];
   const d = leer();
   const ersterStundenTag = stunden.length ? sessionTag(stunden[0].t, e) + 1 : Infinity; // erster vollständiger Tag
   for (const b of tage) {
@@ -245,7 +245,9 @@ function atrReihe(kerzen, len) {
 export const pipVon = (pair) => (pair.endsWith('JPY') ? 0.01 : 0.0001);
 const runden = (pair, x) => Number(x.toFixed(pair.endsWith('JPY') ? 3 : 5));
 
-function rechnen(pair, d, e) {
+// Alle GVA-Linien eines Paars mit ihrem Schicksal (offen / getroffen / verworfen). Wird vom Live-Tab und von der Statistik benutzt.
+// tfs: welche Zeitrahmen (Standard: wie in den Einstellungen).
+export function linienFinden(pair, d, e, tfs = TFS.filter((tf) => e.tfs[tf])) {
   const n = d.t.length;
   if (n < 50) throw new Error('zu wenige Kurse');
   const tiefe = new Float64Array(n), hoehe = new Float64Array(n);
@@ -254,17 +256,8 @@ function rechnen(pair, d, e) {
     hoehe[i] = e.docht ? d.h[i] : Math.max(d.o[i], d.c[i]);
   }
   const bMin = baum(tiefe, true), bMax = baum(hoehe, false);
-  const pip = pipVon(pair);
-  const preis = d.c[n - 1];
-
-  const tageK = kerzenBauen(d, 'D', e).kerzen;
-  const atrD = atrReihe(tageK, 14);
-  const atrTag = atrD[atrD.length - 1] || pip * 50;
-
-  const offen = [], treffer = [];
-  let verworfen = 0;
-  for (const tf of TFS) {
-    if (!e.tfs[tf]) continue;
+  const linien = [];
+  for (const tf of tfs) {
     const { kerzen, barKey } = kerzenBauen(d, tf, e);
     const atr = atrReihe(kerzen, e.atrLen);
     // C = i (existiert → B = i-1 ist abgeschlossen), A = i-2.
@@ -282,15 +275,35 @@ function rechnen(pair, d, e) {
       if (!bull && !bear) continue;
       const lvl = bull ? Math.min(B.o, B.c) : Math.max(B.o, B.c);
       const seite = bull ? 'long' : 'short';
-      const linie = { id: `${pair}|${tf}|${tagIso(B.tag)}|${seite}`, tf, seite, lvl: runden(pair, lvl), entstanden: tagIso(B.tag), alt: B.alt };
       const j = ersterTreffer(bull ? bMin : bMax, B.e + 1, bull ? lvl + tTol : lvl - tTol);
-      if (j >= 0 && j < n) {
-        if (e.filterAn && barKey[j] - B.k < e.filterAbstand + 1) { verworfen++; continue; }
-        treffer.push({ ...linie, t: d.t[j], ungefaehr: d.quelle[j] === 0 });
-      } else {
-        const abstand = Math.abs(preis - lvl);
-        offen.push({ ...linie, abstandPips: Number((abstand / pip).toFixed(1)), abstandAtr: Number((abstand / atrTag).toFixed(2)) });
-      }
+      const getroffen = j >= 0 && j < n;
+      const status = !getroffen ? 'offen' : e.filterAn && barKey[j] - B.k < e.filterAbstand + 1 ? 'verworfen' : 'treffer';
+      linien.push({
+        id: `${pair}|${tf}|${tagIso(B.tag)}|${seite}`, tf, seite, lvlRoh: lvl, lvl: runden(pair, lvl), entstanden: tagIso(B.tag), alt: B.alt,
+        status, j: getroffen ? j : -1, A, B, atrB, verhaeltnis: bodyB / bodyA, passung: Math.abs(bull ? Math.min(A.o, A.c) - Math.min(B.o, B.c) : Math.max(A.o, A.c) - Math.max(B.o, B.c)) / bodyA,
+      });
+    }
+  }
+  return linien;
+}
+
+function rechnen(pair, d, e) {
+  const n = d.t.length;
+  const pip = pipVon(pair);
+  const preis = d.c[n - 1];
+  const tageK = kerzenBauen(d, 'D', e).kerzen;
+  const atrD = atrReihe(tageK, 14);
+  const atrTag = atrD[atrD.length - 1] || pip * 50;
+
+  const offen = [], treffer = [];
+  let verworfen = 0;
+  for (const l of linienFinden(pair, d, e)) {
+    const linie = { id: l.id, tf: l.tf, seite: l.seite, lvl: l.lvl, entstanden: l.entstanden, alt: l.alt };
+    if (l.status === 'verworfen') verworfen++;
+    else if (l.status === 'treffer') treffer.push({ ...linie, t: d.t[l.j], ungefaehr: d.quelle[l.j] === 0 });
+    else {
+      const abstand = Math.abs(preis - l.lvlRoh);
+      offen.push({ ...linie, abstandPips: Number((abstand / pip).toFixed(1)), abstandAtr: Number((abstand / atrTag).toFixed(2)) });
     }
   }
   offen.sort((a, b) => a.abstandPips - b.abstandPips);
@@ -498,9 +511,13 @@ registrierePruefung('trading', async () => {
 });
 
 // Für Tests ohne Server.
-export const _intern = { kerzenBauen, vollLaden, rechnen, sessionTag, keyFn, tagIso, handelstageVor, STANDARD };
+export const _intern = { atrReihe, handelstageVorFn: (t, e) => handelstageVor(t, e), kerzenBauen, vollLaden, rechnen, sessionTag, keyFn, tagIso, handelstageVor, STANDARD };
 
 // Aktueller Kurs eines Paars (für Umrechnungen im Journal), null wenn noch nicht geladen.
 export function tradingKurs(pair) {
   return zustand.ergebnis.get(pair)?.preis ?? null;
 }
+
+// Für die Statistik: Rohdaten eines Paars und ein Stand, der sich bei jeder Änderung erhöht.
+export const tradingDaten = (pair) => zustand.daten.get(pair) || null;
+export const tradingStand = () => `${zustand.letzteVoll}|${zustand.letzteLive}|${JSON.stringify(tradingEinstellungen())}`;

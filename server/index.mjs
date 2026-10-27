@@ -25,6 +25,7 @@ import { tagescheckSenden } from './tagescheck.mjs';
 import { fokusZustand, fokusLauf, koppelcodeErzeugen, koppeln, geraetVonToken, geraetEntfernen, geraetSetzen as fokusGeraetSetzen, bericht as fokusBericht, diagnoseSpeichern, sperreSetzen, sperreLoeschen, kategorieSetzen, piholeSync } from './fokus.mjs';
 import { tradingZustand, tradingPaar, tradingLauf, tradingNeuLaden, tradingEinstellungenSetzen, tradingTestMeldung, PAARE } from './trading.mjs';
 import { heuteZustand, anmeldeUrl, rueckkehr, trennen as googleTrennen, mailAktion, scanStarten, scanZustand, absenderAktion, werbefilterSetzen, terminNeu, aufgabeNeu, aufgabeErledigt } from './google.mjs';
+import { statistik as gvaStatistik, statistikStandardSetzen, beispiel as gvaBeispiel } from './tradingStatistik.mjs';
 import { journalZustand, tradeSpeichern, tradeLoeschen, journalEinstellungenSetzen } from './journal.mjs';
 import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
@@ -165,6 +166,13 @@ async function api(req, res, url) {
   if (p === '/api/trading/einstellungen' && m === 'POST') return json(res, 200, tradingEinstellungenSetzen(await body(req)));
   if (p === '/api/trading/test' && m === 'POST') return json(res, 200, await tradingTestMeldung());
   if (p === '/api/trading/neu-laden' && m === 'POST') { tradingNeuLaden(); return json(res, 200, { ok: true }); }
+  if (p === '/api/trading/statistik' && m === 'POST') return json(res, 200, gvaStatistik(await body(req)));
+  if (p === '/api/trading/statistik/standard' && m === 'POST') return json(res, 200, statistikStandardSetzen(await body(req)));
+  if (p === '/api/trading/statistik/beispiel' && m === 'POST') {
+    const b = await body(req);
+    const r = gvaBeispiel(String(b.id || ''), b);
+    return r ? json(res, 200, r) : json(res, 404, { fehler: 'Ereignis nicht gefunden (Kurse noch nicht geladen?)' });
+  }
 
   // ---------- Sicherheit: Zwei-Faktor und Sitzungen (Einstellungen) ----------
   if (p === '/api/sicherheit' && m === 'GET') return json(res, 200, { zweifaktor: zweifaktorZustand(), sitzungen: sitzungenZustand(req) });
