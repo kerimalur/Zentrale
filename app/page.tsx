@@ -15,6 +15,7 @@ import { Medien, vpnStatus } from '@/components/Medien';
 import { Einstellungen } from '@/components/Einstellungen';
 import { Gesundheit } from '@/components/Gesundheit';
 import { Trading } from '@/components/Trading';
+import { KursdatenLeiste } from '@/components/KursdatenLeiste';
 import { Heute } from '@/components/Heute';
 import { Fokus } from '@/components/Fokus';
 
@@ -122,6 +123,8 @@ export default function Seite() {
           <button className="press icon-knopf" onClick={abmelden} aria-label="Abmelden" title="Abmelden"><Icon name="abmelden" size={20} /></button>
         </div>
       </header>
+
+      <KursdatenLeiste onOeffnen={() => waehle('Trading')} />
 
       {tab === 'Übersicht' && <Uebersicht z={z} aktualisieren={laden} />}
       {tab === 'Heute' && <Heute />}

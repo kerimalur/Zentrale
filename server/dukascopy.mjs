@@ -37,7 +37,7 @@ function letzterFertigerMonat(jetzt = new Date()) {
   return jetzt.getUTCDate() >= 3 ? i - 1 : i - 2;
 }
 
-const zustand = { laeuft: false, art: null, paar: null, geladen: 0, offen: 0, fehler: null, letzterLauf: 0, gesperrtBis: 0, neu: 0 };
+const zustand = { laeuft: false, art: null, paar: null, geladen: 0, offen: 0, fehler: null, letzterLauf: 0, gesperrtBis: 0, neu: 0, artStart: 0 };
 let beiNeuenDaten = null;
 export const dukascopyNachLaden = (fn) => { beiNeuenDaten = fn; };
 
@@ -172,6 +172,7 @@ export async function dukascopyLauf() {
       zustand.art = art;
       zustand.offen = liste.reduce((s, [, m]) => s + m.length, 0);
       zustand.geladen = 0;
+      zustand.artStart = Date.now();
       for (const [pair, monate] of liste) {
         zustand.paar = pair;
         for (const monat of monate) {
@@ -276,7 +277,13 @@ function stand(art, bis) {
   return { da, gesamt, fertig: da >= gesamt, paareFertig };
 }
 export function dukascopyZustand() {
-  const live = () => ({ laeuft: zustand.laeuft, art: zustand.art, paar: zustand.paar, fehler: zustand.fehler, gesperrtBis: zustand.gesperrtBis > Date.now() ? zustand.gesperrtBis : null });
+  const live = () => {
+    // Restzeit aus dem bisherigen Tempo dieses Laufs (erst nach ein paar Monaten aussagekräftig)
+    const dauer = Date.now() - zustand.artStart;
+    const restMin = zustand.laeuft && zustand.geladen >= 3 && dauer > 0
+      ? Math.round(((zustand.offen - zustand.geladen) * (dauer / zustand.geladen)) / 60_000) : null;
+    return { laeuft: zustand.laeuft, art: zustand.art, paar: zustand.paar, fehler: zustand.fehler, restMin, gesperrtBis: zustand.gesperrtBis > Date.now() ? zustand.gesperrtBis : null };
+  };
   if (zCache.wert && Date.now() - zCache.zeit < 20_000) return { ...zCache.wert, ...live() };
   const bis = letzterFertigerMonat();
   const h1 = stand('h1', bis);
