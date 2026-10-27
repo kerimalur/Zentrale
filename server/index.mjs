@@ -27,6 +27,7 @@ import { dukascopyTakt, dukascopyZustand } from './dukascopy.mjs';
 import { tradingZustand, tradingPaar, tradingLauf, tradingNeuLaden, tradingEinstellungenSetzen, tradingTestMeldung, PAARE } from './trading.mjs';
 import { heuteZustand, anmeldeUrl, rueckkehr, trennen as googleTrennen, mailAktion, scanStarten, scanZustand, absenderAktion, werbefilterSetzen, terminNeu, aufgabeNeu, aufgabeErledigt } from './google.mjs';
 import { statistik as gvaStatistik, statistikStandardSetzen, beispiel as gvaBeispiel } from './tradingStatistik.mjs';
+import { laborListe, laborIdee, laborIdeeSpeichern, laborIdeeLoeschen, laborStarten, laborForwardOeffnen, laborLauf, laborErgebnis, laborAbbrechen, laborBausteine, laborStart } from './labor/labor.mjs';
 import { journalZustand, tradeSpeichern, tradeLoeschen, journalEinstellungenSetzen, bildSpeichern, bildPfad, importieren } from './journal.mjs';
 import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
@@ -205,6 +206,36 @@ async function api(req, res, url) {
   if (p === '/api/heute/aufgabe/erledigt' && m === 'POST') { const b = await body(req); return json(res, 200, await aufgabeErledigt(b.id)); }
 
   // ---------- Journal (Tab «Trading» → Journal) ----------
+  // ---------- Trading-Labor (Strategien und Hypothesen testen) ----------
+  if (p === '/api/labor' && m === 'GET') return json(res, 200, laborListe());
+  if (p === '/api/labor/bausteine' && m === 'GET') return json(res, 200, laborBausteine());
+  if (p === '/api/labor/idee' && m === 'GET') {
+    const r = laborIdee(String(url.searchParams.get('id') || ''));
+    return r ? json(res, 200, r) : json(res, 404, { fehler: 'Nicht gefunden' });
+  }
+  if (p === '/api/labor/idee' && m === 'POST') return json(res, 200, laborIdeeSpeichern(await body(req)));
+  if (p === '/api/labor/idee' && m === 'DELETE') {
+    const b = await body(req);
+    return laborIdeeLoeschen(String(b.id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
+  }
+  if (p === '/api/labor/start' && m === 'POST') {
+    const r = laborStarten(String((await body(req)).id || ''));
+    return r.fehler ? json(res, 400, r) : json(res, 200, r);
+  }
+  if (p === '/api/labor/forward-oeffnen' && m === 'POST') {
+    const r = laborForwardOeffnen(String((await body(req)).id || ''));
+    return r.fehler ? json(res, 400, r) : json(res, 200, r);
+  }
+  if (p === '/api/labor/abbrechen' && m === 'POST') return json(res, 200, { ok: laborAbbrechen(String((await body(req)).lauf || '')) });
+  if (p === '/api/labor/lauf' && m === 'GET') {
+    const r = laborLauf(String(url.searchParams.get('id') || ''));
+    return r ? json(res, 200, r) : json(res, 404, { fehler: 'Nicht gefunden' });
+  }
+  if (p === '/api/labor/ergebnis' && m === 'GET') {
+    const r = laborErgebnis(String(url.searchParams.get('lauf') || '').replace(/[^0-9a-f-]/g, ''));
+    return r ? json(res, 200, r) : json(res, 404, { fehler: 'Kein Ergebnis' });
+  }
+
   if (p === '/api/journal' && m === 'GET') return json(res, 200, journalZustand());
   if (p === '/api/journal/trade' && m === 'POST') {
     try { return json(res, 200, tradeSpeichern(await body(req))); }
@@ -473,6 +504,7 @@ setTimeout(() => alle(30_000, netzwache, false), 20_000);
 setTimeout(() => alle(60_000, fokusLauf, false), 25_000);
 // Trading: Kurse laden (erst nach 40 s, damit der Start nicht gebremst wird), danach jede Minute prüfen, ob nachgeladen wird.
 setTimeout(() => alle(60_000, tradingLauf), 40_000);
+laborStart(); // Labor: verwaiste Läufe aufräumen, Warteschlange weiterführen
 setTimeout(() => alle(5 * 60_000, dukascopyTakt), 60_000); // Stundenkerzen ab 2003 nachladen (danach 1× am Tag)
 // Statusbericht für Obsidian (alle 15 Min, erstmals 2 Min nach dem Start, wenn alle Daten da sind).
 let berichtFehler = null;
