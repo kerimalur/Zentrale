@@ -26,7 +26,7 @@ export function Trading() {
   const [fehler, setFehler] = useState<string | null>(null);
   const [sortierung, setSortierung] = useState<'naehe' | 'az'>('naehe');
   const [paar, setPaar] = useState<string | null>(null);
-  const [einst, setEinst] = useState(false);
+  const [einst, setEinst] = useState(false); // eigene Einstellungsseite statt Übersicht
 
   const laden = useCallback(async () => {
     try { setD(await holen<TradingZustand>('/api/trading')); setFehler(null); }
@@ -54,6 +54,8 @@ export function Trading() {
   if (fehler && !d) return <div className="karte fehlerbox">Trading nicht ladbar: {fehler}</div>;
   if (!d) return <div className="karte leise">Lade …</div>;
 
+  if (einst) return <EinstellungenSeite d={d} onZurueck={() => { setEinst(false); laden(); }} />;
+
   const tfs = TFS.filter((tf) => d.einstellungen.tfs[tf]);
   const naechste = d.paare.filter((p) => p.naechsteLinie).sort((a, b) => a.naechsteLinie!.abstandAtr - b.naechsteLinie!.abstandAtr).slice(0, 6);
   const fertig = d.paare.filter((p) => p.preis !== undefined).length;
@@ -77,7 +79,7 @@ export function Trading() {
           <span className={`pille ${d.einstellungen.meldungen && d.meldungenBereit ? 'tr-pille-an' : 'tr-pille-aus'}`}>
             {!d.meldungenBereit ? 'ntfy aus' : d.einstellungen.meldungen ? 'Meldung bei Treffer' : 'Meldungen aus'}
           </span>
-          <button className="knopf-klein press" onClick={() => setEinst(true)}>Einstellungen</button>
+          <button className="icon-knopf press" onClick={() => setEinst(true)} aria-label="Trading-Einstellungen" title="Einstellungen"><Icon name="zahnrad" size={19} /></button>
         </div>
       </section>
 
@@ -149,7 +151,6 @@ export function Trading() {
       </section>
 
       {paar && <PaarPopup pair={paar} onClose={() => setPaar(null)} />}
-      {einst && <EinstellungenPopup d={d} onClose={() => { setEinst(false); laden(); }} />}
     </div>
   );
 }
@@ -270,15 +271,17 @@ function Chart({ d }: { d: TPaarDetail }) {
   );
 }
 
-function EinstellungenPopup({ d, onClose }: { d: TradingZustand; onClose: () => void }) {
+// Eigene Einstellungsseite des Trading-Tabs. Weitere Bereiche (z. B. Fundamentaldaten) kommen als zusätzliche Karten dazu.
+function EinstellungenSeite({ d, onZurueck }: { d: TradingZustand; onZurueck: () => void }) {
   const [e, setE] = useState<TEinstellungen>(d.einstellungen);
   const [laeuft, setLaeuft] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const setz = <K extends keyof TEinstellungen>(k: K, v: TEinstellungen[K]) => setE((x) => ({ ...x, [k]: v }));
+  const geaendert = JSON.stringify(e) !== JSON.stringify(d.einstellungen);
 
   async function speichern() {
     setLaeuft(true);
-    try { await senden('/api/trading/einstellungen', e); onClose(); }
+    try { await senden('/api/trading/einstellungen', e); onZurueck(); }
     catch (err) { setInfo((err as Error).message); setLaeuft(false); }
   }
   async function test() {
@@ -292,45 +295,85 @@ function EinstellungenPopup({ d, onClose }: { d: TradingZustand; onClose: () => 
   }
 
   return (
-    <Popup titel="Trading-Einstellungen" unter="Regeln wie im Pine-Script «GVA Linien — Pur v1.1»" onClose={onClose}>
-      <Schalter an={e.meldungen} onClick={() => setz('meldungen', !e.meldungen)} titel="Meldung beim ersten Treffer" unter={d.meldungenBereit ? 'per ntfy aufs Handy' : 'ntfy ist aus (Einstellungen → Allgemein)'} />
-
-      <h4 className="nw-h">Zeitrahmen</h4>
-      <div className="segment" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-        {TFS.map((tf) => <button key={tf} aria-pressed={e.tfs[tf]} onClick={() => setz('tfs', { ...e.tfs, [tf]: !e.tfs[tf] })}>{TF_TEXT[tf]}</button>)}
-      </div>
-
-      <h4 className="nw-h">GVA-Erkennung</h4>
-      <div className="tr-felder">
-        <label className="nw-feld">Boden/Top-Toleranz (%)<input type="number" step={0.5} min={0.1} max={50} value={e.tolPct} onChange={(x) => setz('tolPct', Number(x.target.value))} /></label>
-        <label className="nw-feld">2. Kerze mindestens X % grösser<input type="number" step={5} min={0} max={500} value={e.k2Pct} onChange={(x) => setz('k2Pct', Number(x.target.value))} /></label>
-      </div>
-      <div className="nw-feld">Toleranz-Basis
-        <div className="segment" style={{ gridTemplateColumns: '1fr 1fr' }}>
-          <button aria-pressed={e.tolBasis === 'body'} onClick={() => setz('tolBasis', 'body')}>Body 1. Kerze</button>
-          <button aria-pressed={e.tolBasis === 'atr'} onClick={() => setz('tolBasis', 'atr')}>ATR (HTF)</button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <section className="karte in tr-kopf" aria-label="Trading-Einstellungen">
+        <button className="icon-knopf press" onClick={onZurueck} aria-label="Zurück zur Übersicht"><Icon name="zurueck" size={18} /></button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h2 className="karte-titel" style={{ marginBottom: 2 }}>Trading-Einstellungen</h2>
+          <div className="leise" style={{ fontSize: 13 }}>Regeln wie im Pine-Script «GVA Linien — Pur v1.1». Speichern rechnet alle Linien neu.</div>
         </div>
+        <div className="tr-kopf-rechts">
+          {geaendert && <span className="pille tr-pille-aus">ungespeichert</span>}
+          <button className="knopf-klein press tr-primaer" onClick={speichern} disabled={laeuft || !geaendert}>{laeuft ? 'Speichere …' : 'Speichern'}</button>
+        </div>
+      </section>
+      {info && <div className="karte leise" style={{ fontSize: 13, padding: '14px 20px' }}>{info}</div>}
+
+      <div className="tr-einst">
+        <section className="karte in" aria-label="GVA-Erkennung">
+          <h2 className="karte-titel">GVA-Erkennung</h2>
+          <label className="nw-feld">Boden/Top-Toleranz (%)
+            <input type="number" step={0.5} min={0.1} max={50} value={e.tolPct} onChange={(x) => setz('tolPct', Number(x.target.value))} />
+            <small className="tr-hilfe">Wie nah die Böden (Long) bzw. Tops (Short) der Kerzenkörper von Kerze A und B beieinander liegen müssen. Standard 5 % – gemessen an der Basis unten.</small>
+          </label>
+          <label className="nw-feld">2. Kerze mindestens X % grösser
+            <input type="number" step={5} min={0} max={500} value={e.k2Pct} onChange={(x) => setz('k2Pct', Number(x.target.value))} />
+            <small className="tr-hilfe">Körper von Kerze B muss so viel grösser sein als der von Kerze A. Standard 40 %.</small>
+          </label>
+          <div className="nw-feld">Toleranz-Basis
+            <div className="segment" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <button aria-pressed={e.tolBasis === 'body'} onClick={() => setz('tolBasis', 'body')}>Body 1. Kerze</button>
+              <button aria-pressed={e.tolBasis === 'atr'} onClick={() => setz('tolBasis', 'atr')}>ATR (HTF)</button>
+            </div>
+            <small className="tr-hilfe">{e.tolBasis === 'body' ? 'Toleranz = X % vom Körper der Kerze A.' : 'Toleranz = X % der ATR im Zeitrahmen der Linie.'}</small>
+          </div>
+          <label className="nw-feld">ATR-Periode (HTF)
+            <input type="number" min={1} max={50} value={e.atrLen} onChange={(x) => setz('atrLen', Number(x.target.value))} />
+            <small className="tr-hilfe">Gilt für die ATR-Basis und die Touch-Toleranz. Standard 14.</small>
+          </label>
+        </section>
+
+        <section className="karte in" aria-label="Berührung und Filter">
+          <h2 className="karte-titel">Berührung</h2>
+          <Schalter an={e.docht} onClick={() => setz('docht', !e.docht)} titel="Docht zählt als Berührung" unter="Aus = nur Kerzenkörper (Open/Close) zählt als Treffer" />
+          <label className="nw-feld" style={{ marginTop: 10 }}>Touch-Toleranz (× ATR HTF)
+            <input type="number" step={0.005} min={0} max={0.5} value={e.touchTol} onChange={(x) => setz('touchTol', Number(x.target.value))} />
+            <small className="tr-hilfe">0 = der Preis muss das Level genau erreichen. 0,02 = 2 % der ATR davor zählt schon.</small>
+          </label>
+          <h2 className="karte-titel" style={{ marginTop: 14 }}>Zu früher Treffer</h2>
+          <Schalter an={e.filterAn} onClick={() => setz('filterAn', !e.filterAn)} titel="Nachbar-Filter" unter="Wird die GVA direkt in der nächsten Kerze wieder angelaufen, gehört das noch zur Entstehung → GVA verwerfen" />
+          {e.filterAn && (
+            <label className="nw-feld" style={{ marginTop: 10 }}>Mindestens X HTF-Kerzen komplett dazwischen
+              <input type="number" min={0} max={20} value={e.filterAbstand} onChange={(x) => setz('filterAbstand', Number(x.target.value))} />
+              <small className="tr-hilfe">Standard 1: bildende Kerze | 1 ganze Kerze | Treffer.</small>
+            </label>
+          )}
+        </section>
+
+        <section className="karte in" aria-label="Zeitrahmen und Kerzen">
+          <h2 className="karte-titel">Zeitrahmen</h2>
+          <div className="segment" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+            {TFS.map((tf) => <button key={tf} aria-pressed={e.tfs[tf]} onClick={() => setz('tfs', { ...e.tfs, [tf]: !e.tfs[tf] })}>{TF_TEXT[tf]}</button>)}
+          </div>
+          <h2 className="karte-titel" style={{ marginTop: 16 }}>3D-Kerzen</h2>
+          <label className="nw-feld">Ein Tag, an dem eine 3D-Kerze beginnt
+            <input type="date" value={e.anker3d} onChange={(x) => setz('anker3d', x.target.value)} />
+            <small className="tr-hilfe">Gezählt wird in Handelstagen (Mo–Fr), ein Handelstag endet um 17:00 New York (meist 23:00 Schweizer Zeit). Passt zu TradingView: 06.10., 09.10., 14.10., 19.10., 22.10., 27.10.</small>
+          </label>
+          <Schalter an={e.feiertageAus} onClick={() => setz('feiertageAus', !e.feiertageAus)} titel="25.12. und 1.1. sind keine Handelstage" unter="zählen dann nicht für die 3D-Kerzen" />
+        </section>
+
+        <section className="karte in" aria-label="Meldungen und Daten">
+          <h2 className="karte-titel">Meldungen</h2>
+          <Schalter an={e.meldungen} onClick={() => setz('meldungen', !e.meldungen)} titel="Meldung beim ersten Treffer" unter={d.meldungenBereit ? 'per ntfy aufs Handy, Titel «Trading»' : 'ntfy ist aus (Einstellungen → Allgemein)'} />
+          <button className="knopf-klein press" style={{ marginTop: 10 }} onClick={test}><Icon name="info" size={14} /> Test-Meldung senden</button>
+          <h2 className="karte-titel" style={{ marginTop: 16 }}>Kursdaten</h2>
+          <div className="leise" style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
+            Yahoo Finance: Stundenkerzen der letzten ~2 Jahre, davor Tageskerzen. Aktualisierung alle 2 Minuten (Markt zu: alle 30 Minuten).
+          </div>
+          <button className="knopf-klein press" onClick={neuLaden}><Icon name="neustart" size={14} /> Kurse neu laden</button>
+        </section>
       </div>
-      {e.tolBasis === 'atr' && <label className="nw-feld">ATR-Periode (HTF)<input type="number" min={1} max={50} value={e.atrLen} onChange={(x) => setz('atrLen', Number(x.target.value))} /></label>}
-
-      <h4 className="nw-h">Berührung</h4>
-      <Schalter an={e.docht} onClick={() => setz('docht', !e.docht)} titel="Docht zählt als Berührung" unter="Aus = nur Kerzenkörper (Open/Close)" />
-      <label className="nw-feld" style={{ marginTop: 8 }}>Touch-Toleranz (× ATR HTF)<input type="number" step={0.005} min={0} max={0.5} value={e.touchTol} onChange={(x) => setz('touchTol', Number(x.target.value))} /></label>
-
-      <h4 className="nw-h">Zu früher Treffer</h4>
-      <Schalter an={e.filterAn} onClick={() => setz('filterAn', !e.filterAn)} titel="Nachbar-Filter" unter="Treffer direkt in der nächsten HTF-Kerze → GVA verwerfen" />
-      {e.filterAn && <label className="nw-feld" style={{ marginTop: 8 }}>Mindestens X HTF-Kerzen komplett dazwischen<input type="number" min={0} max={20} value={e.filterAbstand} onChange={(x) => setz('filterAbstand', Number(x.target.value))} /></label>}
-
-      <h4 className="nw-h">3D-Kerzen</h4>
-      <label className="nw-feld">Ein Tag, an dem eine 3D-Kerze beginnt (wie in TradingView)<input type="date" value={e.anker3d} onChange={(x) => setz('anker3d', x.target.value)} /></label>
-      <Schalter an={e.feiertageAus} onClick={() => setz('feiertageAus', !e.feiertageAus)} titel="25.12. und 1.1. sind keine Handelstage" unter="zählen dann nicht für die 3D-Kerzen" />
-
-      {info && <div className="leise" style={{ fontSize: 13, marginTop: 10 }}>{info}</div>}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-        <button className="knopf-klein press tr-primaer" onClick={speichern} disabled={laeuft}>{laeuft ? 'Speichere …' : 'Speichern'}</button>
-        <button className="knopf-klein press" onClick={test}><Icon name="info" size={14} /> Test-Meldung</button>
-        <button className="knopf-klein press" onClick={neuLaden}><Icon name="neustart" size={14} /> Kurse neu laden</button>
-      </div>
-    </Popup>
+    </div>
   );
 }
