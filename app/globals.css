@@ -649,3 +649,28 @@ button.szene-chip { font-family: inherit; line-height: inherit; }
 .fk-zeiten { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .nw-feld select { font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--track); background: #fff; color: var(--ink); min-height: 40px; }
 @media (max-width: 720px) { .fk-zwei { grid-template-columns: 1fr; } .fk-code { font-size: 36px; } }
+
+/* ---------- Trading (GVA-Linien) ---------- */
+.tr-zahl { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tr-kopf { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.tr-kopf-rechts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tr-pille-an { background: rgba(21, 128, 61, .12); color: var(--gruen); }
+.tr-pille-aus { background: var(--bg); color: var(--muted); }
+.tr-naechste { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.tr-chip { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; border-radius: 16px; text-align: left; font-size: 13px; }
+.tr-chip b { font-size: 15px; }
+.tr-tabelle-rahmen { overflow-x: auto; margin: 0 -6px; padding: 0 6px; }
+.tr-tabelle { width: 100%; border-collapse: separate; border-spacing: 3px; font-size: 13px; min-width: 380px; }
+.tr-tabelle th { font-size: 12px; font-weight: 600; color: var(--muted); padding: 2px 4px; text-align: center; }
+.tr-tabelle th.tr-sub { font-size: 11px; font-weight: 500; }
+.tr-zeile { cursor: pointer; }
+.tr-zeile:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.tr-paar, .tr-paar-kopf { position: sticky; left: 0; z-index: 1; background: #fff; text-align: left; }
+.tr-paar { padding: 6px 8px 6px 2px; white-space: nowrap; }
+.tr-zelle { text-align: center; border-radius: 9px; padding: 9px 4px; min-width: 50px; font-size: 12.5px; transition: filter .2s ease; }
+@media (hover: hover) and (pointer: fine) { .tr-zeile:hover .tr-zelle { filter: brightness(.96); } .tr-zeile:hover .tr-paar b { color: var(--accent); } }
+.tr-chart { width: 100%; height: auto; display: block; background: #fafbfd; border-radius: 14px; margin-bottom: 6px; }
+.tr-felder { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+.tr-primaer { background: var(--accent); color: #fff; }
+.knopf-klein svg { vertical-align: -2px; }
+@media (max-width: 560px) { .tr-felder { grid-template-columns: 1fr; } .tr-zelle { min-width: 42px; padding: 8px 2px; } }

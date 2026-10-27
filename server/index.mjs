@@ -22,6 +22,7 @@ import { tvAbfragen, tvTaste, tvLautstaerke, tvEinschalten } from './tv.mjs';
 import { garminDaten, garminHistorie } from './collect/garmin.mjs';
 import { tagescheckSenden } from './tagescheck.mjs';
 import { fokusZustand, fokusLauf, koppelcodeErzeugen, koppeln, geraetVonToken, geraetEntfernen, geraetSetzen as fokusGeraetSetzen, bericht as fokusBericht, diagnoseSpeichern, sperreSetzen, sperreLoeschen, kategorieSetzen, piholeSync } from './fokus.mjs';
+import { tradingZustand, tradingPaar, tradingLauf, tradingNeuLaden, tradingEinstellungenSetzen, tradingTestMeldung, PAARE } from './trading.mjs';
 import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
 ensureDataDir();
@@ -136,6 +137,18 @@ async function api(req, res, url) {
     return sperreLoeschen(String(b.id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
   }
   if (p === '/api/fokus/pihole' && m === 'POST') { await piholeSync(true); return json(res, 200, fokusZustand().pihole); }
+
+  // ---------- Trading (Tab «Trading»: GVA-Linien, Treffer-Meldungen) ----------
+  if (p === '/api/trading' && m === 'GET') return json(res, 200, tradingZustand());
+  if (p === '/api/trading/paar' && m === 'GET') {
+    const pair = String(url.searchParams.get('p') || '').toUpperCase();
+    if (!PAARE.includes(pair)) return json(res, 404, { fehler: 'Unbekanntes Paar' });
+    const r = tradingPaar(pair);
+    return r ? json(res, 200, r) : json(res, 404, { fehler: 'Noch keine Kurse' });
+  }
+  if (p === '/api/trading/einstellungen' && m === 'POST') return json(res, 200, tradingEinstellungenSetzen(await body(req)));
+  if (p === '/api/trading/test' && m === 'POST') return json(res, 200, await tradingTestMeldung());
+  if (p === '/api/trading/neu-laden' && m === 'POST') { tradingNeuLaden(); return json(res, 200, { ok: true }); }
 
   // ---------- Netzwerk (Tab «Netz» → Heimnetz, Ports & Zugriff) ----------
   if (p === '/api/netzwerk' && m === 'GET') return json(res, 200, await netzwerkZustand());
@@ -379,6 +392,8 @@ alle(15_000, tvAbfragen);
 // Netz-Wache: neue Geräte im Heimnetz und Port-Scans gegen den Pi (liest nur, schickt nichts los).
 setTimeout(() => alle(30_000, netzwache, false), 20_000);
 setTimeout(() => alle(60_000, fokusLauf, false), 25_000);
+// Trading: Kurse laden (erst nach 40 s, damit der Start nicht gebremst wird), danach jede Minute prüfen, ob nachgeladen wird.
+setTimeout(() => alle(60_000, tradingLauf), 40_000);
 // Statusbericht für Obsidian (alle 15 Min, erstmals 2 Min nach dem Start, wenn alle Daten da sind).
 let berichtFehler = null;
 const bericht = async () => {

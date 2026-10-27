@@ -183,6 +183,7 @@ Standard **aus**. Ein-/ausschalten unter **Einstellungen → Backup**. „Backup
 | Übersicht | 6 Dienste mit Status, Antwortzeit, Kennzahl, Verlauf; Szenen; Ereignisse & Fehler | Docker, HTTP-Checks, APIs |
 | System | CPU, RAM, Temperatur, Lüfter, Energie + 24-Std-Verlauf, Anschlüsse (USB 2/3, UASP, LAN, Netzteil), Updates | /proc, /sys, Docker, apt |
 | Fokus | Zeit pro App, Programm und Webseite auf allen gekoppelten Geräten (Windows-Agent, Browser-Erweiterung; Linux und Android folgen), Kategorien, Sperren (Webseiten per Pi-hole, Apps, Bereiche) | Geräte-Berichte, Pi-hole-API |
+| Trading | GVA-Linien (Regeln aus dem Pine-Script «GVA Linien — Pur v1.1») für alle 28 Major-Paare auf 3D, Woche und Monat: Heatmap mit Abstand zur nächsten Long-/Short-Linie, Chart pro Paar, ntfy-Meldung beim ersten Treffer | Yahoo Finance (Stundenkerzen ~2 Jahre, davor Tageskerzen) |
 | Netz | Geräte mit Download/Upload heute + DNS-Anfragen, Datenverkehr 24 Std, Ping | Tailscale, Pi-hole |
 | Netz → Heimnetz | Alle Geräte im Haus (ARP, mDNS, SSDP, Hersteller), Zuordnung (Meins/Familie/Gast), «Ports prüfen» pro Gerät, wer beim Pi anklopft (Scan-Erkennung), Tailnet-Geräte | /proc/net/arp, Multicast, nf_conntrack, Tailscale |
 | Netz → Ports & Zugriff | Alle lauschenden Ports mit Container/Prozess, wer durchkommt (Heimnetz/Tailnet), Firewall- und Tailscale-Regeln, «Weg einer Anfrage» | /proc/net, ufw, iptables, Tailscale-ACL (mit `TS_API_KEY` live) |
