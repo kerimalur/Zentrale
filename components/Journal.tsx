@@ -10,6 +10,8 @@ import {
 } from '@/lib/journal';
 import { Icon } from './ui';
 import { Popup } from './NetzBausteine';
+import { BacktestStart } from './BacktestSession';
+import { ImportPopup } from './JournalImport';
 
 type Filter = 'alle' | JArt;
 type Zeitraum = 'alles' | 'jahr' | '90' | '30';
@@ -53,6 +55,8 @@ export function Journal() {
   const [einst, setEinst] = useState(false);
   const [einheit, setEinheit] = useState<'r' | 'eur'>('r');
   const [gruppe, setGruppe] = useState<'pair' | 'richtung' | 'tf' | 'tag' | 'monat'>('pair');
+  const [session, setSession] = useState(false);
+  const [importOffen, setImportOffen] = useState(false);
 
   const laden = useCallback(async () => {
     try { setD(await holen<JournalZustand>('/api/journal')); setFehler(null); }
@@ -83,6 +87,8 @@ export function Journal() {
           {(Object.keys(ZEITRAUM_TEXT) as Zeitraum[]).map((z) => <button key={z} aria-pressed={zeitraum === z} onClick={() => setZeitraum(z)}>{ZEITRAUM_TEXT[z]}</button>)}
         </div>
         <span style={{ flex: 1 }} />
+        <button className="knopf-klein press" onClick={() => setImportOffen(true)}>Import</button>
+        <button className="knopf-klein press" onClick={() => setSession(true)}>Backtest-Session</button>
         <button className="knopf-klein press tr-primaer" onClick={() => setTrade('neu')}>+ Trade erfassen</button>
         <button className="icon-knopf press" style={{ background: 'var(--bg)' }} onClick={() => setEinst(true)} aria-label="Journal-Einstellungen" title="Einstellungen"><Icon name="zahnrad" size={19} /></button>
       </section>
@@ -106,6 +112,8 @@ export function Journal() {
       )}
 
       {trade && <TradePopup t={trade === 'neu' ? null : trade} d={d} onClose={(neu) => { setTrade(null); if (neu) laden(); }} />}
+      {session && <BacktestStart d={d} onClose={(neu) => { setSession(false); if (neu) laden(); }} />}
+      {importOffen && <ImportPopup paare={d.paare} onClose={(neu) => { setImportOffen(false); if (neu) laden(); }} />}
       {einst && <EinstPopup e={d.einstellungen} onClose={(neu) => { setEinst(false); if (neu) laden(); }} />}
     </div>
   );
@@ -400,7 +408,7 @@ function TradePopup({ t, d, onClose }: { t: JTrade | null; d: JournalZustand; on
         eroeffnet: f.eroeffnet, geschlossen: f.geschlossen || null,
         entry, sl, tp, exit, lots, risikoEur, ergebnisEur, rManuell, gvaLevel: num(f.gvaLevel),
         tags: f.tags.split(',').map((x) => x.trim()).filter(Boolean), fehler: f.fehler.split(',').map((x) => x.trim()).filter(Boolean),
-        notiz: f.notiz, bild: f.bild.trim(),
+        notiz: f.notiz, bild: f.bild.trim(), bilder: t?.bilder || [], session: t?.session || null,
       });
       onClose(true);
     } catch (e) { setFehler((e as Error).message); setLaeuft(false); }
@@ -470,6 +478,11 @@ function TradePopup({ t, d, onClose }: { t: JTrade | null; d: JournalZustand; on
       <label className="nw-feld">Notiz<textarea rows={3} value={f.notiz} onChange={(e) => s('notiz', e.target.value)} className="jr-text" /></label>
       <label className="nw-feld">Screenshot-Link (TradingView)<input value={f.bild} onChange={(e) => s('bild', e.target.value)} placeholder="https://www.tradingview.com/x/…" /></label>
       {t?.bild && <a href={t.bild} target="_blank" rel="noreferrer" style={{ fontSize: 13 }}>Screenshot öffnen ↗</a>}
+      {!!t?.bilder?.length && (
+        <div className="bt-bilder">
+          {t.bilder.map((b) => <a key={b} href={`/api/journal/bild/${b}`} target="_blank" rel="noreferrer"><img src={`/api/journal/bild/${b}`} alt="Screenshot aus der Backtest-Session" loading="lazy" /></a>)}
+        </div>
+      )}
 
       <button type="button" className="knopf-klein press" style={{ alignSelf: 'flex-start' }} onClick={() => setMehr(!mehr)}>{mehr ? 'Weniger' : 'Mehr Felder'}</button>
       {mehr && (

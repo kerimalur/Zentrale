@@ -26,7 +26,7 @@ import { fokusZustand, fokusLauf, koppelcodeErzeugen, koppeln, geraetVonToken, g
 import { tradingZustand, tradingPaar, tradingLauf, tradingNeuLaden, tradingEinstellungenSetzen, tradingTestMeldung, PAARE } from './trading.mjs';
 import { heuteZustand, anmeldeUrl, rueckkehr, trennen as googleTrennen, mailAktion, scanStarten, scanZustand, absenderAktion, werbefilterSetzen, terminNeu, aufgabeNeu, aufgabeErledigt } from './google.mjs';
 import { statistik as gvaStatistik, statistikStandardSetzen, beispiel as gvaBeispiel } from './tradingStatistik.mjs';
-import { journalZustand, tradeSpeichern, tradeLoeschen, journalEinstellungenSetzen } from './journal.mjs';
+import { journalZustand, tradeSpeichern, tradeLoeschen, journalEinstellungenSetzen, bildSpeichern, bildPfad, importieren } from './journal.mjs';
 import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
 ensureDataDir();
@@ -45,10 +45,10 @@ function json(res, status, daten, extraHeaders = {}) {
   res.end(JSON.stringify(daten));
 }
 
-function body(req) {
+function body(req, max = 64 * 1024) {
   return new Promise((resolve, reject) => {
     let roh = '';
-    req.on('data', (c) => { roh += c; if (roh.length > 64 * 1024) { reject(new Error('Zu gross')); req.destroy(); } });
+    req.on('data', (c) => { roh += c; if (roh.length > max) { reject(new Error('Zu gross')); req.destroy(); } });
     req.on('end', () => { try { resolve(roh ? JSON.parse(roh) : {}); } catch { reject(new Error('Ungültiges JSON')); } });
     req.on('error', reject);
   });
@@ -213,6 +213,19 @@ async function api(req, res, url) {
     return tradeLoeschen(String(b.id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
   }
   if (p === '/api/journal/einstellungen' && m === 'POST') return json(res, 200, journalEinstellungenSetzen(await body(req)));
+  if (p === '/api/journal/import' && m === 'POST') return json(res, 200, importieren((await body(req, 4 * 1024 * 1024)).trades));
+  if (p === '/api/journal/bild' && m === 'POST') {
+    const teile = [];
+    let groesse = 0;
+    for await (const c of req) { groesse += c.length; if (groesse > 8 * 1024 * 1024) return json(res, 413, { fehler: 'Bild zu gross' }); teile.push(c); }
+    return json(res, 200, bildSpeichern(Buffer.concat(teile), String(req.headers['content-type'] || '').split(';')[0]));
+  }
+  if (p.startsWith('/api/journal/bild/') && m === 'GET') {
+    const datei = bildPfad(p.slice('/api/journal/bild/'.length));
+    if (!datei) return json(res, 404, { fehler: 'Bild nicht gefunden' });
+    res.writeHead(200, { 'Content-Type': datei.endsWith('.png') ? 'image/png' : 'image/jpeg', 'Cache-Control': 'private, max-age=31536000, immutable' });
+    return fs.createReadStream(datei).pipe(res);
+  }
 
   // ---------- Netzwerk (Tab «Netz» → Heimnetz, Ports & Zugriff) ----------
   if (p === '/api/netzwerk' && m === 'GET') return json(res, 200, await netzwerkZustand());

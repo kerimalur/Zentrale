@@ -11,8 +11,8 @@ export interface JTrade {
   richtung: JRichtung;
   eroeffnet: string; // JJJJ-MM-TT oder JJJJ-MM-TTTHH:mm
   geschlossen: string | null;
-  entry: number;
-  sl: number; // Stop-Loss beim Einstieg (Anfangsrisiko)
+  entry: number | null; // leer nur bei importierten Backtests, die nur R kennen
+  sl: number | null; // Stop-Loss beim Einstieg (Anfangsrisiko)
   tp: number | null;
   exit: number | null; // Ausstiegskurs (bei Teilschliessungen Ø oder leer lassen und EUR eintragen)
   lots: number | null;
@@ -26,6 +26,8 @@ export interface JTrade {
   fehler: string[];
   notiz: string;
   bild: string;
+  bilder?: string[]; // Screenshots auf dem Pi (Backtest-Session)
+  session?: string | null; // Backtest-Session
   checks: Record<string, boolean>;
   erstellt: number;
   geaendert: number;
@@ -47,15 +49,15 @@ export interface JournalZustand {
 }
 
 // ---------- Ein Trade ----------
-export const geplantesRR = (t: Pick<JTrade, 'entry' | 'sl' | 'tp'>) => (t.tp === null ? null : (t.tp - t.entry) / (t.entry - t.sl));
+export const geplantesRR = (t: Pick<JTrade, 'entry' | 'sl' | 'tp'>) => (t.tp === null || t.entry === null || t.sl === null ? null : (t.tp - t.entry) / (t.entry - t.sl));
 // Für Long und Short gleich: Nenner (entry − sl) ist bei Short negativ, Gewinn (exit − entry) dann auch.
-export const rAusKurs = (t: Pick<JTrade, 'entry' | 'sl'>, exit: number) => (exit - t.entry) / (t.entry - t.sl);
+export const rAusKurs = (t: Pick<JTrade, 'entry' | 'sl'>, exit: number) => (t.entry === null || t.sl === null ? null : (exit - t.entry) / (t.entry - t.sl));
 
 export type RQuelle = 'eur' | 'manuell' | 'kurs' | null;
 export function rVon(t: JTrade): { r: number | null; quelle: RQuelle } {
   if (t.ergebnisEur !== null && t.risikoEur && t.risikoEur > 0) return { r: t.ergebnisEur / t.risikoEur, quelle: 'eur' };
   if (t.rManuell !== null) return { r: t.rManuell, quelle: 'manuell' };
-  if (t.exit !== null) return { r: rAusKurs(t, t.exit), quelle: 'kurs' };
+  if (t.exit !== null) { const r = rAusKurs(t, t.exit); if (r !== null) return { r, quelle: 'kurs' }; }
   return { r: null, quelle: null };
 }
 export const istGeschlossen = (t: JTrade) => rVon(t).r !== null;
