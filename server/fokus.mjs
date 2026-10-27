@@ -23,7 +23,7 @@ const BEREICH_REGELN = {
   insta_explore: { paket: 'com.instagram.android', ids: ['search_tab'], selected: true, aktion: { typ: 'klick', id: 'feed_tab' } },
   yt_shorts: { paket: 'com.google.android.youtube', ids: ['reel_recycler', 'reel_player_page_container'], selected: false, aktion: { typ: 'zurueck' } },
   snap_stories: { paket: 'com.snapchat.android', ids: ['df_large_story'], selected: false, aktion: { typ: 'klick', id: 'ngs_chat_icon_container' } },
-  snap_spotlight: { paket: 'com.snapchat.android', ids: ['spotlight_feed', 'ngs_spotlight_icon_container'], selected: false, aktion: { typ: 'klick', id: 'ngs_chat_icon_container' } },
+  snap_spotlight: { paket: 'com.snapchat.android', ids: ['ngs_spotlight_icon_container'], selected: true, aktion: { typ: 'klick', id: 'ngs_chat_icon_container' } },
 };
 const AUFBEWAHRUNG_TAGE = 400;
 const ONLINE_MS = 3 * 60_000;
