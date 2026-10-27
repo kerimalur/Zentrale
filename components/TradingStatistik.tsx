@@ -2,7 +2,7 @@
 // Trading → Statistik: Wie reagiert der Preis beim ersten Treffer einer GVA-Linie? Alles einstellbar und filterbar.
 import { useEffect, useRef, useState } from 'react';
 import { senden } from '@/lib/api';
-import { ART_FARBE, ART_TEXT, kz, pz, type GBeispiel, type GEreignis, type GFilter, type GGruppe, type GParameter, type GStatistik } from '@/lib/gvaStatistik';
+import { ART_FARBE, ART_TEXT, einheitText, kz, pz, type GBeispiel, type GEreignis, type GFilter, type GGruppe, type GParameter, type GStatistik } from '@/lib/gvaStatistik';
 import { datumCh, kurs } from '@/lib/trading';
 import { Schalter } from './ui';
 import { Popup } from './NetzBausteine';
@@ -26,7 +26,9 @@ export function TradingStatistik() {
   const [varianten, setVarianten] = useState(0);
   const [gruppe, setGruppe] = useState<keyof GStatistik['gruppen']>('tf');
   const [beispielId, setBeispielId] = useState<string | null>(null);
-  const [mehr, setMehr] = useState(false);
+  const [liste, setListe] = useState<{ sortierung: string; art: string }>({ sortierung: 'neu', art: 'alle' });
+  const [eintraege, setEintraege] = useState<GEreignis[]>([]);
+  const [laedtMehr, setLaedtMehr] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const anfrage = useRef(0);
 
@@ -35,18 +37,31 @@ export function TradingStatistik() {
     const t = setTimeout(async () => {
       setLaedt(true);
       try {
-        const r = await senden<GStatistik>('/api/trading/statistik', { ...(p || {}), filter: f });
+        const r = await senden<GStatistik>('/api/trading/statistik', { ...(p || {}), filter: f, liste: { ...liste, ab: 0 } });
         if (nr !== anfrage.current) return;
-        setD(r); setFehler(null);
+        setD(r); setFehler(null); setEintraege(r.ereignisse);
         if (!p) setP(r.parameter); else setVarianten((v) => v + 1);
       } catch (e) { if (nr === anfrage.current) setFehler((e as Error).message); }
       finally { if (nr === anfrage.current) setLaedt(false); }
     }, p ? 400 : 0);
     try { localStorage.setItem('zentrale-gva-filter', JSON.stringify(f)); } catch {}
     return () => clearTimeout(t);
-  }, [p, f]);
+  }, [p, f, liste]);
+  async function mehrLaden() {
+    setLaedtMehr(true);
+    try { const r = await senden<GStatistik>('/api/trading/statistik', { ...(p || {}), filter: f, liste: { ...liste, ab: eintraege.length } }); setEintraege((x) => [...x, ...r.ereignisse]); }
+    catch (e) { setInfo((e as Error).message); }
+    finally { setLaedtMehr(false); }
+  }
 
   const setzP = <K extends keyof GParameter>(k: K, v: GParameter[K]) => setP((x) => (x ? { ...x, [k]: v } : x));
+  // Beim Wechsel zwischen ATR und Pips sinnvolle Werte setzen
+  const basis = (b: GParameter['atrBasis']) => setP((x) => {
+    if (!x) return x;
+    const zuPips = b === 'pips' && x.atrBasis !== 'pips', vonPips = b !== 'pips' && x.atrBasis === 'pips';
+    return { ...x, atrBasis: b, reaktion: zuPips ? 50 : vonPips ? 1 : x.reaktion, durchstich: zuPips ? 25 : vonPips ? 0.5 : x.durchstich };
+  });
+  const E = p ? einheitText(p) : 'ATR';
   const setzF = <K extends keyof GFilter>(k: K, v: GFilter[K]) => setF((x) => ({ ...x, [k]: v }));
   const tfUmschalten = (tf: string) => setzF('tfs', f.tfs?.includes(tf) ? f.tfs.filter((x) => x !== tf) : [...(f.tfs || []), tf]);
 
@@ -68,20 +83,22 @@ export function TradingStatistik() {
         <section className="karte in" aria-label="Regel für eine Umkehr">
           <h2 className="karte-titel">Was zählt als Umkehr? <small>{laedt ? 'rechne …' : `${d.gesamtEreignisse} erste Treffer`}</small></h2>
           <div className="gs-felder">
-            <label className="nw-feld">Reaktion (ATR)<input type="number" step={0.1} min={0.1} max={10} value={p.reaktion} onChange={(e) => setzP('reaktion', Number(e.target.value))} /></label>
-            <label className="nw-feld">Max. Durchstich (ATR)<input type="number" step={0.05} min={0} max={10} value={p.durchstich} onChange={(e) => setzP('durchstich', Number(e.target.value))} /></label>
+            <label className="nw-feld">Reaktion ({E})<input type="number" step={p.atrBasis === 'pips' ? 5 : 0.1} min={0.1} max={1000} value={p.reaktion} onChange={(e) => setzP('reaktion', Number(e.target.value))} /></label>
+            <label className="nw-feld">Max. Durchstich ({E})<input type="number" step={p.atrBasis === 'pips' ? 5 : 0.05} min={0} max={1000} value={p.durchstich} onChange={(e) => setzP('durchstich', Number(e.target.value))} /></label>
             <label className="nw-feld">Zeitfenster (Handelstage)<input type="number" step={1} min={1} max={20} value={p.fenster} onChange={(e) => setzP('fenster', Number(e.target.value))} /></label>
             <label className="nw-feld">Test ab Jahr<input type="number" step={1} min={2005} max={2030} value={p.splitJahr} onChange={(e) => setzP('splitJahr', Number(e.target.value))} /></label>
           </div>
           <div className="nw-feld">ATR gemessen an
-            <div className="segment" style={{ gridTemplateColumns: '1fr 1fr' }}>
-              <button aria-pressed={p.atrBasis === 'tag'} onClick={() => setzP('atrBasis', 'tag')}>Tages-ATR</button>
-              <button aria-pressed={p.atrBasis === 'tf'} onClick={() => setzP('atrBasis', 'tf')}>ATR der Linie (3D/W/M)</button>
+            <div className="segment" style={{ gridTemplateColumns: '1fr 1.3fr 0.8fr' }}>
+              <button aria-pressed={p.atrBasis === 'tag'} onClick={() => basis('tag')}>Tages-ATR</button>
+              <button aria-pressed={p.atrBasis === 'tf'} onClick={() => basis('tf')}>ATR der Linie</button>
+              <button aria-pressed={p.atrBasis === 'pips'} onClick={() => basis('pips')}>Pips</button>
             </div>
+            <small className="tr-hilfe">ATR = durchschnittliche Bewegung pro Tag (14 Tage). Bei EURUSD etwa 60–80 Pips, bei GBPJPY etwa 150. Darum ist «1 ATR» bei jedem Paar gleich gross im Verhältnis – feste Pips sind bei ruhigen Paaren viel, bei wilden wenig.</small>
           </div>
           <div className="leise" style={{ fontSize: 12.5, lineHeight: 1.5 }}>
-            Umkehr = der Preis läuft {kz(p.reaktion, 2)} ATR in Gegenrichtung, bevor er mehr als {kz(p.durchstich, 2)} ATR durch die Linie geht, innerhalb von {p.fenster} Handelstagen.
-            Konsolidieren um die Linie bleibt gültig.
+            Es zählt, was zuerst passiert: {kz(p.reaktion, p.atrBasis === 'pips' ? 0 : 2)} {E} Reaktion oder mehr als {kz(p.durchstich, p.atrBasis === 'pips' ? 0 : 2)} {E} Durchstich.
+            Kommt die Reaktion innerhalb von {p.fenster} Handelstagen, ist es eine <b>Umkehr</b>, danach eine <b>Umkehr später</b>. Konsolidieren um die Linie bleibt gültig. Beobachtet wird bis {d.maxTage} Handelstage.
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10, alignItems: 'center' }}>
             <button className="knopf-klein press tr-primaer" disabled={!geaendert} onClick={async () => { await senden('/api/trading/statistik/standard', p); setInfo('Als Standard gespeichert.'); setD({ ...d, standard: p }); }}>Als Standard speichern</button>
@@ -156,15 +173,16 @@ export function TradingStatistik() {
           <div className={`gs-urteil gs-${urteil.ton}`}>{urteil.text}</div>
         </div>
         <div className="gs-balken" role="img" aria-label="Verteilung der Ergebnisse">
-          {(['erfolg', 'keine', 'unklar', 'durch'] as const).map((a) => d.ergebnis[a] > 0 && (
+          {(['erfolg', 'spaet', 'keine', 'unklar', 'durch'] as const).map((a) => d.ergebnis[a] > 0 && (
             <span key={a} style={{ flex: d.ergebnis[a], background: ART_FARBE[a] }} title={`${ART_TEXT[a]}: ${d.ergebnis[a]}`} />
           ))}
         </div>
         <div className="gs-legende">
-          {(['erfolg', 'keine', 'unklar', 'durch'] as const).map((a) => (
+          {(['erfolg', 'spaet', 'keine', 'unklar', 'durch'] as const).map((a) => (
             <span key={a}><i style={{ background: ART_FARBE[a] }} />{ART_TEXT[a]} {d.ergebnis[a]} ({pz(d.n ? d.ergebnis[a] / d.n : null, 0)})</span>
           ))}
         </div>
+        <div className="leise" style={{ fontSize: 12.5 }}>Umkehr irgendwann (bis {d.maxTage} Handelstage, vor dem Durchstich): <b>{pz(d.irgendwann)}</b></div>
         {varianten >= 15 && <div className="leise" style={{ fontSize: 12.5 }}>Du hast {varianten} Varianten angeschaut. Je mehr man sucht, desto eher findet man eine gute Gruppe nur durch Zufall – prüfe sie im Test ab {p.splitJahr}.</div>}
       </section>
 
@@ -172,17 +190,17 @@ export function TradingStatistik() {
         <section className="karte in" aria-label="Kennzahlen">
           <h2 className="karte-titel">Was man daraus lernt</h2>
           <div className="jr-kacheln">
-            <Kachel titel="Durchstich vor Umkehr" wert={`${kz(d.durchstich.p80)} ATR`} unter={`80 % der Umkehrungen gingen höchstens so weit durch (Median ${kz(d.durchstich.p50)}, 90 %: ${kz(d.durchstich.p90)})`} />
-            <Kachel titel="Typische Reaktion" wert={`${kz(d.reaktionMedian)} ATR`} unter="Median der grössten Bewegung in Umkehrrichtung im Zeitfenster" />
+            <Kachel titel="Durchstich vor Umkehr" wert={`${kz(d.durchstich.p80)} ${E}`} unter={`80 % der Umkehrungen gingen höchstens so weit durch (Median ${kz(d.durchstich.p50)}, 90 %: ${kz(d.durchstich.p90)})`} />
+            <Kachel titel="Typische Reaktion" wert={`${kz(d.reaktionMedian)} ${E}`} unter="Median der grössten Bewegung in Umkehrrichtung bis zur Entscheidung" />
             <Kachel titel="Zeit bis zur Umkehr" wert={d.dauerMedianStunden === null ? '—' : d.dauerMedianStunden < 48 ? `${d.dauerMedianStunden} Std` : `${Math.round(d.dauerMedianStunden / 24)} Tage`} unter="Median, nur Umkehrungen" />
             <Kachel titel={`Vor ${p.splitJahr}`} wert={pz(d.oos.vorher.quote)} unter={`${d.oos.vorher.n} Treffer`} />
             <Kachel titel={`Ab ${p.splitJahr} (Test)`} wert={pz(d.oos.nachher.quote)} unter={`${d.oos.nachher.n} Treffer – hält das Ergebnis?`} />
           </div>
           <h4 className="nw-h" style={{ marginTop: 14 }}>Durchstich bei den Umkehrungen</h4>
-          <Histogramm hist={d.durchstich.hist} p80={d.durchstich.p80} />
+          <Histogramm hist={d.durchstich.hist} p80={d.durchstich.p80} e={E} />
         </section>
         <section className="karte in" aria-label="Verlauf nach dem Treffer">
-          <h2 className="karte-titel">Verlauf nach dem Treffer <small>Tagesschluss in ATR, + = Umkehr</small></h2>
+          <h2 className="karte-titel">Verlauf nach dem Treffer <small>Tagesschluss in {E}, + = Umkehr</small></h2>
           <Faecher f={d.faecher} p={p} />
           <div className="leise" style={{ fontSize: 12, marginTop: 6 }}>Dunkel: mittlere 50 % aller Treffer · hell: mittlere 80 % · Linie: Median.</div>
         </section>
@@ -195,11 +213,25 @@ export function TradingStatistik() {
       </section>
 
       <section className="karte in" aria-label="Einzelne Treffer">
-        <h2 className="karte-titel">Einzelne Treffer <small>antippen zeigt das Beispiel</small></h2>
-        <div className="gs-liste">
-          {d.ereignisse.slice(0, mehr ? 300 : 30).map((e) => <EreignisZeile key={e.id} e={e} onClick={() => setBeispielId(e.id)} />)}
+        <h2 className="karte-titel">Einzelne Treffer <small>{d.ereignisseGesamt} · antippen zeigt das Beispiel</small></h2>
+        <div className="gs-liste-kopf">
+          <label className="nw-feld">Sortierung
+            <select value={liste.sortierung} onChange={(e) => setListe((x) => ({ ...x, sortierung: e.target.value }))}>
+              <option value="neu">Neueste zuerst</option><option value="alt">Älteste zuerst</option>
+              <option value="reaktion">Grösste Reaktion</option><option value="durchstich">Grösster Durchstich</option>
+            </select>
+          </label>
+          <label className="nw-feld">Ergebnis
+            <select value={liste.art} onChange={(e) => setListe((x) => ({ ...x, art: e.target.value }))}>
+              <option value="alle">Alle</option>
+              {(['erfolg', 'spaet', 'durch', 'keine', 'unklar'] as const).map((a) => <option key={a} value={a}>{ART_TEXT[a]}</option>)}
+            </select>
+          </label>
         </div>
-        {!mehr && d.ereignisse.length > 30 && <button className="knopf-klein press" onClick={() => setMehr(true)}>Mehr zeigen ({Math.min(300, d.ereignisse.length)})</button>}
+        <div className="gs-liste">
+          {eintraege.map((e) => <EreignisZeile key={e.id} e={e} einheit={E} onClick={() => setBeispielId(e.id)} />)}
+        </div>
+        {eintraege.length < d.ereignisseGesamt && <button className="knopf-klein press" onClick={mehrLaden} disabled={laedtMehr}>{laedtMehr ? 'Lade …' : `Mehr laden (${eintraege.length} von ${d.ereignisseGesamt})`}</button>}
       </section>
 
       {beispielId && <BeispielPopup id={beispielId} p={p} onClose={() => setBeispielId(null)} />}
@@ -217,19 +249,19 @@ function Kachel({ titel, wert, unter }: { titel: string; wert: string; unter: st
   );
 }
 
-function Histogramm({ hist, p80 }: { hist: GStatistik['durchstich']['hist']; p80: number | null }) {
+function Histogramm({ hist, p80, e }: { hist: GStatistik['durchstich']['hist']; p80: number | null; e: string }) {
   const max = Math.max(1, ...hist.map((h) => h.n));
   return (
     <div>
       <div className="gs-hist" role="img" aria-label="Verteilung des Durchstichs vor der Umkehr">
         {hist.map((h) => (
-          <div key={h.von} title={`${kz(h.von)}–${kz(h.bis)} ATR: ${h.n}`}>
+          <div key={h.von} title={`${kz(h.von)}–${kz(h.bis)} ${e}: ${h.n}`}>
             <span style={{ height: `${(h.n / max) * 100}%`, background: p80 !== null && h.von < p80 ? 'var(--gruen)' : '#c8d0dd' }} />
           </div>
         ))}
       </div>
-      <div className="leise tr-zahl" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}><span>0</span><span>{kz(hist[hist.length - 1]?.bis ?? 0)} ATR</span></div>
-      {p80 !== null && <div className="leise" style={{ fontSize: 12.5, marginTop: 4 }}>Grün = bis zum 80-%-Wert. Ein Stop knapp hinter {kz(p80)} ATR hätte 80 % der späteren Umkehrungen überlebt.</div>}
+      <div className="leise tr-zahl" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}><span>0</span><span>{kz(hist[hist.length - 1]?.bis ?? 0)} {e}</span></div>
+      {p80 !== null && <div className="leise" style={{ fontSize: 12.5, marginTop: 4 }}>Grün = bis zum 80-%-Wert. Ein Stop knapp hinter {kz(p80)} {e} hätte 80 % der späteren Umkehrungen überlebt.</div>}
     </div>
   );
 }
@@ -281,7 +313,7 @@ function Gruppen({ g, zufall }: { g: GGruppe[]; zufall: number | null }) {
   );
 }
 
-function EreignisZeile({ e, onClick }: { e: GEreignis; onClick: () => void }) {
+function EreignisZeile({ e, onClick, einheit }: { e: GEreignis; onClick: () => void; einheit: string }) {
   return (
     <button className="zeile press gs-ereignis" onClick={onClick}>
       <span className="fk-punkt" style={{ background: ART_FARBE[e.art] }} />
@@ -291,7 +323,7 @@ function EreignisZeile({ e, onClick }: { e: GEreignis; onClick: () => void }) {
       </span>
       <span style={{ textAlign: 'right', fontSize: 12.5 }}>
         <b style={{ color: ART_FARBE[e.art] }}>{ART_TEXT[e.art]}</b>
-        <div className="leise tr-zahl" style={{ fontSize: 11.5 }}>durch {kz(e.durchstich)} · Reaktion {kz(e.reaktion)} ATR</div>
+        <div className="leise tr-zahl" style={{ fontSize: 11.5 }}>durch {kz(e.durchstich)} · Reaktion {kz(e.reaktion)} {einheit}{e.tage !== null && e.tage !== undefined ? ` · Tag ${e.tage}` : ''}</div>
       </span>
     </button>
   );
@@ -303,7 +335,7 @@ function BeispielPopup({ id, p, onClose }: { id: string; p: GParameter; onClose:
   const [fehler, setFehler] = useState<string | null>(null);
   useEffect(() => { senden<GBeispiel>('/api/trading/statistik/beispiel', { id, ...p }).then(setB).catch((e) => setFehler((e as Error).message)); }, [id, p]);
   return (
-    <Popup titel={b ? `${b.pair} · ${b.seite === 'long' ? 'Long' : 'Short'} ${b.tf}-GVA` : 'Beispiel'} unter={b ? `Level ${kurs(b.pair, b.lvl)} · 1 ATR = ${b.atrPips} Pips` : undefined} onClose={onClose} breit>
+    <Popup titel={b ? `${b.pair} · ${b.seite === 'long' ? 'Long' : 'Short'} ${b.tf}-GVA` : 'Beispiel'} unter={b ? `Level ${kurs(b.pair, b.lvl)}${b.parameter.atrBasis !== 'pips' ? ` · 1 ATR = ${b.atrPips} Pips` : ''}` : undefined} onClose={onClose} breit>
       {fehler && <div className="fehlerbox">{fehler}</div>}
       {!b && !fehler && <div className="leise">Lade …</div>}
       {b && (
@@ -314,11 +346,11 @@ function BeispielPopup({ id, p, onClose }: { id: string; p: GParameter; onClose:
             Kerze A ({datumCh(b.A)}) und Kerze B ({datumCh(b.B)}): Gegenfarbe, B mindestens 40 % grösserer Körper, {b.seite === 'long' ? 'Körper-Böden' : 'Körper-Tops'} gleich hoch.
             Das Level ist das Open von B. Erster gültiger Treffer am {datumCh(b.trefferTag)}, {b.alterTage} Tage nach der Bildung{b.konfluenz ? ', mit Konfluenz' : ''}{b.trend ? `, ${b.trend === 'mit' ? 'mit' : 'gegen'} den Trend` : ''}.
           </div>
-          <h4 className="nw-h">Nach dem Treffer ({b.stundengenau ? 'Stundenkerzen' : 'Tageskerzen'})</h4>
+          <h4 className="nw-h">Nach dem Treffer ({b.kerzenStunden === 24 ? 'Tageskerzen' : b.kerzenStunden === 4 ? '4-Stunden-Kerzen' : 'Stundenkerzen'}, bis zur Entscheidung)</h4>
           <VerlaufChart b={b} />
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 8 }}>
             <span className="pille" style={{ background: 'var(--bg)', color: ART_FARBE[b.ergebnis.art] }}><b>{ART_TEXT[b.ergebnis.art]}</b></span>
-            <span className="leise tr-zahl" style={{ fontSize: 12.5 }}>Durchstich {kz(b.ergebnis.durchstich)} ATR · Reaktion {kz(b.ergebnis.reaktion)} ATR{b.ergebnis.dauer !== null ? ` · nach ${Math.round(b.ergebnis.dauer)} Std` : ''}</span>
+            <span className="leise tr-zahl" style={{ fontSize: 12.5 }}>Durchstich {kz(b.ergebnis.durchstich)} {einheitText(b.parameter)} · Reaktion {kz(b.ergebnis.reaktion)} {einheitText(b.parameter)}{b.ergebnis.tage !== null && b.ergebnis.tage !== undefined ? ` · Entscheidung an Handelstag ${b.ergebnis.tage}` : ''}{b.ergebnis.dauer !== null && b.ergebnis.dauer < 72 ? ` (${Math.round(b.ergebnis.dauer)} Std)` : ''}</span>
           </div>
         </>
       )}
@@ -375,7 +407,9 @@ function VerlaufChart({ b }: { b: GBeispiel }) {
   const y = (v: number) => ((hi + pad - v) / (hi - lo + 2 * pad)) * H;
   const s = (W - R) / k.length;
   const x = (i: number) => i * s + s / 2;
-  const iT = k.findIndex((c) => c.t === b.t);
+  const iT = k.findIndex((c) => c.t <= b.t && (k[k.indexOf(c) + 1]?.t ?? Infinity) > b.t);
+  const idxZeit = (t: number | null) => (t === null ? -1 : k.reduce((best, c, i) => (c.t <= t ? i : best), -1));
+  const iF = idxZeit(b.fensterEnde), iE = idxZeit(b.entscheidung);
   const linie = (v: number, farbe: string, text: string, strich?: string) => (
     <g>
       <line x1={0} x2={W - R} y1={y(v)} y2={y(v)} stroke={farbe} strokeWidth={1.4} strokeDasharray={strich} />
@@ -390,6 +424,8 @@ function VerlaufChart({ b }: { b: GBeispiel }) {
       {linie(b.lvlRoh, 'var(--ink)', 'GVA')}
       <Kerzen k={k} x={x} y={y} breite={s} />
       {iT >= 0 && <circle cx={x(iT)} cy={y(b.lvlRoh)} r={4.5} fill="#fff" stroke="var(--ink)" strokeWidth={2} />}
+      {iF >= 0 && <g><line x1={x(iF) - s / 2} x2={x(iF) - s / 2} y1={0} y2={H} stroke="var(--muted)" strokeDasharray="3 4" /><text x={x(iF) - s / 2 + 4} y={12} fontSize={10} fill="var(--muted)">Ende Zeitfenster</text></g>}
+      {iE >= 0 && <circle cx={x(iE)} cy={b.ergebnis.art === 'durch' ? y(b.grenzen.durchstich) : y(b.grenzen.reaktion)} r={5} fill={ART_FARBE[b.ergebnis.art]} stroke="#fff" strokeWidth={1.5} />}
     </svg>
   );
 }

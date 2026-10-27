@@ -83,22 +83,28 @@ function ereignissePaar(pair) {
 }
 
 // ---------- Ergebnis eines Ereignisses für bestimmte Parameter ----------
+// Was kommt zuerst: Reaktion oder Durchstich? Beobachtet wird bis zu MAX_TAGE Handelstage.
+// erfolg = Reaktion innerhalb des Zeitfensters · spaet = Reaktion erst danach (aber vor dem Durchstich)
+// durch = zuerst Durchstich · keine = nach MAX_TAGE weder noch · unklar = beides in derselben Kerze · offen = Daten reichen noch nicht
+export const MAX_TAGE = 30;
 function bewerten(d, start, lvl, long, atr, p, htStart, e) {
   const X = p.reaktion * atr, Y = p.durchstich * atr;
   let maxAdv = 0, maxFav = 0;
   for (let k = start; k < d.t.length; k++) {
-    if (htIdxCache(d.sd[k], e) - htStart > p.fenster) return { art: 'keine', maxAdv, maxFav, dauer: null };
+    const tage = htIdxCache(d.sd[k], e) - htStart;
+    if (tage > MAX_TAGE) return { art: 'keine', maxAdv, maxFav, dauer: null, tage: null, ende: k - 1 };
     const adv = long ? lvl - d.l[k] : d.h[k] - lvl;
     const fav = long ? d.h[k] - lvl : lvl - d.l[k];
     const durch = adv > Y;
     const reakt = k > start && fav >= X;
-    if (durch && reakt) return { art: 'unklar', maxAdv: Math.max(maxAdv, adv), maxFav: Math.max(maxFav, fav), dauer: null };
-    if (durch) return { art: 'durch', maxAdv: adv, maxFav, dauer: null };
-    if (reakt) return { art: 'erfolg', maxAdv, maxFav: fav, dauer: (d.t[k] - d.t[start]) / STUNDE };
+    const dauer = (d.t[k] - d.t[start]) / STUNDE;
+    if (durch && reakt) return { art: 'unklar', maxAdv: Math.max(maxAdv, adv), maxFav: Math.max(maxFav, fav), dauer, tage, ende: k };
+    if (durch) return { art: 'durch', maxAdv: adv, maxFav, dauer, tage, ende: k };
+    if (reakt) return { art: tage <= p.fenster ? 'erfolg' : 'spaet', maxAdv, maxFav: fav, dauer, tage, ende: k };
     maxAdv = Math.max(maxAdv, adv);
     if (k > start) maxFav = Math.max(maxFav, fav);
   }
-  return { art: 'offen', maxAdv, maxFav, dauer: null }; // Fenster noch nicht vorbei (jüngste Treffer)
+  return { art: 'offen', maxAdv, maxFav, dauer: null, tage: null, ende: d.t.length - 1 }; // jüngste Treffer: noch nicht entschieden
 }
 const htCache = new Map();
 function htIdxCache(tag, e) {
@@ -107,6 +113,9 @@ function htIdxCache(tag, e) {
   if (v === undefined) { v = handelstageVor(tag, e); if (htCache.size > 100_000) htCache.clear(); htCache.set(k, v); }
   return v;
 }
+
+// Einheit, in der Reaktion und Durchstich gemessen werden: Tages-ATR, ATR der Linie oder 1 Pip.
+const einheit = (p, ev) => (p.atrBasis === 'tf' ? ev.atrTf : p.atrBasis === 'pips' ? pipVon(ev.pair) : ev.atrTag);
 
 // Kleiner, reproduzierbarer Zufall (gleiche Zahlen bei jedem Aufruf)
 function zufall(seed) {
@@ -147,10 +156,10 @@ function parameter(b) {
   const s = statEinst();
   const z = (v, min, max, fb) => { const x = Number(v); return Number.isFinite(x) ? Math.min(max, Math.max(min, x)) : fb; };
   return {
-    reaktion: z(b.reaktion ?? s.reaktion, 0.1, 10, s.reaktion),
-    durchstich: z(b.durchstich ?? s.durchstich, 0, 10, s.durchstich),
+    reaktion: z(b.reaktion ?? s.reaktion, 0.1, 1000, s.reaktion),
+    durchstich: z(b.durchstich ?? s.durchstich, 0, 1000, s.durchstich),
     fenster: Math.round(z(b.fenster ?? s.fenster, 1, 20, s.fenster)),
-    atrBasis: (b.atrBasis ?? s.atrBasis) === 'tf' ? 'tf' : 'tag',
+    atrBasis: ['tf', 'pips'].includes(b.atrBasis ?? s.atrBasis) ? (b.atrBasis ?? s.atrBasis) : 'tag',
     splitJahr: Math.round(z(b.splitJahr ?? s.splitJahr, 2005, 2030, s.splitJahr)),
   };
 }
@@ -177,7 +186,7 @@ export function statistik(b = {}) {
   for (const ev of alle) {
     const d = tradingDaten(ev.pair);
     const long = ev.seite === 'long';
-    const atr = p.atrBasis === 'tf' ? ev.atrTf : ev.atrTag;
+    const atr = einheit(p, ev);
     const r = bewerten(d, ev.j, ev.lvlRoh, long, atr, p, ev.htStart, e);
     if (r.art === 'offen') continue;
     ausgewertet.push({ ev, r, atr });
@@ -242,6 +251,10 @@ export function statistik(b = {}) {
   const quoteVon = (arr) => ({ n: arr.length, quote: arr.length ? arr.filter((x) => x.r.art === 'erfolg').length / arr.length : null, bereich: wilson(arr.filter((x) => x.r.art === 'erfolg').length, arr.length) });
 
   const pip = (pair) => pipVon(pair);
+  const L = b.liste || {};
+  const ab = Math.max(0, Math.round(Number(L.ab) || 0));
+  const SORT = { neu: (a, c) => c.ev.t - a.ev.t, alt: (a, c) => a.ev.t - c.ev.t, reaktion: (a, c) => c.r.maxFav / c.atr - a.r.maxFav / a.atr, durchstich: (a, c) => c.r.maxAdv / c.atr - a.r.maxAdv / a.atr };
+  const liste = ausgewertet.filter((x) => !L.art || L.art === 'alle' || x.r.art === L.art).sort(SORT[L.sortierung] || SORT.neu);
   return {
     parameter: p,
     standard: statEinst(),
@@ -249,7 +262,9 @@ export function statistik(b = {}) {
     n,
     gesamtEreignisse: alle.length,
     fehlend,
-    ergebnis: { erfolg, durch: zaehle('durch'), keine: zaehle('keine'), unklar: zaehle('unklar') },
+    ergebnis: { erfolg, spaet: zaehle('spaet'), durch: zaehle('durch'), keine: zaehle('keine'), unklar: zaehle('unklar') },
+    irgendwann: n ? (erfolg + zaehle('spaet')) / n : null,
+    maxTage: MAX_TAGE,
     quote: n ? erfolg / n : null,
     bereich: wilson(erfolg, n),
     zufall: { n: zufallErg.n, quote: zufallErg.n ? zufallErg.erfolg / zufallErg.n : null, bereich: wilson(zufallErg.erfolg, zufallErg.n) },
@@ -269,9 +284,10 @@ export function statistik(b = {}) {
       wochentag: gruppe((ev) => ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][new Date(ev.tag * TAG).getUTCDay()], (a, b) => ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].indexOf(a.schluessel) - ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'].indexOf(b.schluessel)),
     },
     oos: { vorher: quoteVon(vorher), nachher: quoteVon(nachher) },
-    ereignisse: ausgewertet.sort((a, b) => b.ev.t - a.ev.t).slice(0, 300).map(({ ev, r, atr }) => ({
+    ereignisseGesamt: liste.length,
+    ereignisse: liste.slice(ab, ab + 50).map(({ ev, r, atr }) => ({
       id: ev.id, pair: ev.pair, tf: ev.tf, seite: ev.seite, lvl: ev.lvl, entstanden: ev.entstanden, t: ev.t, art: r.art,
-      durchstich: r2(r.maxAdv / atr), reaktion: r2(r.maxFav / atr), dauer: r.dauer === null ? null : Math.round(r.dauer),
+      durchstich: r2(r.maxAdv / atr), reaktion: r2(r.maxFav / atr), dauer: r.dauer === null ? null : Math.round(r.dauer), tage: r.tage,
       pips: Math.round(atr / pip(ev.pair)), stundengenau: ev.stundengenau, konfluenz: ev.konfluenz, trend: ev.trend,
     })),
   };
@@ -294,7 +310,7 @@ export function beispiel(id, b = {}) {
   const e = tradingEinstellungen();
   const d = tradingDaten(pair);
   const long = ev.seite === 'long';
-  const atr = p.atrBasis === 'tf' ? ev.atrTf : ev.atrTag;
+  const atr = einheit(p, ev);
   const r = bewerten(d, ev.j, ev.lvlRoh, long, atr, p, ev.htStart, e);
   // Kerzen des Linien-Zeitrahmens rund um Bildung und Treffer
   const { kerzen } = kerzenBauen(d, ev.tf, e);
@@ -302,12 +318,25 @@ export function beispiel(id, b = {}) {
   const iT = kerzen.findIndex((k) => k.s <= ev.j && k.e >= ev.j);
   const htf = kerzen.slice(Math.max(0, iB - 12), Math.min(kerzen.length, Math.max(iT, iB) + 6)).map((k) => ({ tag: tagIso(k.tag), o: k.o, h: k.h, l: k.l, c: k.c }));
   // Verlauf nach dem Treffer: Stundenkerzen (oder Tageskerzen bei alten Ereignissen)
+  // Verlauf vom Tag vor dem Treffer bis kurz nach der Entscheidung (bei «keine»: 30 Handelstage)
+  const nachlauf = ev.stundengenau ? 24 : 3;
+  const ende = Math.min(d.t.length, r.ende + 1 + nachlauf);
+  const roh = [];
+  for (let k = Math.max(0, ev.j - nachlauf); k < ende; k++) roh.push({ t: d.t[k], o: d.o[k], h: d.h[k], l: d.l[k], c: d.c[k] });
+  // Viele Stundenkerzen zu 4-Std-Kerzen zusammenfassen, damit der Chart lesbar bleibt
+  const gruppe = roh.length > 260 ? 4 : 1;
   const verlauf = [];
-  const ende = Math.min(d.t.length, ev.j + (ev.stundengenau ? 24 * (p.fenster + 3) : p.fenster + 6));
-  for (let k = Math.max(0, ev.j - (ev.stundengenau ? 24 : 3)); k < ende; k++) verlauf.push({ t: d.t[k], o: d.o[k], h: d.h[k], l: d.l[k], c: d.c[k] });
+  for (let i = 0; i < roh.length; i += gruppe) {
+    const g = roh.slice(i, i + gruppe);
+    verlauf.push({ t: g[0].t, o: g[0].o, h: Math.max(...g.map((x) => x.h)), l: Math.min(...g.map((x) => x.l)), c: g[g.length - 1].c });
+  }
+  let fensterEnde = null;
+  for (let k = ev.j; k < d.t.length; k++) if (htIdxCache(d.sd[k], e) - ev.htStart > p.fenster) { fensterEnde = d.t[k]; break; }
+  const entscheidung = r.art === 'offen' || r.art === 'keine' ? null : d.t[r.ende];
   return {
     ...ev, lvl: ev.lvl, atr, atrPips: Math.round(atr / pipVon(pair)), ergebnis: { ...r, durchstich: r2(r.maxAdv / atr), reaktion: r2(r.maxFav / atr) },
     grenzen: { reaktion: long ? ev.lvlRoh + p.reaktion * atr : ev.lvlRoh - p.reaktion * atr, durchstich: long ? ev.lvlRoh - p.durchstich * atr : ev.lvlRoh + p.durchstich * atr },
-    htf, A: tagIso(ev.bildungA), B: tagIso(ev.bildungB), trefferTag: tagIso(ev.tag), verlauf, parameter: p,
+    htf, A: tagIso(ev.bildungA), B: tagIso(ev.bildungB), trefferTag: tagIso(ev.tag), verlauf, kerzenStunden: ev.stundengenau ? gruppe : 24,
+    fensterEnde, entscheidung, parameter: p, einheitPips: Math.round(atr / pipVon(pair) * 10) / 10,
   };
 }

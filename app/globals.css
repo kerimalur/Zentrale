@@ -860,3 +860,4 @@ button.szene-chip { font-family: inherit; line-height: inherit; }
 .jr-import-vorschau th, .jr-import-vorschau td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
 .jr-import-vorschau tr.schlecht td { color: var(--fehler); }
 .jr-import-fehler { font-size: 12.5px; max-height: 200px; overflow-y: auto; margin-top: 6px; color: var(--muted); }
+.gs-liste-kopf { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 220px)); gap: 0 10px; }
