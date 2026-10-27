@@ -15,9 +15,10 @@ import { Medien, vpnStatus } from '@/components/Medien';
 import { Einstellungen } from '@/components/Einstellungen';
 import { Gesundheit } from '@/components/Gesundheit';
 import { Trading } from '@/components/Trading';
+import { Heute } from '@/components/Heute';
 import { Fokus } from '@/components/Fokus';
 
-const TABS = ['Übersicht', 'Gesundheit', 'Fokus', 'Trading', 'System', 'Netz', 'Speicher', 'Cloud', 'Medien', 'Gäste', 'Konsole', 'Einstellungen'] as const;
+const TABS = ['Übersicht', 'Heute', 'Gesundheit', 'Fokus', 'Trading', 'System', 'Netz', 'Speicher', 'Cloud', 'Medien', 'Gäste', 'Konsole', 'Einstellungen'] as const;
 type Tab = (typeof TABS)[number];
 
 function gespeicherterTab(): Tab {
@@ -123,6 +124,7 @@ export default function Seite() {
       </header>
 
       {tab === 'Übersicht' && <Uebersicht z={z} aktualisieren={laden} />}
+      {tab === 'Heute' && <Heute />}
       {tab === 'Gesundheit' && <Gesundheit />}
       {tab === 'Fokus' && <Fokus />}
       {tab === 'Trading' && <Trading />}

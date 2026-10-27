@@ -499,3 +499,8 @@ registrierePruefung('trading', async () => {
 
 // Für Tests ohne Server.
 export const _intern = { kerzenBauen, vollLaden, rechnen, sessionTag, keyFn, tagIso, handelstageVor, STANDARD };
+
+// Aktueller Kurs eines Paars (für Umrechnungen im Journal), null wenn noch nicht geladen.
+export function tradingKurs(pair) {
+  return zustand.ergebnis.get(pair)?.preis ?? null;
+}

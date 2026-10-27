@@ -6,6 +6,7 @@ import { relativ } from '@/lib/format';
 import { TF_TEXT, datumCh, kurs, type TEinstellungen, type TOffen, type TPaarDetail, type TPaarKurz, type TTf, type TradingZustand } from '@/lib/trading';
 import { Icon, Schalter } from './ui';
 import { Popup } from './NetzBausteine';
+import { Journal } from './Journal';
 
 const TFS: TTf[] = ['3D', 'W', 'M'];
 const GRUEN = '21, 128, 61';
@@ -22,6 +23,22 @@ const seiteText = (s: string) => (s === 'long' ? 'Long' : 'Short');
 const zeitpunkt = (t: number) => new Date(t).toLocaleString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 export function Trading() {
+  const [bereich, setBereich] = useState<'live' | 'journal'>(() => {
+    try { return localStorage.getItem('zentrale-trading-bereich') === 'journal' ? 'journal' : 'live'; } catch { return 'live'; }
+  });
+  const waehle = (b: 'live' | 'journal') => { setBereich(b); try { localStorage.setItem('zentrale-trading-bereich', b); } catch {} };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="segment tr-bereich" role="tablist" aria-label="Trading-Bereich">
+        <button role="tab" aria-selected={bereich === 'live'} aria-pressed={bereich === 'live'} onClick={() => waehle('live')}>Live · GVA-Linien</button>
+        <button role="tab" aria-selected={bereich === 'journal'} aria-pressed={bereich === 'journal'} onClick={() => waehle('journal')}>Journal</button>
+      </div>
+      {bereich === 'live' ? <GvaLive /> : <Journal />}
+    </div>
+  );
+}
+
+function GvaLive() {
   const [d, setD] = useState<TradingZustand | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
   const [sortierung, setSortierung] = useState<'naehe' | 'az'>('naehe');

@@ -23,6 +23,8 @@ import { garminDaten, garminHistorie } from './collect/garmin.mjs';
 import { tagescheckSenden } from './tagescheck.mjs';
 import { fokusZustand, fokusLauf, koppelcodeErzeugen, koppeln, geraetVonToken, geraetEntfernen, geraetSetzen as fokusGeraetSetzen, bericht as fokusBericht, diagnoseSpeichern, sperreSetzen, sperreLoeschen, kategorieSetzen, piholeSync } from './fokus.mjs';
 import { tradingZustand, tradingPaar, tradingLauf, tradingNeuLaden, tradingEinstellungenSetzen, tradingTestMeldung, PAARE } from './trading.mjs';
+import { heuteZustand, anmeldeUrl, rueckkehr, trennen as googleTrennen, mailAktion, scanStarten, scanZustand, absenderAktion, werbefilterSetzen, terminNeu, aufgabeNeu, aufgabeErledigt } from './google.mjs';
+import { journalZustand, tradeSpeichern, tradeLoeschen, journalEinstellungenSetzen } from './journal.mjs';
 import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
 ensureDataDir();
@@ -102,6 +104,19 @@ async function api(req, res, url) {
     return json(res, 200, fokusBericht(g, await body(req), req));
   }
 
+  // ---------- Google-Anmeldung: Rückkehr von Google (ohne Cookie, weil die Weiterleitung von accounts.google.com kommt; geschützt über «state») ----------
+  if (p === '/api/google/zurueck' && m === 'GET') {
+    try {
+      await rueckkehr(url);
+      res.writeHead(302, { Location: '/#Heute' });
+      return res.end();
+    } catch (e) {
+      const text = String(e.message).replace(/[<>&"]/g, '');
+      res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><body style="font-family:system-ui;padding:24px"><h2>Google-Verbindung fehlgeschlagen</h2><p>${text}</p><p><a href="/#Heute">Zurück zur Zentrale</a></p>`);
+    }
+  }
+
   if (!istAngemeldet(req)) return json(res, 401, { fehler: 'Nicht angemeldet' });
   // Schutz gegen fremde Seiten: Änderungen nur mit eigenem Header.
   if (m !== 'GET' && req.headers['x-zentrale'] !== '1') return json(res, 403, { fehler: 'Verboten' });
@@ -149,6 +164,34 @@ async function api(req, res, url) {
   if (p === '/api/trading/einstellungen' && m === 'POST') return json(res, 200, tradingEinstellungenSetzen(await body(req)));
   if (p === '/api/trading/test' && m === 'POST') return json(res, 200, await tradingTestMeldung());
   if (p === '/api/trading/neu-laden' && m === 'POST') { tradingNeuLaden(); return json(res, 200, { ok: true }); }
+
+  // ---------- Heute (Mail aufräumen, Kalender, Aufgaben über Google) ----------
+  if (p === '/api/heute' && m === 'GET') return json(res, 200, await heuteZustand(url.searchParams.get('frisch') === '1'));
+  if (p === '/api/google/start' && m === 'GET') {
+    try { res.writeHead(302, { Location: anmeldeUrl() }); return res.end(); }
+    catch (e) { return json(res, 400, { fehler: e.message }); }
+  }
+  if (p === '/api/google/trennen' && m === 'POST') { await googleTrennen(); return json(res, 200, { ok: true }); }
+  if (p === '/api/heute/mail' && m === 'POST') { const b = await body(req); return json(res, 200, await mailAktion(String(b.id || ''), String(b.aktion || ''))); }
+  if (p === '/api/heute/scan' && m === 'POST') return json(res, 200, scanStarten());
+  if (p === '/api/heute/scan' && m === 'GET') return json(res, 200, scanZustand());
+  if (p === '/api/heute/absender' && m === 'POST') { const b = await body(req); return json(res, 200, await absenderAktion(b.email, String(b.aktion || ''))); }
+  if (p === '/api/heute/werbefilter' && m === 'POST') return json(res, 200, await werbefilterSetzen(await body(req)));
+  if (p === '/api/heute/termin' && m === 'POST') return json(res, 200, await terminNeu(await body(req)));
+  if (p === '/api/heute/aufgabe' && m === 'POST') return json(res, 200, await aufgabeNeu(await body(req)));
+  if (p === '/api/heute/aufgabe/erledigt' && m === 'POST') { const b = await body(req); return json(res, 200, await aufgabeErledigt(b.id)); }
+
+  // ---------- Journal (Tab «Trading» → Journal) ----------
+  if (p === '/api/journal' && m === 'GET') return json(res, 200, journalZustand());
+  if (p === '/api/journal/trade' && m === 'POST') {
+    try { return json(res, 200, tradeSpeichern(await body(req))); }
+    catch (e) { return json(res, e.status || 400, { fehler: e.message }); }
+  }
+  if (p === '/api/journal/trade' && m === 'DELETE') {
+    const b = await body(req);
+    return tradeLoeschen(String(b.id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
+  }
+  if (p === '/api/journal/einstellungen' && m === 'POST') return json(res, 200, journalEinstellungenSetzen(await body(req)));
 
   // ---------- Netzwerk (Tab «Netz» → Heimnetz, Ports & Zugriff) ----------
   if (p === '/api/netzwerk' && m === 'GET') return json(res, 200, await netzwerkZustand());
