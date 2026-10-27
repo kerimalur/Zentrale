@@ -34,6 +34,6 @@ export default {
   },
   setups(ctx, p) {
     const { z, signale } = ereignisseAuswerten(ctx, p.tf, p.ereignisse || [], p.richtung, p.nurNeu);
-    return { setups: setupsAusSignalen(ctx, z, signale, p), trichter: { signale: signale.length } };
+    return { setups: setupsAusSignalen(ctx, z, signale, p), trichter: { signale: signale.filter((s) => ctx.imBereich(z.en[s.k])).length } };
   },
 };

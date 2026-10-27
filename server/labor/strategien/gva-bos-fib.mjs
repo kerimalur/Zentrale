@@ -51,7 +51,8 @@ export default {
     const out = [];
 
     for (const L of ctx.linien(p.tfs)) {
-      trichter.linien++;
+      const zaehlt = ctx.imBereich(L.iTreffer);
+      if (zaehlt) trichter.linien++;
       const lang = L.seite > 0;
       const iT = L.iTreffer;
       const htStart = handelstagNr(basis.sd[iT], e);
@@ -78,7 +79,7 @@ export default {
         bos = { k, swing: s };
       }
       if (!bos) continue;
-      trichter.bos++;
+      if (zaehlt) trichter.bos++;
 
       // 100 %: Extrem zwischen min(Treffer, Swing-Pivot) und BOS-Kerze
       const iA = Math.min(iT, z.s[bos.swing.k]), iB = z.en[bos.k];
@@ -100,7 +101,7 @@ export default {
             sl: hi - p.sl * spanne, tp: hi - p.tp * spanne,
             info: { linie: L.id, tf: L.tf, lvl: L.lvl, swing: bos.swing.preis, fib0: hi, fib100: lo },
           });
-          trichter.einstieg++;
+          if (zaehlt) trichter.einstieg++;
           break;
         }
         if (bruch) break; // 100 % gebrochen, bevor die Zone erreicht wurde

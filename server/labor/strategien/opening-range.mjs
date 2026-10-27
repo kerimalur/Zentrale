@@ -3,7 +3,7 @@
 // TP als Vielfaches des Risikos, spätestens Ausstieg zur Endzeit. Höchstens ein Trade pro Tag.
 import { param } from '../bausteine.mjs';
 import { RICHTUNG } from './baukasten.mjs';
-import { zuerich } from '../zeit.mjs';
+import { zuerichSchnell } from '../zeit.mjs';
 
 const { zahl } = param;
 
@@ -23,11 +23,10 @@ export default {
     const out = [];
     let tagKey = null, hoch = -Infinity, tief = Infinity, fertig = false, iSchluss = null;
     for (let i = 0; i < b.n; i++) {
-      const z = zuerich(b.t[i]);
-      const key = z.jahr * 400 + z.monat * 32 + z.tag;
-      if (key !== tagKey) { tagKey = key; hoch = -Infinity; tief = Infinity; fertig = false; iSchluss = null; }
+      const z = zuerichSchnell(b.t[i]);
+      if (z.tag !== tagKey) { tagKey = z.tag; hoch = -Infinity; tief = Infinity; fertig = false; iSchluss = null; }
       if (fertig || z.wochentag === 0 || z.wochentag === 6) continue;
-      const h = z.stunde + z.minute / 60;
+      const h = z.stunde;
       if (h >= p.von && h < p.bis) { hoch = Math.max(hoch, b.h[i]); tief = Math.min(tief, b.l[i]); continue; }
       if (h < p.bis || !(hoch > tief)) continue;
       if (h >= p.schluss) { fertig = true; continue; }
@@ -37,9 +36,11 @@ export default {
       const seite = lang ? 1 : -1;
       if ((seite > 0 && p.richtung === 'short') || (seite < 0 && p.richtung === 'long')) continue;
       // Ausstiegs-Index: letzte Basis-Kerze vor der Schlusszeit
-      if (iSchluss === null) { let j = i; while (j + 1 < b.n) { const zz = zuerich(b.t[j + 1]); if (zz.jahr * 400 + zz.monat * 32 + zz.tag !== key || zz.stunde + zz.minute / 60 >= p.schluss) break; j++; } iSchluss = j; }
+      let j = i;
+      while (j + 1 < b.n) { const zz = zuerichSchnell(b.t[j + 1]); if (zz.tag !== tagKey || zz.stunde >= p.schluss) break; j++; }
+      iSchluss = j;
       out.push({ iSignal: i, seite, einstieg: { art: 'markt' }, sl: seite > 0 ? tief : hoch, rZiel: p.tp, zeitEnde: iSchluss, info: { spanne: [tief, hoch] } });
     }
-    return { setups: out, trichter: { ausbrueche: out.length } };
+    return { setups: out, trichter: { ausbrueche: out.filter((s) => ctx.imBereich(s.iSignal)).length } };
   },
 };

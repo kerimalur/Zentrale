@@ -8,6 +8,7 @@ import { Icon, Schalter } from './ui';
 import { Popup } from './NetzBausteine';
 import { Journal } from './Journal';
 import { DatenHinweis, TradingStatistik } from './TradingStatistik';
+import { Labor } from './Labor';
 
 const TFS: TTf[] = ['3D', 'W', 'M'];
 const GRUEN = '21, 128, 61';
@@ -24,18 +25,19 @@ const seiteText = (s: string) => (s === 'long' ? 'Long' : 'Short');
 const zeitpunkt = (t: number) => new Date(t).toLocaleString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 export function Trading() {
-  const [bereich, setBereich] = useState<'live' | 'journal' | 'statistik'>(() => {
-    try { const b = localStorage.getItem('zentrale-trading-bereich'); return b === 'journal' || b === 'statistik' ? b : 'live'; } catch { return 'live'; }
+  const [bereich, setBereich] = useState<'live' | 'journal' | 'statistik' | 'labor'>(() => {
+    try { const b = localStorage.getItem('zentrale-trading-bereich'); return b === 'journal' || b === 'statistik' || b === 'labor' ? b : 'live'; } catch { return 'live'; }
   });
-  const waehle = (b: 'live' | 'journal' | 'statistik') => { setBereich(b); try { localStorage.setItem('zentrale-trading-bereich', b); } catch {} };
+  const waehle = (b: 'live' | 'journal' | 'statistik' | 'labor') => { setBereich(b); try { localStorage.setItem('zentrale-trading-bereich', b); } catch {} };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div className="segment tr-bereich" role="tablist" aria-label="Trading-Bereich">
         <button role="tab" aria-selected={bereich === 'live'} aria-pressed={bereich === 'live'} onClick={() => waehle('live')}>Live · GVA-Linien</button>
         <button role="tab" aria-selected={bereich === 'journal'} aria-pressed={bereich === 'journal'} onClick={() => waehle('journal')}>Journal</button>
         <button role="tab" aria-selected={bereich === 'statistik'} aria-pressed={bereich === 'statistik'} onClick={() => waehle('statistik')}>Statistik</button>
+        <button role="tab" aria-selected={bereich === 'labor'} aria-pressed={bereich === 'labor'} onClick={() => waehle('labor')}>Labor</button>
       </div>
-      {bereich === 'live' ? <GvaLive /> : bereich === 'journal' ? <Journal /> : <TradingStatistik />}
+      {bereich === 'live' ? <GvaLive /> : bereich === 'journal' ? <Journal /> : bereich === 'statistik' ? <TradingStatistik /> : <Labor />}
     </div>
   );
 }

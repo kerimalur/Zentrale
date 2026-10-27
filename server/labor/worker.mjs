@@ -52,6 +52,7 @@ async function strategie() {
     const basis = basisLaden(pair, { bisSek: bisGesamt, e, yahoo: yahoo?.[pair] });
     if (!basis || basis.n < 1000) { abdeckung.push({ pair, quelle: null, fehlt: true }); continue; }
     const ctx = kontext(basis, e, pair);
+    ctx.bereich = backtest;
     const noetig = mod.aufloesung ? mod.aufloesung(p) : 3600;
     abdeckung.push({ pair, quelle: basis.quelle, ab: basis.t[0], bis: basis.t[basis.n - 1], zuGrob: basis.res > noetig });
     const lauf = (pp) => {

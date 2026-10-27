@@ -16,7 +16,7 @@ function klassiker({ id, name, beschreibung, tf, parameter, ausstieg, ereignisse
     nachbarn,
     setups(ctx, p) {
       const { z, signale } = ereignisseAuswerten(ctx, p.tf, ereignisse(p), p.richtung, true);
-      return { setups: setupsAusSignalen(ctx, z, signale, p), trichter: { signale: signale.length } };
+      return { setups: setupsAusSignalen(ctx, z, signale, p), trichter: { signale: signale.filter((s) => ctx.imBereich(z.en[s.k])).length } };
     },
   };
 }

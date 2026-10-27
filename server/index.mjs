@@ -219,7 +219,8 @@ async function api(req, res, url) {
     return laborIdeeLoeschen(String(b.id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
   }
   if (p === '/api/labor/start' && m === 'POST') {
-    const r = laborStarten(String((await body(req)).id || ''));
+    const b = await body(req);
+    const r = laborStarten(String(b.id || ''), b.art === 'forward' ? 'forward' : 'backtest');
     return r.fehler ? json(res, 400, r) : json(res, 200, r);
   }
   if (p === '/api/labor/forward-oeffnen' && m === 'POST') {

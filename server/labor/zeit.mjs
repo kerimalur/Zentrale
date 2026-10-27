@@ -16,6 +16,23 @@ function euDst(jahr) {
   return v;
 }
 
+// Versatz Zürich gegenüber UTC in Sekunden (3600 oder 7200), mit Merker für das zuletzt benutzte Jahr
+let jahrVonS = 0, jahrBisS = -1, dstA = 0, dstB = 0;
+export function zuerichVersatz(sek) {
+  if (sek < jahrVonS || sek >= jahrBisS) {
+    const j = new Date(sek * 1000).getUTCFullYear();
+    jahrVonS = Date.UTC(j, 0, 1) / 1000; jahrBisS = Date.UTC(j + 1, 0, 1) / 1000;
+    [dstA, dstB] = euDst(j);
+  }
+  return sek >= dstA && sek < dstB ? 7200 : 3600;
+}
+// Schnelle Teile: Tagesnummer, Stunde (mit Minuten als Bruch) und Wochentag in Zürich
+export function zuerichSchnell(sek) {
+  const l = sek + zuerichVersatz(sek);
+  const tag = Math.floor(l / 86_400);
+  return { tag, stunde: (l - tag * 86_400) / 3600, wochentag: (tag + 4) % 7 };
+}
+
 // Zürcher Ortszeit einer Unix-Sekunde: { stunde, minute, wochentag (0 = So), monat (1–12), tag, jahr }
 export function zuerich(sek) {
   const j = new Date(sek * 1000).getUTCFullYear();

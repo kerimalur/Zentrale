@@ -4,7 +4,7 @@
 import { linienFinden, pipVon } from '../trading.mjs';
 import { zeitrahmen, stundenFuerGva, handelstagNr } from './daten.mjs';
 import { sma, atr, rsi, hoechstesVorher, tiefstesVorher } from './indikatoren.mjs';
-import { zuerich, sitzungVon, SITZUNGEN, WOCHENTAGE } from './zeit.mjs';
+import { zuerich, zuerichSchnell, sitzungVon, SITZUNGEN, WOCHENTAGE } from './zeit.mjs';
 
 // ---------- Parameter-Helfer (Schema für die Seite) ----------
 const zahl = (key, name, standard, min, max, schritt, hilfe) => ({ key, name, typ: 'zahl', standard, min, max, schritt, hilfe });
@@ -28,7 +28,9 @@ export function mitStandard(schema, p = {}) {
 
 // ---------- Kontext pro Paar (wird von Ereignissen, Filtern und Strategien geteilt) ----------
 export function kontext(basis, e, pair) {
-  const ctx = { basis, e, pair, pip: pipVon(pair), cache: new Map() };
+  const ctx = { basis, e, pair, pip: pipVon(pair), cache: new Map(), bereich: null };
+  // nur für Zählungen (Trichter): liegt Basis-Index i im Testzeitraum?
+  ctx.imBereich = (i) => !ctx.bereich || (basis.t[i] >= ctx.bereich[0] && basis.t[i] < ctx.bereich[1]);
   ctx.tf = (tf) => zeitrahmen(basis, tf);
   ctx.merke = (k, fn) => { if (!ctx.cache.has(k)) ctx.cache.set(k, fn()); return ctx.cache.get(k); };
   // Tages-Infos: Index des Handelstags je Basis-Kerze, ATR 14 und SMA 200 der Tagesschlüsse
@@ -241,7 +243,7 @@ export const EREIGNISSE = [
     parameter: [zahl('von', 'Von (Stunde)', 8, 0, 23, 1), zahl('bis', 'Bis (Stunde, ausschl.)', 12, 1, 24, 1)],
     berechnen(ctx, z, p) {
       const a = new Uint8Array(z.n);
-      for (let k = 0; k < z.n; k++) { const h = zuerich(z.t[k]).stunde; a[k] = h >= p.von && h < p.bis ? 1 : 0; }
+      for (let k = 0; k < z.n; k++) { const h = zuerichSchnell(z.t[k]).stunde; a[k] = h >= p.von && h < p.bis ? 1 : 0; }
       return gleich(a);
     },
   },
