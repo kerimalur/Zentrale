@@ -1,4 +1,5 @@
 // Typen für Trading → Statistik (wie funktionieren GVA-Linien beim ersten Treffer?).
+import type { DatenStand } from './trading';
 
 export interface GParameter { reaktion: number; durchstich: number; fenster: number; atrBasis: 'tag' | 'tf' | 'pips'; splitJahr: number }
 export interface GFilter {
@@ -15,7 +16,7 @@ export interface GEreignis {
 }
 export interface GStatistik {
   parameter: GParameter; standard: GParameter; filterAnzahl: number;
-  n: number; gesamtEreignisse: number; fehlend: string[];
+  n: number; gesamtEreignisse: number; fehlend: string[]; daten: DatenStand;
   ergebnis: { erfolg: number; spaet: number; durch: number; keine: number; unklar: number };
   irgendwann: number | null; maxTage: number; ereignisseGesamt: number;
   quote: number | null; bereich: Bereich;

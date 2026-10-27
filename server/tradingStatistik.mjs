@@ -1,5 +1,6 @@
 // GVA-Statistik: Was passiert, wenn eine GVA-Linie das erste Mal getroffen wird?
-// Ereignis = erster gültiger Treffer (nach Nachbar-Filter) einer Linie auf 3D, W oder M, seit 2004 für alle 28 Paare.
+// Ereignis = erster gültiger Treffer (nach Nachbar-Filter) einer Linie auf 3D, W oder M, seit 2003 für alle 28 Paare
+// (stundengenau, sobald die Dukascopy-Stundenkerzen geladen sind; vorher ältere Treffer nur auf Tageskerzen).
 // Ergebnis eines Ereignisses (alles in ATR, frei einstellbar):
 //   Erfolg          – der Preis läuft «reaktion» ATR in Umkehrrichtung, bevor er «durchstich» ATR durch die Linie geht
 //   Durchgeschossen – zuerst mehr als «durchstich» ATR durch die Linie
@@ -9,6 +10,7 @@
 // Zufallsvergleich: dieselbe Regel an zufälligen Levels desselben Paars, die genau wie eine GVA zum ersten Mal von der richtigen Seite
 // berührt werden (Kerze davor lag noch ganz auf der anderen Seite).
 import { db, save } from './store.mjs';
+import { dukascopyZustand } from './dukascopy.mjs';
 import { PAARE, TFS, linienFinden, tradingDaten, tradingStand, tradingEinstellungen, pipVon, _intern } from './trading.mjs';
 
 const { kerzenBauen, atrReihe, handelstageVor, tagIso } = _intern;
@@ -108,7 +110,7 @@ function bewerten(d, start, lvl, long, atr, p, htStart, e) {
 }
 const htCache = new Map();
 function htIdxCache(tag, e) {
-  const k = `${e.feiertageAus}|${tag}`;
+  const k = tag * 2 + (e.feiertageAus ? 1 : 0); // Zahl statt Text: schneller (wird pro Stundenkerze aufgerufen)
   let v = htCache.get(k);
   if (v === undefined) { v = handelstageVor(tag, e); if (htCache.size > 100_000) htCache.clear(); htCache.set(k, v); }
   return v;
@@ -262,6 +264,7 @@ export function statistik(b = {}) {
     n,
     gesamtEreignisse: alle.length,
     fehlend,
+    daten: dukascopyZustand(),
     ergebnis: { erfolg, spaet: zaehle('spaet'), durch: zaehle('durch'), keine: zaehle('keine'), unklar: zaehle('unklar') },
     irgendwann: n ? (erfolg + zaehle('spaet')) / n : null,
     maxTage: MAX_TAGE,

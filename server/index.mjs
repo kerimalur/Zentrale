@@ -23,6 +23,7 @@ import { tvAbfragen, tvTaste, tvLautstaerke, tvEinschalten } from './tv.mjs';
 import { garminDaten, garminHistorie } from './collect/garmin.mjs';
 import { tagescheckSenden } from './tagescheck.mjs';
 import { fokusZustand, fokusLauf, koppelcodeErzeugen, koppeln, geraetVonToken, geraetEntfernen, geraetSetzen as fokusGeraetSetzen, bericht as fokusBericht, diagnoseSpeichern, sperreSetzen, sperreLoeschen, kategorieSetzen, piholeSync } from './fokus.mjs';
+import { dukascopyTakt } from './dukascopy.mjs';
 import { tradingZustand, tradingPaar, tradingLauf, tradingNeuLaden, tradingEinstellungenSetzen, tradingTestMeldung, PAARE } from './trading.mjs';
 import { heuteZustand, anmeldeUrl, rueckkehr, trennen as googleTrennen, mailAktion, scanStarten, scanZustand, absenderAktion, werbefilterSetzen, terminNeu, aufgabeNeu, aufgabeErledigt } from './google.mjs';
 import { statistik as gvaStatistik, statistikStandardSetzen, beispiel as gvaBeispiel } from './tradingStatistik.mjs';
@@ -471,6 +472,7 @@ setTimeout(() => alle(30_000, netzwache, false), 20_000);
 setTimeout(() => alle(60_000, fokusLauf, false), 25_000);
 // Trading: Kurse laden (erst nach 40 s, damit der Start nicht gebremst wird), danach jede Minute prüfen, ob nachgeladen wird.
 setTimeout(() => alle(60_000, tradingLauf), 40_000);
+setTimeout(() => alle(5 * 60_000, dukascopyTakt), 3 * 60_000); // Stundenkerzen ab 2003 nachladen (danach 1× am Tag)
 // Statusbericht für Obsidian (alle 15 Min, erstmals 2 Min nach dem Start, wenn alle Daten da sind).
 let berichtFehler = null;
 const bericht = async () => {

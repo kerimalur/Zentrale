@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { senden } from '@/lib/api';
 import { ART_FARBE, ART_TEXT, einheitText, kz, pz, type GBeispiel, type GEreignis, type GFilter, type GGruppe, type GParameter, type GStatistik } from '@/lib/gvaStatistik';
-import { datumCh, kurs } from '@/lib/trading';
+import { datumCh, kurs, type DatenStand } from '@/lib/trading';
 import { Schalter } from './ui';
 import { Popup } from './NetzBausteine';
 
@@ -66,7 +66,7 @@ export function TradingStatistik() {
   const tfUmschalten = (tf: string) => setzF('tfs', f.tfs?.includes(tf) ? f.tfs.filter((x) => x !== tf) : [...(f.tfs || []), tf]);
 
   if (fehler && !d) return <div className="karte fehlerbox">Statistik nicht ladbar: {fehler}</div>;
-  if (!d || !p) return <div className="karte leise">Rechne alle GVA-Linien seit 2004 durch …</div>;
+  if (!d || !p) return <div className="karte leise">Rechne alle GVA-Linien seit 2003 durch …</div>;
 
   const urteil = (() => {
     if (!d.bereich || !d.zufall.bereich || d.n < 30) return { text: 'Zu wenige Treffer für ein Urteil', ton: 'neutral' };
@@ -79,6 +79,7 @@ export function TradingStatistik() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {d.daten && !d.daten.fertig && <DatenHinweis daten={d.daten} />}
       <div className="gs-oben">
         <section className="karte in" aria-label="Regel für eine Umkehr">
           <h2 className="karte-titel">Was zählt als Umkehr? <small>{laedt ? 'rechne …' : `${d.gesamtEreignisse} erste Treffer`}</small></h2>
@@ -152,7 +153,7 @@ export function TradingStatistik() {
               </select>
             </label>
           </div>
-          <Schalter an={!!f.nurStunden} onClick={() => setzF('nurStunden', !f.nurStunden)} titel="Nur stundengenaue Treffer" unter="Letzte ~2 Jahre: Reihenfolge Reaktion/Durchstich sicher bekannt" />
+          <Schalter an={!!f.nurStunden} onClick={() => setzF('nurStunden', !f.nurStunden)} titel="Nur stundengenaue Treffer" unter={d.daten?.fertig ? 'Alle Treffer sind stundengenau (Dukascopy ab 2003)' : 'Reihenfolge Reaktion/Durchstich sicher bekannt'} />
         </section>
       </div>
 
@@ -427,5 +428,31 @@ function VerlaufChart({ b }: { b: GBeispiel }) {
       {iF >= 0 && <g><line x1={x(iF) - s / 2} x2={x(iF) - s / 2} y1={0} y2={H} stroke="var(--muted)" strokeDasharray="3 4" /><text x={x(iF) - s / 2 + 4} y={12} fontSize={10} fill="var(--muted)">Ende Zeitfenster</text></g>}
       {iE >= 0 && <circle cx={x(iE)} cy={b.ergebnis.art === 'durch' ? y(b.grenzen.durchstich) : y(b.grenzen.reaktion)} r={5} fill={ART_FARBE[b.ergebnis.art]} stroke="#fff" strokeWidth={1.5} />}
     </svg>
+  );
+}
+
+// Stand der Stundenkerzen (Dukascopy ab 2003). Solange nicht alles da ist, sind ältere Treffer nur auf Tageskerzen genau.
+export function DatenHinweis({ daten }: { daten: DatenStand }) {
+  const prozent = daten.gesamt ? Math.floor((daten.da / daten.gesamt) * 100) : 0;
+  return (
+    <div className="karte" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+        <strong>Stundenkerzen seit 2003 {daten.fertig ? 'geladen' : 'werden geladen'}</strong>
+        <span className="leise">{daten.paareFertig}/28 Paare · {prozent} %</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 3, background: 'var(--linie, rgba(127,127,127,.25))', overflow: 'hidden' }}>
+        <div style={{ width: `${prozent}%`, height: '100%', background: 'var(--gruen)' }} />
+      </div>
+      <small className="leise" style={{ lineHeight: 1.5 }}>
+        {daten.fertig
+          ? `Alle Treffer stundengenau, abgeschlossene Monate bis ${daten.bisMonat} von Dukascopy, danach Yahoo.`
+          : daten.gesperrtBis
+            ? `Dukascopy bremst gerade – weiter um ${new Date(daten.gesperrtBis).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })}.`
+            : daten.laeuft
+              ? `Lädt ${daten.paar ?? ''} (dauert beim ersten Mal einige Stunden). Bis alles da ist, sind ältere Treffer nur auf Tageskerzen genau; danach rechnet die Statistik automatisch neu.`
+              : 'Startet in wenigen Minuten im Hintergrund.'}
+        {daten.fehler && !daten.gesperrtBis ? ` Letzter Fehler: ${daten.fehler}` : ''}
+      </small>
+    </div>
   );
 }

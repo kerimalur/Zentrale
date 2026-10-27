@@ -7,7 +7,7 @@ import { TF_TEXT, datumCh, kurs, type TEinstellungen, type TOffen, type TPaarDet
 import { Icon, Schalter } from './ui';
 import { Popup } from './NetzBausteine';
 import { Journal } from './Journal';
-import { TradingStatistik } from './TradingStatistik';
+import { DatenHinweis, TradingStatistik } from './TradingStatistik';
 
 const TFS: TTf[] = ['3D', 'W', 'M'];
 const GRUEN = '21, 128, 61';
@@ -388,8 +388,9 @@ function EinstellungenSeite({ d, onZurueck }: { d: TradingZustand; onZurueck: ()
           <button className="knopf-klein press" style={{ marginTop: 10 }} onClick={test}><Icon name="info" size={14} /> Test-Meldung senden</button>
           <h2 className="karte-titel" style={{ marginTop: 16 }}>Kursdaten</h2>
           <div className="leise" style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 10 }}>
-            Yahoo Finance: Stundenkerzen der letzten ~2 Jahre, davor Tageskerzen. Aktualisierung alle 2 Minuten (Markt zu: alle 30 Minuten).
+            Stundenkerzen ab 2003 von Dukascopy (abgeschlossene Monate), der laufende Monat von Yahoo Finance. Aktualisierung alle 2 Minuten (Markt zu: alle 30 Minuten).
           </div>
+          {d.daten && <div style={{ marginBottom: 10 }}><DatenHinweis daten={d.daten} /></div>}
           <button className="knopf-klein press" onClick={neuLaden}><Icon name="neustart" size={14} /> Kurse neu laden</button>
         </section>
       </div>

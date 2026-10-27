@@ -42,6 +42,11 @@ export interface TPaarKurz {
   laedt?: boolean;
 }
 
+// Stundenkerzen von Dukascopy (ab 2003), werden im Hintergrund Monat für Monat geladen
+export interface DatenStand {
+  an: boolean; laeuft: boolean; paar: string | null; da: number; gesamt: number; fertig: boolean;
+  paareFertig: number; fehler: string | null; gesperrtBis: number | null; bisMonat: string;
+}
 export interface TradingZustand {
   einstellungen: TEinstellungen;
   marktOffen: boolean;
@@ -50,6 +55,7 @@ export interface TradingZustand {
   gesamt: number;
   stand: number | null;
   meldungenBereit: boolean;
+  daten: DatenStand;
   paare: TPaarKurz[];
   treffer: (TTreffer & { pair: string })[];
 }

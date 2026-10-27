@@ -8,8 +8,10 @@
 //   - Nach dem ersten Treffer ist die Linie verbraucht.
 // Kerzen werden wie bei TradingView-Forex gebaut: Handelstag endet um 17:00 New York, Woche So 17:00 – Fr 17:00,
 // 3D = 3 Handelstage am Stück (Wochenende und 25.12./1.1. zählen nicht), Startpunkt über ein Ankerdatum einstellbar.
-// Daten: Yahoo Finance (Stundenkerzen der letzten ~2 Jahre, davor Tageskerzen → ältere Linien auf wenige Pips genau).
+// Daten: Stundenkerzen von Dukascopy ab 2003 (abgeschlossene Monate, siehe dukascopy.mjs), der Rest von Yahoo Finance
+// (Stundenkerzen der letzten ~2 Jahre; Tageskerzen nur, solange Dukascopy noch nicht geladen ist).
 import { db, save } from './store.mjs';
+import { dukascopyStunden, dukascopyNachLaden, dukascopyZustand } from './dukascopy.mjs';
 import { holen } from './util.mjs';
 import { ereignis, nachrichtSenden, telegramBereit } from './ereignisse.mjs';
 import { registrierePruefung } from './tagescheck.mjs';
@@ -147,12 +149,26 @@ const leer = () => ({ t: [], o: [], h: [], l: [], c: [], sd: [], quelle: [] });
 
 async function vollLaden(pair, e) {
   const jetzt = Math.floor(Date.now() / 1000);
-  const [tage, stunden] = [await yahoo(pair, `interval=1d&period1=1072915200&period2=${jetzt}`), await yahoo(pair, 'interval=1h&range=730d')];
+  const [tage, yStunden] = [await yahoo(pair, `interval=1d&period1=1072915200&period2=${jetzt}`), await yahoo(pair, 'interval=1h&range=730d')];
+  // Stundenkerzen: Yahoo vor dem ersten Dukascopy-Monat, dann Dukascopy bis Ende des letzten gespeicherten Monats, danach Yahoo.
+  // (Dukascopy nur, wenn Yahoo lückenlos daran anschliesst.)
+  let stunden = yStunden;
+  const duka = dukascopyStunden(pair);
+  if (duka && (!yStunden.length || yStunden[0].t <= duka.bis)) {
+    stunden = yStunden.filter((b) => b.t < duka.t[0]);
+    for (let i = 0; i < duka.t.length; i++) stunden.push({ t: duka.t[i], o: duka.o[i], h: duka.h[i], l: duka.l[i], c: duka.c[i] });
+    for (const b of yStunden) if (b.t >= duka.bis) stunden.push(b);
+  }
   const d = leer();
   const ersterStundenTag = stunden.length ? sessionTag(stunden[0].t, e) + 1 : Infinity; // erster vollständiger Tag
   for (const b of tage) {
     const tag = naechsterHandelstag(Math.floor((b.t + 3 * STUNDE) / TAG), e); // Yahoo-Tageskerze = Londoner Kalendertag
     if (tag >= ersterStundenTag) break;
+    const n = d.t.length;
+    if (n && d.sd[n - 1] === tag) { // Feiertags-Kerze (z. B. 1.1.) gehört zum nächsten Handelstag
+      d.h[n - 1] = Math.max(d.h[n - 1], b.h); d.l[n - 1] = Math.min(d.l[n - 1], b.l); d.c[n - 1] = b.c;
+      continue;
+    }
     d.t.push(tagStart(tag)); d.o.push(b.o); d.h.push(b.h); d.l.push(b.l); d.c.push(b.c); d.sd.push(tag); d.quelle.push(0);
   }
   for (const b of stunden) {
@@ -214,8 +230,9 @@ function kerzenBauen(d, tf, e) {
   const kf = keyFn(tf, e);
   const barKey = new Array(d.t.length);
   const kerzen = [];
+  let altTag = null, k = 0;
   for (let i = 0; i < d.t.length; i++) {
-    const k = kf(d.sd[i]);
+    if (d.sd[i] !== altTag) { altTag = d.sd[i]; k = kf(altTag); } // Schlüssel nur einmal pro Handelstag berechnen
     barKey[i] = k;
     const letzte = kerzen[kerzen.length - 1];
     if (letzte && letzte.k === k) {
@@ -430,6 +447,8 @@ export function tradingNeuLaden() {
   zustand.geladen = false;
   tradingLauf().catch((e) => console.error('[trading]', e.message));
 }
+// Neue Dukascopy-Monate → beim nächsten Takt alles neu laden (Linien und Treffer bleiben gleich, nur genauer).
+dukascopyNachLaden(() => { zustand.letzteVoll = 0; });
 
 // ---------- API ----------
 export function tradingZustand() {
@@ -451,6 +470,7 @@ export function tradingZustand() {
     gesamt: PAARE.length,
     stand: zustand.letzteLive || null,
     meldungenBereit: telegramBereit() && !!db().einstellungen.telegram,
+    daten: dukascopyZustand(),
     paare,
     treffer,
   };
