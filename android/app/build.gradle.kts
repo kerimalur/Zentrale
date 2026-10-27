@@ -11,8 +11,8 @@ android {
         applicationId = "ch.kerim.zentrale.fokus"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     // Fester Schlüssel, damit spätere Versionen über die installierte App drüber installiert werden können.

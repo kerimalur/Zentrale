@@ -152,14 +152,43 @@ class FokusService : AccessibilityService() {
 
     private fun vordergrundPaket(): String? = try { rootInActiveWindow?.packageName?.toString() } catch (_: Exception) { null }
 
+    // ---------- Browser: Adresse aus der Adressleiste lesen (Webseiten messen und sperren, unabhängig von DNS) ----------
+    private val browser = mapOf(
+        "com.android.chrome" to "com.android.chrome:id/url_bar",
+        "com.brave.browser" to "com.brave.browser:id/url_bar",
+        "com.microsoft.emmx" to "com.microsoft.emmx:id/url_bar",
+        "com.opera.browser" to "com.opera.browser:id/url_field",
+        "org.mozilla.firefox" to "org.mozilla.firefox:id/mozac_browser_toolbar_url_view",
+        "com.sec.android.app.sbrowser" to "com.sec.android.app.sbrowser:id/location_bar_edit_text",
+    )
+
+    private fun domainVon(t: String): String? {
+        var h = t.trim().lowercase().substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#')
+        if (h.contains(' ') || h.isEmpty()) return null
+        h = h.substringBefore(':').removePrefix("www.").removePrefix("m.").removePrefix("mobile.")
+        if (!h.contains('.')) return null
+        val teile = h.split('.')
+        if (teile.size <= 2) return h
+        val zwei = teile[teile.size - 2] in setOf("co", "com", "org", "net", "gov", "ac") && teile.last().length == 2
+        return teile.takeLast(if (zwei) 3 else 2).joinToString(".")
+    }
+
+    private fun browserDomain(pkg: String): String? {
+        val id = browser[pkg] ?: return null
+        val root = try { rootInActiveWindow } catch (_: Exception) { null } ?: return null
+        val n = root.findAccessibilityNodeInfosByViewId(id).firstOrNull() ?: return null
+        return n.text?.toString()?.let { domainVon(it) }
+    }
+
     private fun zaehlen() {
         jetzt = null
         if (aktiv()) {
             val pkg = vordergrundPaket()
             if (pkg != null && pkg !in ignorierte) {
-                val n = label(pkg)
-                jetzt = n
-                puffer[n] = (puffer[n] ?: 0) + tick
+                val dom = browserDomain(pkg)
+                val key = if (dom != null) "web:$dom" else "app:${label(pkg)}"
+                jetzt = key
+                puffer[key] = (puffer[key] ?: 0) + tick
             }
         }
         sekSeitSenden += tick
@@ -223,6 +252,13 @@ class FokusService : AccessibilityService() {
             val s = sperren.getJSONObject(i)
             val typ = s.optString("typ")
             val wert = s.optString("wert")
+            if (typ == "domain" && browser.containsKey(pkg)) {
+                val dom = browserDomain(pkg)
+                if (dom != null && (dom == wert || dom.endsWith(".$wert"))) {
+                    sperrenAktion { performGlobalAction(GLOBAL_ACTION_HOME); hinweis("$wert ist gesperrt") }
+                    return
+                }
+            }
             if (typ == "app" && appPasst(pkg, wert)) {
                 sperrenAktion { performGlobalAction(GLOBAL_ACTION_HOME); hinweis("${label(pkg)} ist gesperrt") }
                 return

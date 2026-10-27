@@ -39,12 +39,25 @@ object Api {
     fun diagnose(s: Speicher, text: String): Antwort =
         post("${s.adresse}/api/fokus/agent/diagnose", s.token, JSONObject().put("text", text))
 
+    // Schlüssel «web:domain» oder «app:Name» (alte Einträge ohne Vorsatz sind Apps).
+    private fun teilen(key: String): Pair<String, String> = when {
+        key.startsWith("web:") -> "web" to key.substring(4)
+        key.startsWith("app:") -> "app" to key.substring(4)
+        else -> "app" to key
+    }
+
     /** Sendet die gesammelte Zeit und liefert die aktuellen Sperren zurück. */
     fun bericht(s: Speicher, zeiten: Map<String, Int>, jetzt: String?): Antwort {
         val eintraege = JSONArray()
-        for ((name, sek) in zeiten) eintraege.put(JSONObject().put("art", "app").put("name", name).put("sek", sek))
-        val body = JSONObject().put("version", "android-1.1").put("eintraege", eintraege)
-        if (jetzt != null) body.put("jetzt", JSONObject().put("art", "app").put("name", jetzt))
+        for ((key, sek) in zeiten) {
+            val (art, name) = teilen(key)
+            eintraege.put(JSONObject().put("art", art).put("name", name).put("sek", sek))
+        }
+        val body = JSONObject().put("version", "android-1.2").put("eintraege", eintraege)
+        if (jetzt != null) {
+            val (art, name) = teilen(jetzt)
+            body.put("jetzt", JSONObject().put("art", art).put("name", name))
+        }
         return post("${s.adresse}/api/fokus/agent/bericht", s.token, body)
     }
 }
