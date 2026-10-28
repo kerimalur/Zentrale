@@ -10,7 +10,7 @@ import {
 } from '@/lib/labor';
 import { Schalter } from './ui';
 import { Popup } from './NetzBausteine';
-import { Gruppenbalken, Kachel, Raster } from './LaborTeile';
+import { Erweitert, Gruppenbalken, Kachel, Raster } from './LaborTeile';
 
 type FB = LBausteine['fremd'];
 
@@ -389,23 +389,10 @@ export function FremdEditor({ b, start, id, onZurueck, onGespeichert, onBaustein
 
       <section className="karte in">
         <h2 className="karte-titel">Vorab-Karte <small>Hypothese mit Fremddaten</small></h2>
-        <p className="tr-hilfe" style={{ margin: '0 0 12px' }}>Alles hier wird beim Start eingefroren. Jede Änderung danach ist eine neue Version und zählt als getestete Variante (strengere Grenze für den p-Wert).</p>
+        <p className="tr-hilfe" style={{ margin: '0 0 12px' }}>Nur das Wichtige ausfüllen: Name, ein Satz Mechanismus und ein Erfolgskriterium als Zahl. Alles hier wird beim Start eingefroren; jede Änderung danach ist eine neue Version und zählt als getestete Variante (strengere Grenze für den p-Wert). Leere Felder sind in Ordnung.</p>
         <label className="nw-feld">Name<input value={k.name} onChange={(e) => setz('name', e.target.value)} maxLength={80} /></label>
-        <div className="nw-feld">Kette: Ereignis → Mechanismus → Wirkung → Markt → Zeitraum
-          <div className="lb-kette">
-            {([['ereignis', 'Ereignis (messbar)'], ['mechanismus', 'Mechanismus'], ['wirkung', 'Wirkung'], ['markt', 'Markt'], ['zeitraum', 'Zeitraum']] as [keyof LKette, string][]).map(([key, ph], i) => (
-              <div key={key} className="lb-kette-glied">
-                {i > 0 && <span aria-hidden="true">→</span>}
-                <input value={kette[key] || ''} onChange={(e) => setKette(key, e.target.value)} placeholder={ph} aria-label={ph} maxLength={200} />
-              </div>
-            ))}
-          </div>
-        </div>
-        <label className="nw-feld">Hypothese in einem Satz<textarea className="lb-text" rows={2} value={k.beschreibung || ''} onChange={(e) => setz('beschreibung', e.target.value)} /></label>
-        <label className="nw-feld">Mechanismus (warum sollte es wirken?)<textarea className="lb-text" rows={2} value={k.mechanismus || ''} onChange={(e) => setz('mechanismus', e.target.value)} /></label>
-        <label className="nw-feld">Erwartete Wirkung (Richtung, Markt, Zeitraum)<textarea className="lb-text" rows={2} value={k.erwartung || ''} onChange={(e) => setz('erwartung', e.target.value)} /></label>
-        <label className="nw-feld">Erfolgskriterium (vorab!)<textarea className="lb-text" rows={2} value={k.erfolgskriterium || ''} onChange={(e) => setz('erfolgskriterium', e.target.value)} /></label>
-        <label className="nw-feld">Ab wann bekannt? (Notiz)<input value={k.bekanntAb || ''} onChange={(e) => setz('bekanntAb', e.target.value)} placeholder="z. B. EIA-Speicher Donnerstag 10:30 New York → ab Freitag" maxLength={300} /></label>
+        <label className="nw-feld">Mechanismus (warum sollte es wirken? Ein Satz genügt)<textarea className="lb-text" rows={2} value={k.mechanismus || ''} onChange={(e) => setz('mechanismus', e.target.value)} /></label>
+        <label className="nw-feld">Erfolgskriterium (vorab als Zahl, z. B. «Mehrwert &gt; 0, p &lt; 0,05, beide Hälften gleiche Richtung»)<textarea className="lb-text" rows={2} value={k.erfolgskriterium || ''} onChange={(e) => setz('erfolgskriterium', e.target.value)} /></label>
         {fallen.length > 0 && (
           <div className="lb-fallen">
             <strong>Fallen aus bisherigen Tests</strong>
@@ -481,12 +468,29 @@ export function FremdEditor({ b, start, id, onZurueck, onGespeichert, onBaustein
           <label className="nw-feld">Wartezeit nach «bekannt» (Tage)<input type="number" min={0} max={365} value={k.warten ?? 0} onChange={(e) => setz('warten', zahl(e.target.value))} /></label>
           <label className="nw-feld">Horizonte (Kalendertage)<input value={horizText} onChange={(e) => setHorizText(e.target.value)} placeholder="7, 30, 60" /></label>
           <label className="nw-feld">Haupt-Horizont (für das Urteil)<input type="number" min={1} max={730} value={k.hauptHorizont ?? 30} onChange={(e) => setz('hauptHorizont', zahl(e.target.value))} /></label>
+        </div>
+        <p className="tr-hilfe" style={{ margin: '0 0 10px' }}>Gemessen wird ab dem ersten Kurs nach «bekannt + Wartezeit» bis Horizont-Tage später, ohne Überlappung pro Markt. Gleichzeitig (während der Ereignis-Periode) wird zusätzlich gezeigt – das ist nicht handelbar.</p>
+
+        <Erweitert hilfe="Standardwerte passen meistens, leere Felder sind in Ordnung">
+        <div className="nw-feld">Kette: Ereignis → Mechanismus → Wirkung → Markt → Zeitraum
+          <div className="lb-kette">
+            {([['ereignis', 'Ereignis (messbar)'], ['mechanismus', 'Mechanismus'], ['wirkung', 'Wirkung'], ['markt', 'Markt'], ['zeitraum', 'Zeitraum']] as [keyof LKette, string][]).map(([key, ph], i) => (
+              <div key={key} className="lb-kette-glied">
+                {i > 0 && <span aria-hidden="true">→</span>}
+                <input value={kette[key] || ''} onChange={(e) => setKette(key, e.target.value)} placeholder={ph} aria-label={ph} maxLength={200} />
+              </div>
+            ))}
+          </div>
+        </div>
+        <label className="nw-feld">Hypothese in einem Satz<textarea className="lb-text" rows={2} value={k.beschreibung || ''} onChange={(e) => setz('beschreibung', e.target.value)} /></label>
+        <label className="nw-feld">Erwartete Wirkung (Richtung, Markt, Zeitraum)<textarea className="lb-text" rows={2} value={k.erwartung || ''} onChange={(e) => setz('erwartung', e.target.value)} /></label>
+        <label className="nw-feld">Ab wann bekannt? (Notiz)<input value={k.bekanntAb || ''} onChange={(e) => setz('bekanntAb', e.target.value)} placeholder="z. B. EIA-Speicher Donnerstag 10:30 New York → ab Freitag" maxLength={300} /></label>
+        <div className="lb-felder">
           <label className="nw-feld">Backtest von<input type="number" min={fb.jahre.von} max={fb.jahre.bis} value={k.backtest?.von ?? ''} onChange={(e) => setz('backtest', { von: zahl(e.target.value), bis: k.backtest?.bis ?? 2022 })} /></label>
           <label className="nw-feld">Backtest bis<input type="number" min={fb.jahre.von} max={fb.jahre.bis} value={k.backtest?.bis ?? ''} onChange={(e) => setz('backtest', { von: k.backtest?.von ?? 1990, bis: zahl(e.target.value) })} /></label>
           <label className="nw-feld">Forward ab (gesperrt)<input type="number" min={fb.jahre.von} max={fb.jahre.bis} value={k.forward?.von ?? ''} onChange={(e) => setz('forward', { von: zahl(e.target.value) })} /></label>
           <label className="nw-feld">Geplante Varianten<input type="number" min={1} max={100} value={k.geplanteVarianten ?? 1} onChange={(e) => setz('geplanteVarianten', zahl(e.target.value))} /></label>
         </div>
-        <p className="tr-hilfe" style={{ margin: '0 0 10px' }}>Gemessen wird ab dem ersten Kurs nach «bekannt + Wartezeit» bis Horizont-Tage später, ohne Überlappung pro Markt. Gleichzeitig (während der Ereignis-Periode) wird zusätzlich gezeigt – das ist nicht handelbar.</p>
         <Schalter an={!!k.stufe2?.aktiv} onClick={() => setz('stufe2', k.stufe2?.aktiv ? null : { aktiv: true, modell: 'ausbruch', n: 10, halten: 5 })} titel="Stufe 2: Bias-Fenster + Entry-Model" unter="Im Fenster (bekannt + Wartezeit bis Haupt-Horizont) mit festem Entry-Model viele kleinere Trades; Gegenprobe ausserhalb und in Gegenrichtung" />
         {k.stufe2?.aktiv && (
           <div className="lb-felder" style={{ marginTop: 8 }}>
@@ -500,20 +504,19 @@ export function FremdEditor({ b, start, id, onZurueck, onGespeichert, onBaustein
             <p className="tr-hilfe lb-breit">Für Kerims Fix Entry Model (GVA + BOS) auf Devisen: eine Strategie anlegen und dort als Bias-Fenster diese Hypothese wählen.</p>
           </div>
         )}
-      </section>
-
-      <section className="karte in">
-        <h2 className="karte-titel">Wege zu mehr Fällen <small>vorab festhalten</small></h2>
-        <div className="lb-wege">
-          {fb.wege.map((w) => {
-            const an = (k.wege || []).includes(w.id);
-            return (
-              <button key={w.id} type="button" className="lb-weg press" aria-pressed={an} onClick={() => setz('wege', an ? (k.wege || []).filter((x) => x !== w.id) : [...(k.wege || []), w.id])}>
-                <strong>{an ? '✓ ' : ''}{w.name}</strong><span>{w.text}</span>
-              </button>
-            );
-          })}
+        <div className="nw-feld" style={{ marginTop: 12 }}>Wege zu mehr Fällen <span className="tr-hilfe">(nur eine Gedankenstütze, ändert die Rechnung nicht)</span>
+          <div className="lb-wege">
+            {fb.wege.map((w) => {
+              const an = (k.wege || []).includes(w.id);
+              return (
+                <button key={w.id} type="button" className="lb-weg press" aria-pressed={an} onClick={() => setz('wege', an ? (k.wege || []).filter((x) => x !== w.id) : [...(k.wege || []), w.id])}>
+                  <strong>{an ? '✓ ' : ''}{w.name}</strong><span>{w.text}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+        </Erweitert>
       </section>
 
       {fehler && <div className="fehlerbox">{fehler}</div>}

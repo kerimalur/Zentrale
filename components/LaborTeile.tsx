@@ -2,7 +2,7 @@
 // Gemeinsame Bausteine der Labor-Seiten (Strategien, Kurs-Hypothesen, Fremddaten-Hypothesen).
 import { useState } from 'react';
 import { kopieren } from '@/lib/api';
-import { URTEIL_FARBE, atrText, pText, rText, type LGruppe, type LZeile } from '@/lib/labor';
+import { AMPEL_FARBE, URTEIL_FARBE, atrText, pText, rText, type LFazit, type LGruppe, type LZeile } from '@/lib/labor';
 
 export function UrteilChip({ urteil }: { urteil: string }) {
   return <span className="lb-chip" style={{ background: URTEIL_FARBE[urteil] || 'var(--muted)', color: '#fff' }}>{urteil}</span>;
@@ -40,6 +40,56 @@ export function Gruppenbalken({ gruppen, einheit }: { gruppen: LGruppe[]; einhei
         </div>
       ))}
     </div>
+  );
+}
+
+// Fazit auf einen Blick: Ampel, ein Satz, 4 Kernzahlen, worauf achten, was würde das Urteil ändern, Handelsregel.
+// Alles Weitere (Raster, Jahre, Trades) steht darunter und ist aufklappbar.
+export function FazitKarte({ f, offen, onUmschalten }: { f: LFazit; offen: boolean; onUmschalten: () => void }) {
+  const farbe = AMPEL_FARBE[f.ampel];
+  const guteFarbe = (g: boolean | null) => (g === true ? 'var(--gruen)' : g === false ? 'var(--fehler)' : 'var(--ink)');
+  return (
+    <section className="karte in lb-fazit" style={{ borderLeft: `6px solid ${farbe}` }}>
+      <div className="lb-fazit-kopf">
+        <span className="lb-ampel" style={{ background: farbe }} aria-hidden="true" />
+        <span className="gs-gross" style={{ fontSize: 30, color: farbe }}>{f.urteil}</span>
+        <span className="leise">{f.warum}</span>
+      </div>
+      <p className="lb-fazit-satz">{f.satz}</p>
+      <div className="lb-kacheln lb-fazit-zahlen">
+        {f.zahlen.map((z) => (
+          <div key={z.titel} className="lb-kachel">
+            <span className="leise">{z.titel}</span>
+            <strong style={{ color: guteFarbe(z.gut) }}>{z.wert}</strong>
+            {z.unter && <small className="leise">{z.unter}</small>}
+          </div>
+        ))}
+      </div>
+      <div className="lb-fazit-spalten">
+        <div>
+          <h3 className="lb-fazit-h">Darauf achten</h3>
+          {f.achten.length ? <ul className="lb-fazit-liste">{f.achten.map((a, i) => <li key={i}>{a}</li>)}</ul> : <p className="leise" style={{ margin: 0, fontSize: 13.5 }}>Keine Auffälligkeiten.</p>}
+        </div>
+        <div>
+          <h3 className="lb-fazit-h">Was würde das Urteil ändern?</h3>
+          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5 }}>{f.aendern}</p>
+          <h3 className="lb-fazit-h" style={{ marginTop: 12 }}>Handelsregel</h3>
+          <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5 }}>{f.regel || <span className="leise">{f.regelHinweis}</span>}</p>
+        </div>
+      </div>
+      <div className="leise" style={{ fontSize: 12.5, marginTop: 12 }}>{f.meta}</div>
+      <button type="button" className="knopf-klein press" style={{ marginTop: 10 }} aria-expanded={offen} onClick={onUmschalten}>{offen ? 'Details ausblenden ▴' : 'Alle Details anzeigen ▾'}</button>
+    </section>
+  );
+}
+
+// Eingeklappter Bereich «Erweitert» für Felder mit sinnvollen Standardwerten
+export function Erweitert({ titel = 'Erweitert', hilfe, children }: { titel?: string; hilfe?: string; children: React.ReactNode }) {
+  return (
+    <details className="lb-erweitert">
+      <summary>{titel}{hilfe && <small> · {hilfe}</small>}</summary>
+      <div className="lb-erweitert-inhalt">{children}</div>
+    </details>
   );
 }
 

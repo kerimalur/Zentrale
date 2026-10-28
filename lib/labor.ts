@@ -37,7 +37,13 @@ export interface LBausteine {
 export interface LLauf {
   id: string; idee: string; v: number; art: 'backtest' | 'forward'; status: 'wartet' | 'laeuft' | 'fertig' | 'fehler';
   erstellt: string; start: string | null; ende: string | null; fortschritt: { fertig: number; gesamt: number; paar: string | null } | null; fehler: string | null;
-  kurz: { urteil: string; warum: string; n: number; nUnabhaengig: number; avgR: number | null; quote: number | null; dauerSek: number; mittelProzent?: number | null; mehrwertProzent?: number | null } | null;
+  kurz: { urteil: string; warum: string; n: number; nUnabhaengig: number; avgR: number | null; quote: number | null; dauerSek: number; mittelProzent?: number | null; mehrwertProzent?: number | null; einzeiler?: string | null; achten1?: string | null } | null;
+}
+// Fazit-Karte (kommt vom Server mit jedem Ergebnis)
+export interface LFazit {
+  ampel: 'gruen' | 'gelb' | 'rot' | 'grau'; urteil: string; warum: string; satz: string;
+  zahlen: { titel: string; wert: string; unter?: string; gut: boolean | null }[];
+  achten: string[]; aendern: string; regel: string | null; regelHinweis: string | null; meta: string;
 }
 export interface LExtern { id: string; datum: string; urteil: string | null; stufe: string; kernzahl: string; link: string; text: string; n: number | null; nUnabhaengig: number | null }
 export interface LZettel {
@@ -71,7 +77,7 @@ export interface LFErgebnis {
   stufe2: { modell: string; halten: number; innen: { n: number; avg: number | null; quote: number | null }; aussen: { n: number; avg: number | null; quote: number | null }; gegen: { n: number; avg: number | null; quote: number | null }; forward: { n: number; avg: number | null; quote: number | null } | null; p: number | null } | null;
   proJahrGrafik: LFJahr[]; hauptmarkt: { id: string; name: string }; ereignisseGesamt: number;
   abdeckung: { id: string; name: string; quelle: string; link: string | null; von: string; bis: string; n: number; freq: string; veraltet: string | null; hinweis: string | null }[];
-  marktNamen: Record<string, string>; dauerSek: number; karte: LKarte; lauf: { id: string; art: string; v: number; start: string; ende: string }; schonGesehen?: boolean;
+  marktNamen: Record<string, string>; dauerSek: number; karte: LKarte; lauf: { id: string; art: string; v: number; start: string; ende: string }; schonGesehen?: boolean; fazit?: LFazit | null;
 }
 export const pText = (x: number | null | undefined, st = 2) => (x === null || x === undefined ? '—' : `${x >= 0 ? '+' : ''}${x.toFixed(st).replace('.', ',')} %`);
 export const tagDatum = (t: number) => new Date(t * 86_400_000).toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -96,7 +102,7 @@ export interface LHorizont {
 }
 export interface LErgebnis {
   typ: 'strategie' | 'hypothese'; urteil: string; warum: string; n: number; nUnabhaengig: number; varianten: number; raster: LZeile[];
-  abdeckung: LAbdeckung[]; dauerSek: number; karte: LKarte; lauf: { id: string; art: string; v: number; start: string; ende: string }; schonGesehen?: boolean;
+  abdeckung: LAbdeckung[]; dauerSek: number; karte: LKarte; lauf: { id: string; art: string; v: number; start: string; ende: string }; schonGesehen?: boolean; fazit?: LFazit | null;
   // Strategie
   kennzahlen?: LKennzahlen; zufall?: { mittel: number | null; p: number | null; n: number }; proJahr?: LGruppe[]; proPaar?: LGruppe[]; proSeite?: LGruppe[];
   kurve?: [number, number][]; forward?: { kennzahlen: LKennzahlen; kurve: [number, number][]; nUnabhaengig: number } | null;
@@ -108,6 +114,7 @@ export interface LErgebnis {
 }
 
 export const URTEIL_FARBE: Record<string, string> = { 'Bestätigt': 'var(--gruen)', 'Hinweis': '#d6a23a', 'Nicht bestätigt': 'var(--fehler)', 'Zu wenig Daten': 'var(--muted)' };
+export const AMPEL_FARBE: Record<LFazit['ampel'], string> = { gruen: 'var(--gruen)', gelb: '#d6a23a', rot: 'var(--fehler)', grau: 'var(--muted)' };
 export const rText = (x: number | null | undefined, st = 2) => (x === null || x === undefined ? '—' : `${x >= 0 ? '+' : ''}${x.toFixed(st).replace('.', ',')} R`);
 export const atrText = (x: number | null | undefined) => (x === null || x === undefined ? '—' : `${x >= 0 ? '+' : ''}${x.toFixed(3).replace('.', ',')} ATR`);
 export const prozent = (x: number | null | undefined, st = 0) => (x === null || x === undefined ? '—' : `${(x * 100).toFixed(st).replace('.', ',')} %`);

@@ -59,6 +59,11 @@ function ergebnisMd(e) {
   if (!e) return '';
   let s = `\n## Ergebnis (Zentrale, Version ${e.lauf?.v ?? '?'}, ${e.lauf?.art === 'forward' ? 'Backtest + Forward' : 'nur Backtest'}, ${(e.lauf?.ende || '').slice(0, 10)})\n\n`;
   s += zeile('Urteil', `${e.urteil} – ${e.warum}`);
+  if (e.fazit) {
+    s += zeile('Fazit', e.fazit.satz);
+    if (e.fazit.achten?.length) s += zeile('Darauf achten', e.fazit.achten.join(' · '));
+    s += zeile('Handelsregel', e.fazit.regel || e.fazit.regelHinweis || '—');
+  }
   s += zeile('Monty-Stufe', e.stufe2 || e.karte?.bias ? '2 (Bias-Fenster + Entry-Model)' : e.lauf?.art === 'forward' ? '3 (Backtest vs. Forward)' : '1 (Grund-Hypothese)');
   s += zeile('Fälle', `N ${e.n} · unabhängig ${e.nUnabhaengig} · getestete Varianten ${e.varianten}`);
   if (e.typ === 'fremd') {

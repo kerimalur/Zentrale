@@ -10,7 +10,7 @@ import {
   type LBaustein, type LBausteine, type LErgebnis, type LFErgebnis, type LExtern, type LIdee, type LIdeeKurz, type LKarte, type LParam, type LTeil, type LTrade, type LZettel, pText,
 } from '@/lib/labor';
 import { Schalter } from './ui';
-import { UrteilChip, TypChip, Raster, Gruppenbalken, Kachel, Rueckfrage } from './LaborTeile';
+import { UrteilChip, TypChip, Raster, Gruppenbalken, Kachel, Rueckfrage, FazitKarte, Erweitert } from './LaborTeile';
 import { Popup } from './NetzBausteine';
 import { FremdEditor, FremdVorabKarte, ErgebnisFremd, reiheNameKlient } from './LaborFremd';
 import { Brainstorm, ExportKnoepfe, ImportPopup, MdVorschau } from './LaborWerkzeuge';
@@ -195,6 +195,12 @@ function IdeeZeile({ i, onClick }: { i: LIdeeKurz; onClick: () => void }) {
           <span className="leise" style={{ fontSize: 12.5 }}>Version {i.version}{!i.eingefroren ? ' (Entwurf)' : ''} · {i.varianten} Variante{i.varianten === 1 ? '' : 'n'}{i.forwardOffen ? ' · Forward offen' : ''}</span>
         </div>
         {laeuft && i.lauf ? <Fortschritt lauf={i.lauf} /> : i.lauf?.status === 'fehler' ? <div style={{ fontSize: 12.5, color: 'var(--fehler)' }}>Fehler: {i.lauf.fehler}</div> : null}
+        {!laeuft && i.ergebnis && (
+          <>
+            <div className="leise" style={{ fontSize: 13, marginTop: 2 }}>{i.ergebnis.einzeiler || i.ergebnis.warum}</div>
+            {i.ergebnis.achten1 && <div className="lb-zeile-warnung">⚠ {i.ergebnis.achten1}</div>}
+          </>
+        )}
         {(i.tags?.length > 0 || i.extern) && (
           <div className="lb-tags">
             {i.tags.map((t) => <span key={t} className="lb-tag">{t}</span>)}
@@ -320,23 +326,25 @@ function KarteEditor({ b, ideen, start, id, onZurueck, onGespeichert }: { b: LBa
         <h2 className="karte-titel">Vorab-Karte <small>{istH ? 'Hypothese' : 'Strategie'}</small></h2>
         <p className="tr-hilfe" style={{ margin: '0 0 12px' }}>Alles hier wird beim Start eingefroren – damit sich die Torpfosten nachher nicht verschieben.</p>
         <label className="nw-feld">Name<input value={k.name} onChange={(e) => setz('name', e.target.value)} maxLength={80} /></label>
-        <label className="nw-feld">Mechanismus (warum sollte es funktionieren?)<textarea className="lb-text" rows={2} value={k.mechanismus || ''} onChange={(e) => setz('mechanismus', e.target.value)} /></label>
-        <label className="nw-feld">Erwartung (Richtung und Zeitraum)<textarea className="lb-text" rows={2} value={k.erwartung || ''} onChange={(e) => setz('erwartung', e.target.value)} /></label>
-        <label className="nw-feld">Erfolgskriterium (vorab!)<textarea className="lb-text" rows={2} value={k.erfolgskriterium || ''} onChange={(e) => setz('erfolgskriterium', e.target.value)} /></label>
-        <div className="lb-felder">
-          <label className="nw-feld">Backtest von<input type="number" min={b.jahre.von} max={b.jahre.bis} value={k.backtest?.von ?? ''} onChange={(e) => setz('backtest', { von: Number(e.target.value), bis: k.backtest?.bis ?? 2022 })} /></label>
-          <label className="nw-feld">Backtest bis<input type="number" min={b.jahre.von} max={b.jahre.bis} value={k.backtest?.bis ?? ''} onChange={(e) => setz('backtest', { von: k.backtest?.von ?? b.jahre.von, bis: Number(e.target.value) })} /></label>
-          <label className="nw-feld">Forward ab (gesperrt)<input type="number" min={b.jahre.von} max={b.jahre.bis} value={k.forward?.von ?? ''} onChange={(e) => setz('forward', { von: Number(e.target.value) })} /></label>
-          <label className="nw-feld">Geplante Varianten<input type="number" min={1} max={100} value={k.geplanteVarianten ?? 1} onChange={(e) => setz('geplanteVarianten', Number(e.target.value))} /></label>
-        </div>
-        <div className="nw-feld">Paare <span className="tr-hilfe">(keine Auswahl = alle 28)</span>
-          <div className="lb-chips">
-            {b.paare.map((p) => {
-              const an = (k.paare || []).includes(p);
-              return <button key={p} type="button" className="lb-wahl press" aria-pressed={an} onClick={() => setz('paare', an ? (k.paare || []).filter((x) => x !== p) : [...(k.paare || []), p])}>{p}</button>;
-            })}
+        <label className="nw-feld">Mechanismus (warum sollte es funktionieren? Ein Satz genügt)<textarea className="lb-text" rows={2} value={k.mechanismus || ''} onChange={(e) => setz('mechanismus', e.target.value)} /></label>
+        <label className="nw-feld">Erfolgskriterium (vorab als Zahl, z. B. «Ø R &gt; 0,1, p &lt; 0,05, beide Hälften positiv»)<textarea className="lb-text" rows={2} value={k.erfolgskriterium || ''} onChange={(e) => setz('erfolgskriterium', e.target.value)} /></label>
+        <Erweitert hilfe="Standardwerte passen meistens, leere Felder sind in Ordnung">
+          <label className="nw-feld">Erwartung (Richtung und Zeitraum)<textarea className="lb-text" rows={2} value={k.erwartung || ''} onChange={(e) => setz('erwartung', e.target.value)} /></label>
+          <div className="lb-felder">
+            <label className="nw-feld">Backtest von<input type="number" min={b.jahre.von} max={b.jahre.bis} value={k.backtest?.von ?? ''} onChange={(e) => setz('backtest', { von: Number(e.target.value), bis: k.backtest?.bis ?? 2022 })} /></label>
+            <label className="nw-feld">Backtest bis<input type="number" min={b.jahre.von} max={b.jahre.bis} value={k.backtest?.bis ?? ''} onChange={(e) => setz('backtest', { von: k.backtest?.von ?? b.jahre.von, bis: Number(e.target.value) })} /></label>
+            <label className="nw-feld">Forward ab (gesperrt)<input type="number" min={b.jahre.von} max={b.jahre.bis} value={k.forward?.von ?? ''} onChange={(e) => setz('forward', { von: Number(e.target.value) })} /></label>
+            <label className="nw-feld">Geplante Varianten<input type="number" min={1} max={100} value={k.geplanteVarianten ?? 1} onChange={(e) => setz('geplanteVarianten', Number(e.target.value))} /></label>
           </div>
-        </div>
+          <div className="nw-feld">Paare <span className="tr-hilfe">(keine Auswahl = alle 28)</span>
+            <div className="lb-chips">
+              {b.paare.map((p) => {
+                const an = (k.paare || []).includes(p);
+                return <button key={p} type="button" className="lb-wahl press" aria-pressed={an} onClick={() => setz('paare', an ? (k.paare || []).filter((x) => x !== p) : [...(k.paare || []), p])}>{p}</button>;
+              })}
+            </div>
+          </div>
+        </Erweitert>
       </section>
 
       <section className="karte in">
@@ -418,6 +426,7 @@ function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen }: { b: LBauste
   const [frage, setFrage] = useState<'forward' | 'loeschen' | 'verwerfen' | 'lauf' | null>(null);
   const [karteAuf, setKarteAuf] = useState(false);
   const [versionWahl, setVersionWahl] = useState<number | null>(null);
+  const [detailsAuf, setDetailsAuf] = useState(false);
 
   const laden = useCallback(async () => {
     try { const x = await holen<LIdee>(`/api/labor/idee?id=${id}`); setI(x); setFehler(null); return x; } catch (e) { setFehler((e as Error).message); return null; }
@@ -528,7 +537,8 @@ function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen }: { b: LBauste
           onJa={() => { setFrage(null); aktion('/api/labor/lauf', { lauf: zielLauf }, 'DELETE'); }} />
       )}
 
-      {erg ? (erg.typ === 'fremd' ? <ErgebnisFremd e={erg as LFErgebnis} /> : erg.typ === 'hypothese' ? <ErgebnisHypothese e={erg as LErgebnis} /> : <ErgebnisStrategie e={erg as LErgebnis} />)
+      {erg?.fazit && <FazitKarte f={erg.fazit} offen={detailsAuf} onUmschalten={() => setDetailsAuf((x) => !x)} />}
+      {erg ? ((!erg.fazit || detailsAuf) && (erg.typ === 'fremd' ? <ErgebnisFremd e={erg as LFErgebnis} /> : erg.typ === 'hypothese' ? <ErgebnisHypothese e={erg as LErgebnis} /> : <ErgebnisStrategie e={erg as LErgebnis} />))
         : !laeuft && <div className="karte leise">Noch kein Ergebnis aus der Zentrale – starte den Backtest{istFremd ? ' (oder trage unten ein Ergebnis aus dem Skill ein)' : ''}.</div>}
 
       <NotizenKarte i={i} speichern={meta} />
@@ -689,7 +699,8 @@ function ErgebnisStrategie({ e }: { e: LErgebnis }) {
         </div>
         {e.trichter && Object.keys(e.trichter).length > 0 && (
           <div className="leise" style={{ fontSize: 12.5, marginTop: 10 }}>
-            {Object.entries(e.trichter).map(([a, w]) => `${a === 'linien' ? 'GVA-Treffer' : a === 'bos' ? 'mit BOS' : a === 'einstieg' ? 'Einstieg erreicht' : a} ${w}`).join(' → ')}
+            {Object.entries(e.trichter).filter(([a]) => a !== 'ungueltig').map(([a, w]) => `${a === 'linien' ? 'GVA-Treffer' : a === 'bos' ? 'mit BOS' : a === 'einstieg' ? 'Einstieg erreicht' : a} ${w}`).join(' → ')}
+            {e.trichter.ungueltig ? ` · davon ${e.trichter.ungueltig} ungültig (Kurs schon weggelaufen)` : ''}
             {e.uebersprungen ? ` · ${e.uebersprungen} übersprungen (Position offen)` : ''} · Ø MFE {e.mfeMedian ?? '—'} R, MAE {e.maeMedian ?? '—'} R (Median)
           </div>
         )}

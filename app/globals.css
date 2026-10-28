@@ -947,6 +947,21 @@ button.szene-chip { font-family: inherit; line-height: inherit; }
 .lb-heat th { color: var(--muted); font-weight: 400; font-size: 11px; white-space: nowrap; }
 .lb-heat td small { display: block; color: var(--muted); font-size: 10px; }
 .lb-heat td.akt { outline: 2px solid var(--ink); outline-offset: -3px; }
+/* Fazit-Karte und «Erweitert» */
+.lb-fazit-kopf { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.lb-ampel { width: 14px; height: 14px; border-radius: 50%; flex: none; }
+.lb-fazit-satz { margin: 10px 0 14px; font-size: 14.5px; line-height: 1.5; max-width: 75ch; }
+.lb-fazit-zahlen { margin-bottom: 14px; }
+.lb-fazit-spalten { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px 28px; }
+.lb-fazit-h { margin: 0 0 6px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.lb-fazit-liste { margin: 0; padding-left: 18px; font-size: 13.5px; line-height: 1.5; }
+.lb-fazit-liste li { margin-bottom: 3px; }
+.lb-erweitert { background: var(--bg); border-radius: 16px; padding: 10px 14px; margin: 12px 0 4px; }
+.lb-erweitert summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.lb-erweitert summary small { font-weight: 400; color: var(--muted); font-size: 12.5px; }
+.lb-erweitert-inhalt { margin-top: 12px; }
+.lb-erweitert-inhalt .nw-feld input, .lb-erweitert-inhalt .nw-feld select, .lb-erweitert-inhalt .nw-feld textarea { background: #fff; }
+.lb-zeile-warnung { font-size: 12.5px; color: #8a5a00; margin-top: 2px; }
 .lb-details { background: var(--bg); border-radius: 14px; padding: 10px 14px; margin-top: 8px; font-size: 13.5px; }
 .lb-details summary { cursor: pointer; font-weight: 600; }
 .lb-details ul { margin: 8px 0 2px; padding-left: 18px; line-height: 1.5; color: var(--muted); }

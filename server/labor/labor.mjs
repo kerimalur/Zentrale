@@ -17,6 +17,7 @@ import { MAERKTE, REIHEN, ORTE, WETTER_GROESSEN, COT_MAERKTE, COT_GROESSEN, WEGE
 import { reiheHolen, reiheVorschau, eigeneReihen, csvZuPunkten, tagIso } from './fremd/quellen.mjs';
 import { bedingungenVorbereiten, ereignisseFinden } from './fremd/motor.mjs';
 import { ideeMd, zettelMd, sammlungMd, mdLesen, katalogNamen } from './fremd/markdown.mjs';
+import { fazitBauen, fazitKurz } from './fazit.mjs';
 
 const ordner = () => path.join(config.dataDir, 'labor');
 const JAHR = new Date().getUTCFullYear();
@@ -456,7 +457,11 @@ export function laborLauf(id) {
 }
 
 export function laborErgebnis(laufId) {
-  try { return JSON.parse(fs.readFileSync(path.join(ordner(), `${laufId}.json`), 'utf8')); } catch { return null; }
+  let e;
+  try { e = JSON.parse(fs.readFileSync(path.join(ordner(), `${laufId}.json`), 'utf8')); } catch { return null; }
+  // Fazit wird beim Laden gebaut (rechnet nichts neu), damit auch ältere Ergebnisse es bekommen
+  try { e.fazit = fazitBauen(e); } catch (err) { console.error('[labor] Fazit:', err.message); e.fazit = null; }
+  return e;
 }
 
 function yahooFallback(paare) {
@@ -553,6 +558,7 @@ async function naechster() {
         urteil: ergebnis.urteil, warum: ergebnis.warum, n: ergebnis.n, nUnabhaengig: ergebnis.nUnabhaengig,
         avgR: ergebnis.typ === 'fremd' ? null : ergebnis.kennzahlen?.avgR ?? null, quote: ergebnis.typ === 'fremd' ? hh?.quote ?? null : ergebnis.kennzahlen?.quote ?? null,
         mittelProzent: hh?.mittel ?? null, mehrwertProzent: hh?.mehrwert ?? null, dauerSek: ergebnis.dauerSek,
+        ...(() => { try { return fazitKurz({ ...ergebnis, karte: k, lauf: { id: lauf.id, art: lauf.art, v: lauf.v }, schonGesehen: lauf.art === 'forward' && Object.keys(i.forward || {}).some((x) => Number(x) < lauf.v) }); } catch { return {}; } })(),
       };
     }
     save();

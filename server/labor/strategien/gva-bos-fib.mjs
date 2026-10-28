@@ -7,6 +7,9 @@
 //      Einstieg mit Limit bei der Fib-Stufe (Standard 0,618), SL bei 100 %, TP bei −100 % (Ausdehnung).
 //      Das 0 %-Hoch wird bis zum Einstieg nachgeführt; eine Kerze, die ein neues Hoch macht, zählt erst ab der nächsten Kerze.
 //   4. Läuft der Preis vor dem Einstieg unter die 100 % oder endet das Fenster, verfällt das Setup.
+//   5. Ungültig: Läuft der Preis vor dem Einstieg schon weit in Trade-Richtung weg (Standard −40 %, gemessen an der Spanne
+//      beim BOS: 0 % − 0,4 × Spanne), war der Zug ohne uns und das Setup zählt nicht mehr. Ein Hoch, das in derselben Kerze
+//      wie die Zone liegt, gilt als zuerst gelaufen (vorsichtig, wie beim Stop-Loss). Abschaltbar.
 import { param } from '../bausteine.mjs';
 import { swings } from '../indikatoren.mjs';
 import { handelstagNr } from '../daten.mjs';
@@ -29,7 +32,9 @@ export default {
     auswahl('fib', 'Einstieg bei Fib', '0.618', [{ wert: '0.5', text: '0,5' }, { wert: '0.618', text: '0,618' }, { wert: '0.705', text: '0,705' }, { wert: '0.786', text: '0,786' }]),
     zahl('sl', 'Stop-Loss bei Fib', 1, 1, 1.5, 0.05, '1 = 100 % (das Tief vor dem BOS)'),
     zahl('tp', 'Take-Profit bei Fib', -1, -3, 0, 0.1, '−1 = −100 % (Ausdehnung über das Hoch)'),
-    auswahl('verfall', 'Setup verfällt', 'fenster', [{ wert: 'fenster', text: 'am Ende des Zeitfensters' }, { wert: 'tag', text: 'am Ende des BOS-Tages' }, { wert: 'nie', text: 'erst wenn die 100 % brechen' }]),
+    schalter('ungueltigAn', 'Setup ungültig, wenn der Kurs schon weg ist', true, 'Der Kurs läuft vor dem Einstieg über die 0 %-Marke hinaus in Trade-Richtung: der Zug fand ohne Einstieg statt.'),
+    zahl('ungueltig', 'Ungültig bei Fib', -0.4, -1.5, -0.1, 0.05, '−0,4 = −40 %, gemessen an der Spanne beim BOS. Die Break-Even-Marke (z. B. −27 %) liegt davor.'),
+    auswahl('verfall', 'Setup verfällt','fenster', [{ wert: 'fenster', text: 'am Ende des Zeitfensters' }, { wert: 'tag', text: 'am Ende des BOS-Tages' }, { wert: 'nie', text: 'erst wenn die 100 % brechen' }]),
   ],
   // Nachbar-Parameter für den Robustheits-Check (kein Aussuchen!)
   nachbarn(p) {
@@ -47,7 +52,7 @@ export default {
     const sw = ctx.merke(`swings-${p.swingTf}-${p.swingN}`, () => swings(z, p.swingN));
     const D = ctx.tag().D, dIdx = ctx.tag().idx;
     const fib = Number(p.fib);
-    const trichter = { linien: 0, bos: 0, einstieg: 0 };
+    const trichter = { linien: 0, bos: 0, einstieg: 0, ungueltig: 0 };
     const out = [];
 
     for (const L of ctx.linien(p.tfs)) {
@@ -89,9 +94,16 @@ export default {
       for (let i = iLo; i <= iB; i++) { if (lang ? basis.h[i] > hi : basis.l[i] < hi) hi = lang ? basis.h[i] : basis.l[i]; }
       const verfall = p.verfall === 'fenster' ? iEnde : p.verfall === 'tag' ? D.en[dIdx[iB]] : basis.n - 1;
 
+      // Ungültig-Marke: fest an der Spanne beim BOS (hi/lo am Ende der BOS-Kerze), nicht am nachgeführten Hoch
+      const ungueltigPreis = p.ungueltigAn ? hi - p.ungueltig * (hi - lo) : null;
+
       for (let i = iB + 1; i <= verfall && i < basis.n; i++) {
         const spanne = hi - lo; // bei Short negativ
         const limit = hi - fib * spanne;
+        if (ungueltigPreis !== null && (lang ? basis.h[i] >= ungueltigPreis : basis.l[i] <= ungueltigPreis)) {
+          if (zaehlt) trichter.ungueltig++;
+          break; // schon in Trade-Richtung weggelaufen, bevor die Zone erreicht wurde
+        }
         const bruch = lang ? basis.l[i] < lo : basis.h[i] > lo;
         const gefuellt = lang ? basis.l[i] <= limit : basis.h[i] >= limit;
         if (gefuellt) {
