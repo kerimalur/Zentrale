@@ -13,14 +13,22 @@ import { PAARE, tradingEinstellungen, tradingDaten } from '../trading.mjs';
 import { EREIGNISSE, FILTER, EREIGNIS, FILTER_ID } from './bausteine.mjs';
 import { STRATEGIEN, STRATEGIE } from './strategien/index.mjs';
 import { TF_LISTE, TF_TEXT } from './daten.mjs';
+import { MAERKTE, REIHEN, ORTE, WETTER_GROESSEN, COT_MAERKTE, COT_GROESSEN, WEGE, FALLEN, LEITFRAGEN, GRUPPEN, standardVerzoegerung } from './fremd/katalog.mjs';
+import { reiheHolen, reiheVorschau, eigeneReihen, csvZuPunkten, tagIso } from './fremd/quellen.mjs';
+import { bedingungenVorbereiten, ereignisseFinden } from './fremd/motor.mjs';
+import { ideeMd, zettelMd, sammlungMd, mdLesen, katalogNamen } from './fremd/markdown.mjs';
 
 const ordner = () => path.join(config.dataDir, 'labor');
 const JAHR = new Date().getUTCFullYear();
 const ERSTES_JAHR = 2003;
+const ERSTES_JAHR_FREMD = 1950;
+const isoZuTag = (d) => Math.floor(Date.parse(`${d}T00:00:00Z`) / 86_400_000);
 
 function lab() {
   const d = db();
   d.labor ||= { ideen: [], laeufe: [] };
+  d.labor.zettel ||= [];
+  d.labor.reihen ||= [];
   return d.labor;
 }
 
@@ -38,26 +46,103 @@ export const VORLAGEN = [
   { id: 'donchian', name: 'Klassiker: Donchian-Ausbruch', karte: { typ: 'strategie', name: 'Donchian 20 Tage', modell: 'donchian', parameter: {}, filter: [], mechanismus: 'Trends laufen weiter.', erwartung: 'Ausbruch in Richtung des Ausbruchs', erfolgskriterium: ERFOLG_STD } },
   { id: 'eigen', name: 'Eigene Regel (leer)', karte: { typ: 'strategie', name: 'Neue Regel', modell: 'baukasten', parameter: { tf: '1H' }, ereignisse: [], filter: [], mechanismus: '', erwartung: '', erfolgskriterium: ERFOLG_STD } },
   { id: 'eigen-h', name: 'Eigene Hypothese (leer)', karte: { typ: 'hypothese', name: 'Neue Hypothese', tf: 'D', richtung: 'beide', nurNeu: true, ereignisse: [], filter: [], horizonte: [1, 5, 10], hauptHorizont: 5, mechanismus: '', erwartung: '', erfolgskriterium: 'Mehrwert über Saison und Zufall, p < 0,05 nach Bonferroni, beide Hälften, Forward hält.' } },
+  // Fremddaten-Hypothesen (Rohstoffe, Wetter, Krieg, Makro …) nach dem Skill «hypothese-testen»
+  ...fremdVorlagen(),
 ];
+function fremdVorlagen() {
+  const ERFOLG_F = 'Mehrwert über der Saison > 0, p < 0,05 nach Bonferroni, beide Hälften gleiche Richtung, Pseudo-Forward hält.';
+  const basis = { typ: 'fremd', modus: 'bedingung', start: 'beginn', warten: 0, geplanteVarianten: 1, erfolgskriterium: ERFOLG_F, backtest: { von: 1990, bis: 2022 }, forward: { von: 2023 }, wege: [] };
+  const b = (reihe, agg, mess, vergleich, schwelle) => ({ reihe, verz: standardVerzoegerung(reihe), agg, diff: 0, mess, vergleich, schwelle });
+  return [
+    { id: 'f-gas', name: 'Fremddaten: Kältewelle → Erdgas short', karte: { ...basis, name: 'Kältewelle → Erdgas danach short', richtung: 'short', warten: 14, horizonte: [30, 61, 91], hauptHorizont: 61, saison: { von: '11-01', bis: '03-15' }, backtest: { von: 1996, bis: 2022 },
+      kette: { ereignis: 'Kältewelle startet (Heizgradtage 7 Tage > 1 Std.-Abw. über 10 Vorjahren)', mechanismus: 'Nachfrage-Spitze ist schnell eingepreist, danach normalisiert sie sich', wirkung: 'Erdgas fällt nach der Kälte', markt: 'Erdgas-Future rollend, UNG', zeitraum: '14 Tage warten, 61 Tage halten' },
+      bedingungen: [b('nasa:us-gas:HDD', { art: 'rollend', tage: 7, fn: 'summe' }, { art: 'anomalie', vorjahre: 10, fenster: 7, perioden: 1 }, '>', 1)],
+      maerkte: [{ id: 'roll:gas' }, { id: 'yahoo:UNG' }], mechanismus: 'Kälte erhöht die Nachfrage kurzfristig, der Preis steigt schon während der Kälte. Danach fällt die Nachfrage wieder.', erwartung: 'Erdgas ist 2 Monate nach dem Beginn einer Kältewelle tiefer als der gleiche Kalendertag in anderen Jahren.', wege: ['spiegel', 'querschnitt', 'dosis'] } },
+    { id: 'f-gpr', name: 'Fremddaten: Geopolitik-Schock → Gold long', karte: { ...basis, name: 'Geopolitischer Schock → Gold steigt', richtung: 'long', horizonte: [5, 20, 60], hauptHorizont: 20, backtest: { von: 2001, bis: 2022 },
+      kette: { ereignis: 'GPR (7 Tage) springt > 2 z-Werte über das letzte Jahr', mechanismus: 'Angst-Kanal: Flucht in sichere Häfen', wirkung: 'Gold steigt', markt: 'Gold-Future, GLD', zeitraum: '20 Tage' },
+      bedingungen: [b('gpr:GPRD', { art: 'rollend', tage: 7, fn: 'mittel' }, { art: 'zscore', perioden: 250, vorjahre: 10, fenster: 7 }, '>', 2)],
+      maerkte: [{ id: 'yahoo:GC=F' }, { id: 'yahoo:GLD' }], mechanismus: 'Bei Krieg und Terror fliehen Anleger in sichere Häfen.', erwartung: 'Gold ist 20 Tage nach einem Sprung des GPR-Index höher als zu gleichen Kalendertagen.', wege: ['querschnitt', 'spiegel'] } },
+    { id: 'f-mais', name: 'Fremddaten: Trockener Sommer → Mais long', karte: { ...basis, name: 'Trockener Sommer im Maisgürtel → Mais steigt', richtung: 'long', horizonte: [14, 30, 60], hauptHorizont: 30, saison: { von: '06-01', bis: '08-15' }, backtest: { von: 2001, bis: 2022 },
+      kette: { ereignis: 'Regen 30 Tage deutlich unter den 10 Vorjahren', mechanismus: 'Ernte-Erwartung sinkt', wirkung: 'Mais steigt', markt: 'Mais-Future', zeitraum: '30 Tage' },
+      bedingungen: [b('nasa:us-mais:PRECTOTCORR', { art: 'rollend', tage: 30, fn: 'summe' }, { art: 'anomalie', vorjahre: 10, fenster: 10, perioden: 1 }, '<', -1)],
+      maerkte: [{ id: 'yahoo:ZC=F' }], mechanismus: 'Trockenheit in der Blütezeit senkt den Ertrag.', erwartung: 'Mais ist 30 Tage nach Beginn einer Trockenphase höher als üblich.', wege: ['spiegel', 'querschnitt', 'kette'] } },
+    { id: 'f-oni', name: 'Fremddaten: El Niño → Kakao long', karte: { ...basis, name: 'El Niño → Kakao steigt', richtung: 'long', horizonte: [30, 91, 182], hauptHorizont: 91, backtest: { von: 1990, bis: 2022 },
+      kette: { ereignis: 'ONI steigt über 1,0', mechanismus: 'Trockenheit in Westafrika', wirkung: 'Kakao-Ernte sinkt, Preis steigt', markt: 'Kakao-Future', zeitraum: '3 Monate' },
+      bedingungen: [b('oni', { art: 'roh' }, { art: 'wert', perioden: 1, vorjahre: 10, fenster: 7 }, '>', 1)],
+      maerkte: [{ id: 'yahoo:CC=F' }], mechanismus: 'El Niño bringt Westafrika Trockenheit.', erwartung: 'Kakao ist 3 Monate nach El-Niño-Beginn höher.', wege: ['historie', 'kette'] } },
+    { id: 'f-liste', name: 'Fremddaten: Eigene Ereignis-Liste (z. B. Kriegsbeginne)', karte: { ...basis, name: 'Kriegsbeginn → Öl steigt', modus: 'liste', richtung: 'long', warten: 1, horizonte: [5, 20, 60], hauptHorizont: 20,
+      kette: { ereignis: 'Beginn eines Kriegs mit Öl-Bezug', mechanismus: 'Angebotsangst', wirkung: 'Öl steigt', markt: 'WTI rollend', zeitraum: '20 Tage' },
+      liste: [{ datum: '1990-08-02', text: 'Irak besetzt Kuwait' }, { datum: '2003-03-20', text: 'Irak-Krieg' }, { datum: '2011-02-17', text: 'Libyen' }, { datum: '2014-02-27', text: 'Krim' }, { datum: '2022-02-24', text: 'Ukraine' }],
+      maerkte: [{ id: 'roll:oel' }], mechanismus: 'Kriege in Förderregionen bedrohen das Angebot.', erwartung: 'Öl ist 20 Tage nach Kriegsbeginn höher.', wege: ['querschnitt'] } },
+    { id: 'f-leer', name: 'Fremddaten: Leere Vorlage (eigene Daten und Märkte)', karte: { ...basis, name: 'Neue Fremddaten-Hypothese', richtung: 'long', horizonte: [7, 30, 60], hauptHorizont: 30, bedingungen: [], maerkte: [], mechanismus: '', erwartung: '', kette: {} } },
+  ];
+}
+
 export function laborBausteine() {
   return {
     strategien: STRATEGIEN.map(meta), ereignisse: EREIGNISSE.map(meta), filter: FILTER.map(meta),
     paare: PAARE, zeitrahmen: TF_LISTE.map((t) => ({ wert: t, text: TF_TEXT[t] })), vorlagen: VORLAGEN, jahre: { von: ERSTES_JAHR, bis: JAHR },
+    fremd: {
+      maerkte: [...MAERKTE, ...PAARE.map((p) => ({ id: `fx:${p}`, name: `${p} (Kursdaten der Zentrale)`, gruppe: 'Devisen', handelbar: true, kosten: 0.02 }))],
+      gruppen: GRUPPEN, reihen: REIHEN, orte: Object.entries(ORTE).map(([id, o]) => ({ id, name: o.name, orte: o.orte.map((x) => x[0]) })),
+      wetterGroessen: WETTER_GROESSEN, cotMaerkte: COT_MAERKTE.map(([wert, text]) => ({ wert, text })), cotGroessen: COT_GROESSEN,
+      wege: WEGE, fallen: FALLEN, leitfragen: LEITFRAGEN, jahre: { von: ERSTES_JAHR_FREMD, bis: JAHR },
+      eigene: eigeneReihen().map((r) => ({ id: r.id, name: r.name, n: r.punkte.length, von: r.punkte.length ? tagIso(r.punkte[0][0]) : null, bis: r.punkte.length ? tagIso(r.punkte[r.punkte.length - 1][0]) : null, quelle: r.quelle || '' })),
+      verzoegerung: Object.fromEntries(REIHEN.map((r) => [r.id, r.verz])),
+    },
   };
 }
 
 // ---------- Vorab-Karte prüfen ----------
 const text = (v, max = 600) => String(v ?? '').trim().slice(0, max);
-const jahrIn = (v, std) => { const j = Math.round(Number(v)); return Number.isFinite(j) ? Math.min(JAHR, Math.max(ERSTES_JAHR, j)) : std; };
 const bausteinListe = (liste, katalog) => (Array.isArray(liste) ? liste : []).filter((x) => x && katalog[x.id]).slice(0, 12).map((x) => ({ id: x.id, p: typeof x.p === 'object' && x.p ? x.p : {} }));
 
+export const REIHE_RE = /^(fred:[A-Z0-9_]{2,40}|yahoo:[A-Z0-9.^=-]{1,20}|nasa:[a-z0-9_.~-]{2,200}:[A-Z0-9_]{2,15}|oni|gpr:[A-Z0-9_]{2,15}|eia:(ng|pet)\/hist_xls\/[A-Za-z0-9_]{3,40}|cot:\d{6}:[a-z]{4,12}|fx:[A-Z]{6}|roll:(gas|oel)|eigene:[0-9a-f-]{36})$/i;
+const zahlIn = (v, min, max, std) => { const n = Number(v); return v !== '' && v !== null && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : std; };
+const mmdd = (s) => (/^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(String(s || '')) ? s : null);
+
+function fremdNormal(k, out) {
+  out.modus = k.modus === 'liste' ? 'liste' : 'bedingung';
+  out.richtung = k.richtung === 'short' ? 'short' : 'long';
+  out.start = k.start === 'jede' ? 'jede' : 'beginn';
+  const sv = mmdd(k.saison?.von), sb = mmdd(k.saison?.bis);
+  out.saison = sv && sb ? { von: sv, bis: sb } : null;
+  out.warten = Math.round(zahlIn(k.warten, 0, 365, 0));
+  const h = [...new Set((Array.isArray(k.horizonte) ? k.horizonte : [7, 30, 60]).map((x) => Math.round(Number(x))).filter((x) => x >= 1 && x <= 730))].sort((a, b) => a - b).slice(0, 6);
+  out.horizonte = h.length ? h : [7, 30, 60];
+  out.hauptHorizont = out.horizonte.includes(Number(k.hauptHorizont)) ? Number(k.hauptHorizont) : out.horizonte[Math.min(1, out.horizonte.length - 1)];
+  out.bedingungen = (Array.isArray(k.bedingungen) ? k.bedingungen : []).filter((b) => b && REIHE_RE.test(String(b.reihe || ''))).slice(0, 4).map((b) => ({
+    reihe: String(b.reihe), verz: Math.round(zahlIn(b.verz, 0, 120, standardVerzoegerung(String(b.reihe)))),
+    agg: { art: ['roh', 'rollend', 'woche', 'monat'].includes(b.agg?.art) ? b.agg.art : 'roh', tage: Math.round(zahlIn(b.agg?.tage, 1, 365, 7)), fn: ['mittel', 'summe', 'min', 'max'].includes(b.agg?.fn) ? b.agg.fn : 'mittel' },
+    diff: Math.round(zahlIn(b.diff, 0, 52, 0)),
+    mess: { art: ['wert', 'aenderung', 'aenderungProzent', 'anomalie', 'zscore', 'perzentil'].includes(b.mess?.art) ? b.mess.art : 'wert', perioden: Math.round(zahlIn(b.mess?.perioden, 1, 520, 12)), vorjahre: Math.round(zahlIn(b.mess?.vorjahre, 2, 40, 10)), fenster: Math.round(zahlIn(b.mess?.fenster, 0, 60, 7)) },
+    vergleich: b.vergleich === '<' ? '<' : '>', schwelle: zahlIn(b.schwelle, -1e12, 1e12, 0),
+  }));
+  out.liste = (Array.isArray(k.liste) ? k.liste : []).map((x) => ({
+    datum: /^\d{4}-\d{2}-\d{2}$/.test(String(x?.datum || '')) && Number.isFinite(isoZuTag(x.datum)) ? x.datum : null, text: text(x?.text, 120),
+    seite: x?.seite === -1 || x?.seite === 'short' ? -1 : x?.seite === 1 || x?.seite === 'long' ? 1 : null,
+  })).filter((x) => x.datum).sort((a, b) => (a.datum < b.datum ? -1 : 1)).slice(0, 1000);
+  const gesehen = new Set();
+  out.maerkte = (Array.isArray(k.maerkte) ? k.maerkte : []).filter((m) => m && REIHE_RE.test(String(m.id || '')) && !gesehen.has(m.id) && gesehen.add(m.id)).slice(0, 8).map((m) => {
+    const kat = MAERKTE.find((x) => x.id === m.id);
+    return { id: String(m.id), kosten: zahlIn(m.kosten, 0, 10, kat?.kosten ?? (String(m.id).startsWith('fx:') ? 0.02 : 0.05)), handelbar: m.handelbar !== undefined ? !!m.handelbar : kat ? kat.handelbar : true };
+  });
+  out.stufe2 = k.stufe2?.aktiv ? { aktiv: true, modell: ['woche', 'ausbruch', 'ruecksetzer'].includes(k.stufe2.modell) ? k.stufe2.modell : 'ausbruch', n: Math.round(zahlIn(k.stufe2.n, 2, 60, 10)), halten: Math.round(zahlIn(k.stufe2.halten, 1, 60, 5)) } : null;
+  const kt = k.kette || {};
+  out.kette = { ereignis: text(kt.ereignis, 200), mechanismus: text(kt.mechanismus, 200), wirkung: text(kt.wirkung, 200), markt: text(kt.markt, 200), zeitraum: text(kt.zeitraum, 200) };
+  out.bekanntAb = text(k.bekanntAb, 300);
+  out.wege = (Array.isArray(k.wege) ? k.wege : []).filter((w) => WEGE.some((x) => x.id === w));
+}
+
 export function karteNormal(k = {}) {
-  const typ = k.typ === 'hypothese' ? 'hypothese' : 'strategie';
-  const btVon = jahrIn(k.backtest?.von, ERSTES_JAHR);
+  const typ = k.typ === 'hypothese' ? 'hypothese' : k.typ === 'fremd' ? 'fremd' : 'strategie';
+  const erstes = typ === 'fremd' ? ERSTES_JAHR_FREMD : ERSTES_JAHR;
+  const jahrIn = (v, std) => { const j = Math.round(Number(v)); return Number.isFinite(j) ? Math.min(JAHR, Math.max(erstes, j)) : std; };
+  const btVon = jahrIn(k.backtest?.von, typ === 'fremd' ? 1990 : ERSTES_JAHR);
   const btBis = Math.max(btVon, jahrIn(k.backtest?.bis, Math.min(2022, JAHR - 1)));
   const fwVon = Math.min(JAHR, Math.max(btBis + 1, jahrIn(k.forward?.von, btBis + 1)));
   const out = {
-    typ, name: text(k.name, 80) || (typ === 'hypothese' ? 'Neue Hypothese' : 'Neue Strategie'),
+    typ, name: text(k.name, 80) || (typ === 'strategie' ? 'Neue Strategie' : 'Neue Hypothese'),
     beschreibung: text(k.beschreibung), mechanismus: text(k.mechanismus), erwartung: text(k.erwartung, 300), erfolgskriterium: text(k.erfolgskriterium, 400),
     geplanteVarianten: Math.min(100, Math.max(1, Math.round(Number(k.geplanteVarianten) || 1))),
     paare: Array.isArray(k.paare) ? k.paare.filter((p) => PAARE.includes(p)) : [],
@@ -68,9 +153,15 @@ export function karteNormal(k = {}) {
     out.modell = STRATEGIE[k.modell] ? k.modell : 'baukasten';
     out.parameter = typeof k.parameter === 'object' && k.parameter ? k.parameter : {};
     if (STRATEGIE[out.modell].mitEreignissen) out.ereignisse = bausteinListe(k.ereignisse, EREIGNIS);
-    if (k.bias && Array.isArray(k.bias.ereignisse) && k.bias.ereignisse.length) {
+    if (k.bias?.quelle === 'fremd' && typeof k.bias.idee === 'string' && k.bias.idee) {
+      // Bias aus einer Fremddaten-Hypothese: Fenster = Ereignis bekannt + Wartezeit bis + tage Kalendertage
+      out.bias = { quelle: 'fremd', idee: k.bias.idee.slice(0, 40), richtung: ['long', 'short', 'beide'].includes(k.bias.richtung) ? k.bias.richtung : 'beide', tage: Math.min(365, Math.max(1, Math.round(Number(k.bias.tage) || 30))), ereignisse: [] };
+    } else if (k.bias && Array.isArray(k.bias.ereignisse) && k.bias.ereignisse.length) {
       out.bias = { tf: TF_LISTE.includes(k.bias.tf) ? k.bias.tf : 'D', richtung: ['long', 'short', 'beide'].includes(k.bias.richtung) ? k.bias.richtung : 'beide', tage: Math.min(60, Math.max(1, Math.round(Number(k.bias.tage) || 5))), ereignisse: bausteinListe(k.bias.ereignisse, EREIGNIS) };
     }
+  } else if (typ === 'fremd') {
+    delete out.paare; delete out.filter;
+    fremdNormal(k, out);
   } else {
     out.tf = TF_LISTE.includes(k.tf) ? k.tf : 'D';
     out.richtung = ['long', 'short', 'beide'].includes(k.richtung) ? k.richtung : 'beide';
@@ -97,6 +188,7 @@ function ideeKurz(i) {
     id: i.id, name: v.karte.name, typ: v.karte.typ, version: v.v, eingefroren: !!v.eingefroren, erstellt: i.erstellt, geaendert: i.geaendert,
     varianten: varianten(i), forwardOffen: !!i.forward?.[v.v], forwardGeoeffnet: i.forward || {},
     lauf: letzter, ergebnis: letzterFertig ? { lauf: letzterFertig.id, v: letzterFertig.v, art: letzterFertig.art, ...letzterFertig.kurz } : null,
+    tags: i.tags || [], extern: i.extern?.length ? i.extern[i.extern.length - 1] : null, maerkte: v.karte.typ === 'fremd' ? (v.karte.maerkte || []).map((m) => m.id) : null,
   };
 }
 
@@ -108,7 +200,160 @@ export function laborListe() {
 export function laborIdee(id) {
   const i = lab().ideen.find((x) => x.id === id);
   if (!i) return null;
-  return { ...ideeKurz(i), versionen: i.versionen, laeufe: lab().laeufe.filter((l) => l.idee === id).slice(-30) };
+  return { ...ideeKurz(i), versionen: i.versionen, laeufe: lab().laeufe.filter((l) => l.idee === id).slice(-30), notizen: i.notizen || '', externAlle: i.extern || [], zettel: i.zettel || null };
+}
+
+// Notizen, Stichworte und Skill-Ergebnisse ändern – ohne neue Version (gehören nicht zur Vorab-Karte)
+const tagsNormal = (t) => [...new Set((Array.isArray(t) ? t : String(t || '').split(',')).map((x) => text(x, 30).toLowerCase()).filter(Boolean))].slice(0, 12);
+function externNormal(x) {
+  const s = (v, m) => text(v, m);
+  return { id: s(x.id, 40) || crypto.randomUUID(), datum: s(x.datum, 20) || jetztIso().slice(0, 10), urteil: ['Bestätigt', 'Hinweis', 'Nicht bestätigt', 'Zu wenig Daten'].includes(x.urteil) ? x.urteil : null, stufe: s(x.stufe, 60), kernzahl: s(x.kernzahl, 300), link: /^https?:\/\//.test(String(x.link || '')) ? s(x.link, 300) : '', text: s(x.text, 1500), n: Number.isFinite(Number(x.n)) && x.n !== null ? Number(x.n) : null, nUnabhaengig: Number.isFinite(Number(x.nUnabhaengig)) && x.nUnabhaengig !== null ? Number(x.nUnabhaengig) : null };
+}
+export function laborIdeeMeta(b) {
+  const i = lab().ideen.find((x) => x.id === b.id);
+  if (!i) return null;
+  if (b.notizen !== undefined) i.notizen = text(b.notizen, 20_000);
+  if (b.tags !== undefined) i.tags = tagsNormal(b.tags);
+  if (Array.isArray(b.extern)) i.extern = b.extern.slice(0, 50).map(externNormal);
+  i.geaendert = jetztIso();
+  save();
+  return laborIdee(i.id);
+}
+export function laborIdeeKopieren(id) {
+  const i = lab().ideen.find((x) => x.id === id);
+  if (!i) return null;
+  const k = structuredClone(aktuelle(i).karte);
+  k.name = `${k.name} (Kopie)`.slice(0, 80);
+  const neu = laborIdeeSpeichern({ karte: k });
+  return laborIdeeMeta({ id: neu.id, tags: i.tags || [], notizen: i.notizen || '' });
+}
+
+// ---------- Brainstorm-Zettel ----------
+const ZSTATUS = ['roh', 'ausgearbeitet', 'getestet', 'verworfen'];
+function zettelNormal(z, alt = {}) {
+  const kt = z.kette || {};
+  return {
+    id: alt.id || crypto.randomUUID(), erstellt: alt.erstellt || jetztIso(), geaendert: jetztIso(),
+    titel: text(z.titel, 120) || 'Neue Idee', text: text(z.text, 5000), tags: tagsNormal(z.tags), status: ZSTATUS.includes(z.status) ? z.status : 'roh',
+    kette: { ereignis: text(kt.ereignis, 300), mechanismus: text(kt.mechanismus, 300), wirkung: text(kt.wirkung, 300), markt: text(kt.markt, 300), zeitraum: text(kt.zeitraum, 300) },
+    spiegel: text(z.spiegel, 1000), fragen: text(z.fragen, 3000), quellen: text(z.quellen, 1500), wege: (Array.isArray(z.wege) ? z.wege : []).filter((w) => WEGE.some((x) => x.id === w)),
+    links: (Array.isArray(z.links) ? z.links : []).map((x) => text(x, 40)).filter(Boolean).slice(0, 20), idee: typeof z.idee === 'string' ? z.idee.slice(0, 40) : alt.idee || null,
+    farbe: ['gelb', 'blau', 'gruen', 'rot', 'grau'].includes(z.farbe) ? z.farbe : alt.farbe || 'gelb',
+  };
+}
+export function laborZettel() { return { zettel: [...lab().zettel].sort((a, b) => (b.geaendert > a.geaendert ? 1 : -1)) }; }
+export function laborZettelSpeichern(b) {
+  const l = lab();
+  const alt = b.id ? l.zettel.find((x) => x.id === b.id) : null;
+  const z = zettelNormal(b, alt || {});
+  if (alt) Object.assign(alt, z); else l.zettel.push(z);
+  if (l.zettel.length > 2000) l.zettel.splice(0, l.zettel.length - 2000);
+  save();
+  return alt || z;
+}
+export function laborZettelLoeschen(id) {
+  const l = lab();
+  const i = l.zettel.findIndex((x) => x.id === id);
+  if (i < 0) return false;
+  l.zettel.splice(i, 1);
+  for (const z of l.zettel) z.links = (z.links || []).filter((x) => x !== id);
+  save();
+  return true;
+}
+
+// ---------- Eigene Datenreihen (CSV einfügen) ----------
+export function laborReiheSpeichern(b) {
+  const l = lab();
+  const punkte = csvZuPunkten(b.csv);
+  if (punkte.length < 10) return { fehler: 'Zu wenige Werte erkannt (mindestens 10 Zeilen «Datum;Wert»)' };
+  const alt = b.id ? l.reihen.find((x) => x.id === b.id) : null;
+  const r = { id: alt?.id || crypto.randomUUID(), name: text(b.name, 80) || 'Eigene Reihe', quelle: text(b.quelle, 200), punkte: punkte.slice(-60_000), geaendert: jetztIso() };
+  if (alt) Object.assign(alt, r); else l.reihen.push(r);
+  save();
+  return { ok: true, id: r.id, n: r.punkte.length, von: tagIso(r.punkte[0][0]), bis: tagIso(r.punkte[r.punkte.length - 1][0]) };
+}
+export function laborReiheLoeschen(id) {
+  const l = lab();
+  const n = l.reihen.length;
+  l.reihen = l.reihen.filter((x) => x.id !== id);
+  save();
+  return l.reihen.length < n;
+}
+export async function laborReiheVorschau(id) {
+  if (!REIHE_RE.test(String(id || ''))) return { fehler: 'Ungültige Reihe' };
+  try { return await reiheVorschau(id); } catch (err) { return { fehler: err.message }; }
+}
+
+// ---------- Markdown ----------
+function letztesErgebnis(i) {
+  const fertig = [...lab().laeufe].reverse().find((x) => x.idee === i.id && x.status === 'fertig');
+  return fertig ? laborErgebnis(fertig.id) : null;
+}
+export function laborExport({ ideen = [], zettel = [] } = {}) {
+  const l = lab();
+  const namen = katalogNamen(laborBausteine());
+  const teile = [];
+  for (const id of ideen) { const i = l.ideen.find((x) => x.id === id); if (i) teile.push({ name: aktuelle(i).karte.name, md: ideeMd(i, letztesErgebnis(i), namen) }); }
+  for (const id of zettel) { const z = l.zettel.find((x) => x.id === id); if (z) teile.push({ name: z.titel, md: zettelMd(z) }); }
+  if (!teile.length) return { fehler: 'Nichts ausgewählt' };
+  const datei = (s) => s.toLowerCase().replace(/[äöü]/g, (c) => ({ ä: 'ae', ö: 'oe', ü: 'ue' }[c])).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'labor';
+  const heute = jetztIso().slice(0, 10);
+  if (teile.length === 1) return { datei: `${heute}-${datei(teile[0].name)}.md`, md: teile[0].md };
+  return { datei: `${heute}-labor-sammlung.md`, md: sammlungMd(teile.map((t) => t.md), `Labor-Export (${teile.length})`) };
+}
+
+// Import: erst Vorschau (was erkannt wurde), dann mit «uebernehmen» anlegen.
+// Ideen mit bekannter id werden als neue Version gespeichert (bestehende Läufe bleiben), sonst neu angelegt.
+// Skill-Ergebnisse werden der Idee mit gleicher id oder gleichem Namen zugeordnet; sonst einem neuen Zettel.
+// zuordnung: { e0: ideeId | 'zettel' } – Skill-Ergebnisse von Hand einer Idee zuordnen
+const gleicheKarte = (a, b) => JSON.stringify(karteNormal(a)) === JSON.stringify(karteNormal(b));
+export function laborImport({ text: t, uebernehmen = false, auswahl = null, zuordnung = {} }) {
+  const l = lab();
+  const r = mdLesen(String(t || '').slice(0, 2_000_000));
+  const ideeZiel = (x) => {
+    const i = x.id && l.ideen.find((y) => y.id === x.id);
+    if (!i) return 'neu';
+    return gleicheKarte(aktuelle(i).karte, x.karte || {}) ? 'unverändert' : aktuelle(i).eingefroren ? 'neue Version' : 'Entwurf ersetzen';
+  };
+  const eintraege = [
+    ...r.ideen.map((x, n) => ({ nr: `i${n}`, art: 'idee', name: x.karte?.name || 'Idee', typ: x.karte?.typ, ziel: ideeZiel(x) })),
+    ...r.zettel.map((x, n) => ({ nr: `z${n}`, art: 'zettel', name: x.titel || 'Zettel', ziel: x.id && l.zettel.some((y) => y.id === x.id) ? 'aktualisieren' : 'neu' })),
+    ...r.ergebnisse.map((x, n) => {
+      const hand = zuordnung?.[`e${n}`];
+      const idee = hand === 'zettel' ? null : (hand && l.ideen.find((y) => y.id === hand)) || (x.id && l.ideen.find((y) => y.id === x.id)) || l.ideen.find((y) => aktuelle(y).karte.name.toLowerCase() === (x.name || '').toLowerCase());
+      return { nr: `e${n}`, art: 'ergebnis', name: x.name || 'Ergebnis', urteil: x.urteil, kernzahl: x.kernzahl, link: x.link, ziel: idee ? `zu «${aktuelle(idee).karte.name}»` : 'als Zettel', ideeId: idee?.id || null };
+    }),
+  ];
+  if (!uebernehmen) return { eintraege, warnungen: r.warnungen };
+  const nimm = (nr) => !Array.isArray(auswahl) || auswahl.includes(nr);
+  const angelegt = { ideen: 0, zettel: 0, ergebnisse: 0 };
+  r.ideen.forEach((x, n) => {
+    if (!nimm(`i${n}`) || !x.karte) return;
+    const vorhanden = x.id && l.ideen.find((y) => y.id === x.id);
+    if (vorhanden && gleicheKarte(aktuelle(vorhanden).karte, x.karte)) { laborIdeeMeta({ id: vorhanden.id, tags: x.tags?.length ? x.tags : vorhanden.tags, notizen: x.notizen || vorhanden.notizen }); angelegt.ideen++; return; }
+    const neu = laborIdeeSpeichern({ id: vorhanden ? x.id : undefined, karte: x.karte });
+    laborIdeeMeta({ id: neu.id, tags: x.tags, notizen: x.notizen });
+    angelegt.ideen++;
+  });
+  r.zettel.forEach((x, n) => {
+    if (!nimm(`z${n}`)) return;
+    const vorhanden = x.id && l.zettel.some((y) => y.id === x.id);
+    laborZettelSpeichern({ ...x, id: vorhanden ? x.id : undefined });
+    angelegt.zettel++;
+  });
+  r.ergebnisse.forEach((x, n) => {
+    if (!nimm(`e${n}`)) return;
+    const e = eintraege.find((y) => y.nr === `e${n}`);
+    if (e?.ideeId) { const i = l.ideen.find((y) => y.id === e.ideeId); i.extern = [...(i.extern || []), externNormal(x)].slice(-50); i.geaendert = jetztIso(); }
+    else {
+      const z = l.zettel.find((y) => y.titel.toLowerCase() === (x.name || '').toLowerCase()) || laborZettelSpeichern({ titel: x.name || 'Skill-Ergebnis', status: 'getestet' });
+      z.status = 'getestet';
+      z.text = `${z.text ? `${z.text}\n\n` : ''}Skill-Ergebnis ${x.datum}: ${x.urteil || '—'}${x.kernzahl ? ` · ${x.kernzahl}` : ''}${x.link ? ` · ${x.link}` : ''}${x.text ? `\n${x.text}` : ''}`.slice(0, 5000);
+    }
+    angelegt.ergebnisse++;
+  });
+  save();
+  return { ok: true, angelegt };
 }
 
 // Anlegen oder ändern: Ist die letzte Version eingefroren, entsteht eine neue Version.
@@ -127,6 +372,30 @@ export function laborIdeeSpeichern(b) {
   }
   save();
   return laborIdee(i.id);
+}
+
+// Entwurf verwerfen: die letzte, noch nicht eingefrorene Version löschen (die vorige bleibt)
+export function laborVersionVerwerfen(id) {
+  const i = lab().ideen.find((x) => x.id === id);
+  if (!i) return { fehler: 'Idee nicht gefunden' };
+  const v = aktuelle(i);
+  if (v.eingefroren) return { fehler: 'Eingefrorene Versionen bleiben – sie zählen als getestete Variante' };
+  if (i.versionen.length < 2) return { fehler: 'Das ist die einzige Version – lösche stattdessen die ganze Idee' };
+  i.versionen.pop();
+  i.geaendert = jetztIso();
+  save();
+  return laborIdee(i.id);
+}
+
+// Ein Ergebnis (Lauf) löschen. Die Version bleibt eingefroren und zählt weiter als Variante.
+export function laborLaufLoeschen(laufId) {
+  const l = lab();
+  const x = l.laeufe.find((y) => y.id === laufId);
+  if (!x || x.status === 'laeuft' || x.status === 'wartet') return false;
+  try { fs.unlinkSync(path.join(ordner(), `${x.id}.json`)); } catch {}
+  l.laeufe = l.laeufe.filter((y) => y.id !== laufId);
+  save();
+  return true;
 }
 
 export function laborIdeeLoeschen(id) {
@@ -151,6 +420,11 @@ export function laborStarten(id, art = 'backtest') {
   const k = v.karte;
   if (k.typ === 'hypothese' && !k.ereignisse?.length) return { fehler: 'Die Hypothese braucht mindestens ein Ereignis' };
   if (k.typ === 'strategie' && STRATEGIE[k.modell]?.mitEreignissen && !k.ereignisse?.length) return { fehler: 'Die Regel braucht mindestens ein Ereignis' };
+  if (k.typ === 'fremd') {
+    if (!k.maerkte?.length) return { fehler: 'Die Hypothese braucht mindestens einen Markt' };
+    if (k.modus === 'liste' ? !k.liste?.length : !k.bedingungen?.length) return { fehler: k.modus === 'liste' ? 'Die Ereignis-Liste ist leer' : 'Die Hypothese braucht mindestens eine Bedingung' };
+  }
+  if (k.bias?.quelle === 'fremd' && aktuelle(l.ideen.find((x) => x.id === k.bias.idee) || { versionen: [{ karte: {} }] }).karte.typ !== 'fremd') return { fehler: 'Die Fremddaten-Hypothese für das Bias-Fenster gibt es nicht mehr' };
   if (art === 'forward' && !i.forward?.[v.v]) return { fehler: 'Forward-Zeitraum ist für diese Version noch gesperrt' };
   if (l.laeufe.some((x) => x.idee === id && (x.status === 'wartet' || x.status === 'laeuft'))) return { fehler: 'Für diese Idee läuft schon etwas' };
   if (!v.eingefroren) { v.eingefroren = jetztIso(); i.geaendert = jetztIso(); }
@@ -198,7 +472,52 @@ function yahooFallback(paare) {
   return out;
 }
 
-function naechster() {
+// Daten für einen Lauf vorbereiten (im Haupt-Thread, weil Netz): Rückgabe { url, daten } für den Worker
+async function fremdDaten(k, lauf) {
+  const ids = [...new Set([...(k.modus === 'liste' ? [] : (k.bedingungen || []).map((b) => b.reihe)), ...(k.maerkte || []).map((m) => m.id)])];
+  const reihen = {};
+  for (let x = 0; x < ids.length; x++) {
+    lauf.fortschritt = { fertig: x, gesamt: ids.length, paar: `Daten: ${ids[x]}` };
+    try { reihen[ids[x]] = await reiheHolen(ids[x]); }
+    catch (err) {
+      if ((k.maerkte || []).some((m) => m.id === ids[x]) && k.maerkte.length > 1) continue; // ein fehlender Markt von mehreren: weiter ohne ihn
+      throw new Error(`${ids[x]}: ${err.message}`);
+    }
+  }
+  return reihen;
+}
+const tagVonJahr = (j) => Math.floor(Date.UTC(j, 0, 1) / 86_400_000);
+async function vorbereiten(k, lauf, i) {
+  if (k.typ === 'fremd') {
+    const reihen = await fremdDaten(k, lauf);
+    const karte = { ...k, liste: (k.liste || []).map((x) => ({ ...x, tag: isoZuTag(x.datum) })) };
+    const backtest = [tagVonJahr(k.backtest.von), tagVonJahr(k.backtest.bis + 1)];
+    const forward = lauf.art === 'forward' ? [tagVonJahr(k.forward.von), Math.floor(Date.now() / 86_400_000) + 1] : null;
+    return { url: new URL('./fremd/worker.mjs', import.meta.url), daten: { karte, reihen, backtest, forward, varianten: varianten(i) } };
+  }
+  const paare = k.paare?.length ? k.paare : PAARE;
+  const backtest = [Date.UTC(k.backtest.von, 0, 1) / 1000, Date.UTC(k.backtest.bis + 1, 0, 1) / 1000];
+  const forward = lauf.art === 'forward' ? [Date.UTC(k.forward.von, 0, 1) / 1000, Math.floor(Date.now() / 1000)] : null;
+  let biasFenster = null;
+  if (k.typ === 'strategie' && k.bias?.quelle === 'fremd') {
+    // Ereignisse der Fremddaten-Hypothese (aktuelle Version) als Zeitfenster für die Strategie
+    const fi = lab().ideen.find((x) => x.id === k.bias.idee);
+    if (!fi) throw new Error('Fremddaten-Hypothese für das Bias-Fenster nicht gefunden');
+    const fk = aktuelle(fi).karte;
+    const reihen = await fremdDaten({ ...fk, maerkte: [] }, lauf);
+    const fkt = { ...fk, liste: (fk.liste || []).map((x) => ({ ...x, tag: isoZuTag(x.datum) })) };
+    const vorb = fkt.modus === 'liste' ? [] : bedingungenVorbereiten(fkt, reihen);
+    const evs = ereignisseFinden(fkt, vorb, Math.floor(backtest[0] / 86_400), Math.floor((forward ? forward[1] : backtest[1]) / 86_400) + 1);
+    const seite = k.bias.richtung === 'long' ? 1 : k.bias.richtung === 'short' ? -1 : 0;
+    biasFenster = evs.map((e) => ({ von: (e.tag + (fkt.warten || 0)) * 86_400, bis: (e.tag + (fkt.warten || 0) + k.bias.tage) * 86_400, seite }));
+  }
+  return {
+    url: new URL('./worker.mjs', import.meta.url),
+    daten: { karte: k, e: { ...tradingEinstellungen() }, yahoo: yahooFallback(paare), paare, backtest, forward, varianten: varianten(i), biasFenster },
+  };
+}
+
+async function naechster() {
   if (aktiv) return;
   const l = lab();
   const lauf = l.laeufe.find((x) => x.status === 'wartet');
@@ -207,19 +526,19 @@ function naechster() {
   const v = i?.versionen.find((x) => x.v === lauf.v);
   if (!v) { lauf.status = 'fehler'; lauf.fehler = 'Version nicht gefunden'; save(); return naechster(); }
   const k = v.karte;
-  const paare = k.paare?.length ? k.paare : PAARE;
-  const backtest = [Date.UTC(k.backtest.von, 0, 1) / 1000, Date.UTC(k.backtest.bis + 1, 0, 1) / 1000];
-  const forward = lauf.art === 'forward' ? [Date.UTC(k.forward.von, 0, 1) / 1000, Math.floor(Date.now() / 1000)] : null;
-  lauf.status = 'laeuft'; lauf.start = jetztIso(); lauf.fortschritt = { fertig: 0, gesamt: paare.length, paar: null };
+  lauf.status = 'laeuft'; lauf.start = jetztIso(); lauf.fortschritt = { fertig: 0, gesamt: 1, paar: 'Vorbereiten' };
   save();
+  aktiv = { lauf, worker: null, abgebrochen: false };
+  const schluss = (status, fehler) => { aktiv = null; lauf.status = status; lauf.fehler = fehler; lauf.ende = jetztIso(); save(); setTimeout(naechster, 0); };
+  let vorb;
+  try { vorb = await vorbereiten(k, lauf, i); } catch (err) { console.error('[labor]', err.message); return schluss('fehler', String(err.message).slice(0, 300)); }
+  if (aktiv?.abgebrochen) return schluss('fehler', 'abgebrochen');
+  lauf.fortschritt = { fertig: 0, gesamt: 1, paar: null };
   let worker;
   try {
-    worker = new Worker(new URL('./worker.mjs', import.meta.url), {
-      workerData: { karte: k, e: { ...tradingEinstellungen() }, yahoo: yahooFallback(paare), paare, backtest, forward, varianten: varianten(i) },
-      resourceLimits: { maxOldGenerationSizeMb: 1536 },
-    });
-  } catch (err) { lauf.status = 'fehler'; lauf.fehler = err.message; save(); return naechster(); }
-  aktiv = { lauf, worker };
+    worker = new Worker(vorb.url, { workerData: vorb.daten, resourceLimits: { maxOldGenerationSizeMb: 1536 } });
+  } catch (err) { return schluss('fehler', err.message); }
+  aktiv.worker = worker;
   const ende = (status, fehler, ergebnis) => {
     if (!aktiv || aktiv.lauf !== lauf) return;
     aktiv = null;
@@ -229,7 +548,12 @@ function naechster() {
       const datei = path.join(ordner(), `${lauf.id}.json`);
       fs.writeFileSync(datei + '.tmp', JSON.stringify({ ...ergebnis, lauf: { id: lauf.id, art: lauf.art, v: lauf.v, start: lauf.start, ende: lauf.ende }, karte: k, schonGesehen: lauf.art === 'forward' && Object.keys(i.forward || {}).some((x) => Number(x) < lauf.v) }));
       fs.renameSync(datei + '.tmp', datei);
-      lauf.kurz = { urteil: ergebnis.urteil, warum: ergebnis.warum, n: ergebnis.n, nUnabhaengig: ergebnis.nUnabhaengig, avgR: ergebnis.kennzahlen?.avgR ?? null, quote: ergebnis.kennzahlen?.quote ?? null, dauerSek: ergebnis.dauerSek };
+      const hh = ergebnis.typ === 'fremd' ? ergebnis.horizonte?.find((h) => h.h === ergebnis.haupt) : null;
+      lauf.kurz = {
+        urteil: ergebnis.urteil, warum: ergebnis.warum, n: ergebnis.n, nUnabhaengig: ergebnis.nUnabhaengig,
+        avgR: ergebnis.typ === 'fremd' ? null : ergebnis.kennzahlen?.avgR ?? null, quote: ergebnis.typ === 'fremd' ? hh?.quote ?? null : ergebnis.kennzahlen?.quote ?? null,
+        mittelProzent: hh?.mittel ?? null, mehrwertProzent: hh?.mehrwert ?? null, dauerSek: ergebnis.dauerSek,
+      };
     }
     save();
     naechster();
@@ -244,7 +568,7 @@ function naechster() {
 }
 
 export function laborAbbrechen(laufId) {
-  if (aktiv?.lauf.id === laufId) { aktiv.worker.terminate(); return true; }
+  if (aktiv?.lauf.id === laufId) { if (aktiv.worker) aktiv.worker.terminate(); else aktiv.abgebrochen = true; return true; }
   const x = lab().laeufe.find((y) => y.id === laufId && y.status === 'wartet');
   if (x) { x.status = 'fehler'; x.fehler = 'abgebrochen'; save(); return true; }
   return false;

@@ -8,7 +8,7 @@ import { strategieAuswerten, hypotheseAuswerten, mittel } from './statistik.mjs'
 import { STRATEGIE } from './strategien/index.mjs';
 import { handelstagNr } from './daten.mjs';
 
-const { karte, e, yahoo, paare, backtest, forward, varianten } = workerData;
+const { karte, e, yahoo, paare, backtest, forward, varianten, biasFenster } = workerData;
 const start = Date.now();
 const melde = (x) => parentPort.postMessage({ typ: 'fortschritt', ...x });
 const bisGesamt = forward ? forward[1] : backtest[1];
@@ -22,7 +22,17 @@ function parameterVon(k) {
 }
 
 // Stufe 2: Setups nur im Bias-Fenster (Ereignis + n Handelstage, gleiche Richtung); der Rest ist die Gegenprobe.
+// Mit biasFenster (aus einer Fremddaten-Hypothese): Zeitfenster in Unix-Sekunden, seite 0 = beide Richtungen.
 function biasTeilen(ctx, setups, bias) {
+  if (biasFenster) {
+    const innen = [], aussen = [];
+    for (const s of setups) {
+      const t = ctx.basis.t[s.iSignal];
+      const drin = biasFenster.some((f) => t >= f.von && t < f.bis && (!f.seite || f.seite === s.seite));
+      (drin ? innen : aussen).push(s);
+    }
+    return { innen, aussen };
+  }
   if (!bias?.ereignisse?.length) return { innen: setups, aussen: null };
   const { z, signale } = ereignisseAuswerten(ctx, bias.tf || 'D', bias.ereignisse, bias.richtung || 'beide', true);
   const fenster = signale.map(({ k, seite }) => {
@@ -79,7 +89,7 @@ async function strategie() {
     n: nachbarTrades[i].length, avgR: nachbarTrades[i].length ? Number(mittel(nachbarTrades[i].map((t) => t.r)).toFixed(4)) : null,
   }));
   const erg = strategieAuswerten({ trades: alle, forward: forward ? fw : null, nachbarn, varianten, trichter });
-  if (karte.bias?.ereignisse?.length) {
+  if (karte.bias?.ereignisse?.length || biasFenster) {
     const g = mittel(gegen.map((t) => t.r));
     erg.raster.push({ id: 'bias', name: 'Bias-Fenster hilft', status: g === null || erg.kennzahlen.avgR === null ? 'offen' : erg.kennzahlen.avgR > g ? 'ja' : 'nein', text: `im Fenster Ø ${erg.kennzahlen.avgR ?? '—'} R (${alle.length}) · ausserhalb Ø ${g === null ? '—' : g.toFixed(2)} R (${gegen.length})` });
   }

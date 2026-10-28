@@ -27,7 +27,7 @@ import { dukascopyTakt, dukascopyZustand } from './dukascopy.mjs';
 import { tradingZustand, tradingPaar, tradingLauf, tradingNeuLaden, tradingEinstellungenSetzen, tradingTestMeldung, PAARE } from './trading.mjs';
 import { heuteZustand, anmeldeUrl, rueckkehr, trennen as googleTrennen, mailAktion, scanStarten, scanZustand, absenderAktion, werbefilterSetzen, terminNeu, aufgabeNeu, aufgabeErledigt } from './google.mjs';
 import { statistik as gvaStatistik, statistikStandardSetzen, beispiel as gvaBeispiel } from './tradingStatistik.mjs';
-import { laborListe, laborIdee, laborIdeeSpeichern, laborIdeeLoeschen, laborStarten, laborForwardOeffnen, laborLauf, laborErgebnis, laborAbbrechen, laborBausteine, laborStart } from './labor/labor.mjs';
+import { laborListe, laborIdee, laborIdeeSpeichern, laborIdeeLoeschen, laborStarten, laborForwardOeffnen, laborLauf, laborErgebnis, laborAbbrechen, laborBausteine, laborStart, laborIdeeMeta, laborIdeeKopieren, laborZettel, laborZettelSpeichern, laborZettelLoeschen, laborReiheSpeichern, laborReiheLoeschen, laborReiheVorschau, laborExport, laborImport, laborVersionVerwerfen, laborLaufLoeschen } from './labor/labor.mjs';
 import { journalZustand, tradeSpeichern, tradeLoeschen, journalEinstellungenSetzen, bildSpeichern, bildPfad, importieren } from './journal.mjs';
 import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
@@ -213,7 +213,25 @@ async function api(req, res, url) {
     const r = laborIdee(String(url.searchParams.get('id') || ''));
     return r ? json(res, 200, r) : json(res, 404, { fehler: 'Nicht gefunden' });
   }
-  if (p === '/api/labor/idee' && m === 'POST') return json(res, 200, laborIdeeSpeichern(await body(req)));
+  if (p === '/api/labor/idee' && m === 'POST') return json(res, 200, laborIdeeSpeichern(await body(req, 512 * 1024)));
+  if (p === '/api/labor/idee/meta' && m === 'POST') {
+    const r = laborIdeeMeta(await body(req, 256 * 1024));
+    return r ? json(res, 200, r) : json(res, 404, { fehler: 'Nicht gefunden' });
+  }
+  if (p === '/api/labor/idee/kopieren' && m === 'POST') {
+    const r = laborIdeeKopieren(String((await body(req)).id || ''));
+    return r ? json(res, 200, r) : json(res, 404, { fehler: 'Nicht gefunden' });
+  }
+  if (p === '/api/labor/zettel' && m === 'GET') return json(res, 200, laborZettel());
+  if (p === '/api/labor/zettel' && m === 'POST') return json(res, 200, laborZettelSpeichern(await body(req, 128 * 1024)));
+  if (p === '/api/labor/zettel' && m === 'DELETE') return laborZettelLoeschen(String((await body(req)).id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
+  if (p === '/api/labor/reihe' && m === 'POST') { const r = laborReiheSpeichern(await body(req, 4 * 1024 * 1024)); return r.fehler ? json(res, 400, r) : json(res, 200, r); }
+  if (p === '/api/labor/reihe' && m === 'DELETE') return laborReiheLoeschen(String((await body(req)).id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
+  if (p === '/api/labor/reihe' && m === 'GET') { const r = await laborReiheVorschau(String(url.searchParams.get('id') || '')); return r.fehler ? json(res, 400, r) : json(res, 200, r); }
+  if (p === '/api/labor/export' && m === 'POST') { const r = laborExport(await body(req)); return r.fehler ? json(res, 400, r) : json(res, 200, r); }
+  if (p === '/api/labor/version-verwerfen' && m === 'POST') { const r = laborVersionVerwerfen(String((await body(req)).id || '')); return r.fehler ? json(res, 400, r) : json(res, 200, r); }
+  if (p === '/api/labor/lauf' && m === 'DELETE') return laborLaufLoeschen(String((await body(req)).lauf || '')) ? json(res, 200, { ok: true }) : json(res, 400, { fehler: 'Lauf nicht löschbar' });
+  if (p === '/api/labor/import' && m === 'POST') return json(res, 200, laborImport(await body(req, 2 * 1024 * 1024)));
   if (p === '/api/labor/idee' && m === 'DELETE') {
     const b = await body(req);
     return laborIdeeLoeschen(String(b.id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });

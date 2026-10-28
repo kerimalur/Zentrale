@@ -7,12 +7,18 @@ import { holen, senden } from '@/lib/api';
 import { datumCh } from '@/lib/trading';
 import {
   URTEIL_FARBE, atrText, prozent, rText, standardWerte,
-  type LBaustein, type LBausteine, type LErgebnis, type LGruppe, type LIdee, type LIdeeKurz, type LKarte, type LParam, type LTeil, type LTrade, type LZeile,
+  type LBaustein, type LBausteine, type LErgebnis, type LFErgebnis, type LExtern, type LIdee, type LIdeeKurz, type LKarte, type LParam, type LTeil, type LTrade, type LZettel, pText,
 } from '@/lib/labor';
 import { Schalter } from './ui';
+import { UrteilChip, TypChip, Raster, Gruppenbalken, Kachel, Rueckfrage } from './LaborTeile';
 import { Popup } from './NetzBausteine';
+import { FremdEditor, FremdVorabKarte, ErgebnisFremd, reiheNameKlient } from './LaborFremd';
+import { Brainstorm, ExportKnoepfe, ImportPopup, MdVorschau } from './LaborWerkzeuge';
 
-type Ansicht = { art: 'liste' } | { art: 'idee'; id: string } | { art: 'karte'; karte: LKarte; id?: string };
+type Ansicht =
+  | { art: 'liste' } | { art: 'brainstorm' } | { art: 'idee'; id: string }
+  | { art: 'karte'; karte: LKarte; id?: string; zettel?: string };
+type Filter = '' | 'strategie' | 'hypothese' | 'fremd';
 
 export function Labor() {
   const [b, setB] = useState<LBausteine | null>(null);
@@ -20,64 +26,154 @@ export function Labor() {
   const [fehler, setFehler] = useState<string | null>(null);
   const [ansicht, setAnsicht] = useState<Ansicht>({ art: 'liste' });
   const [vorlagen, setVorlagen] = useState(false);
+  const [importOffen, setImportOffen] = useState(false);
+  const [meldung, setMeldung] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>('');
+  const [tag, setTag] = useState('');
+  const [suche, setSuche] = useState('');
+  const [waehlen, setWaehlen] = useState(false);
+  const [auswahl, setAuswahl] = useState<Set<string>>(new Set());
 
   const laden = useCallback(async () => {
     try { setListe((await holen<{ ideen: LIdeeKurz[] }>('/api/labor')).ideen); setFehler(null); } catch (e) { setFehler((e as Error).message); }
   }, []);
-  useEffect(() => { holen<LBausteine>('/api/labor/bausteine').then(setB).catch((e) => setFehler((e as Error).message)); laden(); }, [laden]);
+  const bausteineLaden = useCallback(() => { holen<LBausteine>('/api/labor/bausteine').then(setB).catch((e) => setFehler((e as Error).message)); }, []);
+  useEffect(() => { bausteineLaden(); laden(); }, [laden, bausteineLaden]);
   const laeuft = liste?.some((i) => i.lauf && (i.lauf.status === 'laeuft' || i.lauf.status === 'wartet'));
   useEffect(() => {
     if (ansicht.art !== 'liste') return;
     const t = setInterval(() => { if (!document.hidden) laden(); }, laeuft ? 3000 : 20_000);
     return () => clearInterval(t);
   }, [laden, laeuft, ansicht.art]);
+  const alleTags = useMemo(() => [...new Set((liste || []).flatMap((i) => i.tags || []))].sort(), [liste]);
+  const sichtbar = useMemo(() => {
+    const q = suche.trim().toLowerCase();
+    return (liste || []).filter((i) => (!filter || i.typ === filter) && (!tag || (i.tags || []).includes(tag)) && (!q || `${i.name} ${(i.tags || []).join(' ')} ${(i.maerkte || []).join(' ')}`.toLowerCase().includes(q)));
+  }, [liste, filter, tag, suche]);
 
   if (fehler && !b) return <div className="karte fehlerbox">Labor nicht ladbar: {fehler}</div>;
   if (!b || !liste) return <div className="karte leise">Lade das Labor …</div>;
 
-  if (ansicht.art === 'karte') return <KarteEditor b={b} start={ansicht.karte} id={ansicht.id} onZurueck={() => { setAnsicht(ansicht.id ? { art: 'idee', id: ansicht.id } : { art: 'liste' }); laden(); }} onGespeichert={(id) => { setAnsicht({ art: 'idee', id }); laden(); }} />;
-  if (ansicht.art === 'idee') return <IdeeAnsicht b={b} id={ansicht.id} onZurueck={() => { setAnsicht({ art: 'liste' }); laden(); }} onBearbeiten={(karte) => setAnsicht({ art: 'karte', karte, id: ansicht.id })} />;
+  const nachSpeichern = async (id: string, zettel?: string) => {
+    if (zettel) {
+      // Zettel, aus dem die Hypothese entstand: verknüpfen und als ausgearbeitet markieren
+      const z = (await holen<{ zettel: LZettel[] }>('/api/labor/zettel').catch(() => ({ zettel: [] as LZettel[] }))).zettel.find((x) => x.id === zettel);
+      if (z) await senden('/api/labor/zettel', { ...z, idee: id, status: z.status === 'roh' ? 'ausgearbeitet' : z.status }).catch(() => {});
+    }
+    setAnsicht({ art: 'idee', id }); laden();
+  };
 
+  if (ansicht.art === 'karte') {
+    const zurueck = () => { setAnsicht(ansicht.id ? { art: 'idee', id: ansicht.id } : ansicht.zettel ? { art: 'brainstorm' } : { art: 'liste' }); laden(); };
+    if (ansicht.karte.typ === 'fremd') return <FremdEditor b={b} start={ansicht.karte} id={ansicht.id} onZurueck={zurueck} onGespeichert={(id) => nachSpeichern(id, ansicht.zettel)} onBausteine={bausteineLaden} />;
+    return <KarteEditor b={b} ideen={liste} start={ansicht.karte} id={ansicht.id} onZurueck={zurueck} onGespeichert={(id) => nachSpeichern(id, ansicht.zettel)} />;
+  }
+  if (ansicht.art === 'idee') {
+    return <IdeeAnsicht b={b} id={ansicht.id} onZurueck={() => { setAnsicht({ art: 'liste' }); laden(); }} onBearbeiten={(karte, neu) => setAnsicht(neu ? { art: 'karte', karte } : { art: 'karte', karte, id: ansicht.id })}
+      onOeffnen={(id) => setAnsicht({ art: 'idee', id })} />;
+  }
+
+  const bereich = (
+    <div className="segment" style={{ gridTemplateColumns: '1fr 1fr', maxWidth: 420 }} role="tablist" aria-label="Labor-Bereich">
+      <button role="tab" aria-selected={ansicht.art === 'liste'} aria-pressed={ansicht.art === 'liste'} onClick={() => { setAnsicht({ art: 'liste' }); laden(); }}>Bibliothek</button>
+      <button role="tab" aria-selected={ansicht.art === 'brainstorm'} aria-pressed={ansicht.art === 'brainstorm'} onClick={() => setAnsicht({ art: 'brainstorm' })}>Brainstorm</button>
+    </div>
+  );
+
+  if (ansicht.art === 'brainstorm') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {bereich}
+        <Brainstorm b={b} ideen={liste} meldung={meldung} onZurHypothese={(karte, zettel) => setAnsicht({ art: 'karte', karte, zettel })} onIdeeOeffnen={(id) => setAnsicht({ art: 'idee', id })} />
+      </div>
+    );
+  }
+
+  const gruppen: { titel: string; filter: (v: { karte: LKarte }) => boolean }[] = [
+    { titel: 'Strategien und Kurs-Hypothesen (28 Devisenpaare)', filter: (v) => v.karte.typ !== 'fremd' },
+    { titel: 'Hypothesen mit Fremddaten (Rohstoffe, Wetter, Krieg, Makro …)', filter: (v) => v.karte.typ === 'fremd' },
+  ];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {bereich}
       <section className="karte in">
         <h2 className="karte-titel">Labor <small>{liste.length} Idee{liste.length === 1 ? '' : 'n'}</small></h2>
         <p className="leise" style={{ fontSize: 13.5, lineHeight: 1.5, margin: '0 0 12px', maxWidth: '70ch' }}>
-          Hier testest du Strategien und Hypothesen nach festen Regeln: Vorab festhalten, was gilt, dann backtesten. Der Forward-Zeitraum bleibt gesperrt, bis du ihn einmal bewusst öffnest. Jede Änderung nach dem Start ist eine neue Version – die Zentrale zählt mit, wie viel du probiert hast.
+          Hier testest du Strategien und Hypothesen nach festen Regeln: Vorab festhalten, was gilt, dann backtesten. Hypothesen gehen auch über Devisen hinaus – Erdgas, Gold, Weizen, Öl, Indizes mit Wetter-, Kriegs-, Makro- oder eigenen Daten. Der Forward-Zeitraum bleibt gesperrt, bis du ihn einmal bewusst öffnest. Jede Änderung nach dem Start ist eine neue Version – die Zentrale zählt mit, wie viel du probiert hast.
         </p>
-        <button className="knopf-akzent press" onClick={() => setVorlagen(true)}>+ Neue Idee</button>
+        <div className="lb-kopf">
+          <button className="knopf-akzent press" onClick={() => setVorlagen(true)}>+ Neue Idee</button>
+          <button className="knopf-klein press" onClick={() => setImportOffen(true)}>Markdown importieren …</button>
+          <ExportKnoepfe ideen={liste.map((i) => i.id)} klein={false} />
+          <span className="leise" style={{ fontSize: 12.5 }}>(alle {liste.length})</span>
+        </div>
+        {meldung && <div className="leise" style={{ fontSize: 13, marginTop: 8 }}>{meldung}</div>}
       </section>
 
       {liste.length > 0 && (
         <section className="karte in" aria-label="Bibliothek">
-          <div className="lb-liste">
-            {liste.map((i) => <IdeeZeile key={i.id} i={i} onClick={() => setAnsicht({ art: 'idee', id: i.id })} />)}
+          <div className="lb-kopf" style={{ marginBottom: 10 }}>
+            <input className="lb-suche" value={suche} onChange={(e) => setSuche(e.target.value)} placeholder="Suchen (Name, Stichwort, Markt) …" aria-label="Ideen suchen" />
+            <select className="lb-select" style={{ flex: '0 1 200px' }} value={filter} onChange={(e) => setFilter(e.target.value as Filter)} aria-label="Art">
+              <option value="">alle Arten</option><option value="strategie">Strategien</option><option value="hypothese">Hypothesen · Kurse</option><option value="fremd">Hypothesen · Fremddaten</option>
+            </select>
+            {alleTags.length > 0 && (
+              <select className="lb-select" style={{ flex: '0 1 160px' }} value={tag} onChange={(e) => setTag(e.target.value)} aria-label="Stichwort">
+                <option value="">alle Stichworte</option>{alleTags.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
+            <button className="knopf-klein press" onClick={() => { setWaehlen((w) => !w); setAuswahl(new Set()); }}>{waehlen ? 'Auswahl beenden' : 'Auswählen'}</button>
+            {waehlen && (
+              <>
+                <button className="knopf-klein press" onClick={() => setAuswahl(new Set(sichtbar.map((i) => i.id)))}>Alle sichtbaren</button>
+                <ExportKnoepfe ideen={[...auswahl]} />
+                <span className="leise" style={{ fontSize: 12.5 }}>{auswahl.size} gewählt</span>
+              </>
+            )}
           </div>
+          {gruppen.map((g) => {
+            const l = sichtbar.filter((i) => g.filter({ karte: { typ: i.typ, name: i.name } }));
+            if (!l.length) return null;
+            return (
+              <div key={g.titel} style={{ marginBottom: 10 }}>
+                <h4 className="nw-h">{g.titel}</h4>
+                <div className="lb-liste">
+                  {l.map((i) => (
+                    <div key={i.id} style={{ display: 'flex', alignItems: 'center' }}>
+                      {waehlen && <label className="lb-auswahl"><input type="checkbox" checked={auswahl.has(i.id)} onChange={() => setAuswahl((s) => { const n = new Set(s); if (n.has(i.id)) n.delete(i.id); else n.add(i.id); return n; })} aria-label={`${i.name} auswählen`} /></label>}
+                      <IdeeZeile i={i} onClick={() => setAnsicht({ art: 'idee', id: i.id })} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {!sichtbar.length && <div className="leise">Keine Idee passt zum Filter.</div>}
         </section>
       )}
 
       {vorlagen && (
         <Popup titel="Neue Idee" unter="Mit einer Vorlage beginnen – alles ist danach änderbar" onClose={() => setVorlagen(false)}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {b.vorlagen.map((v) => (
-              <button key={v.id} className="lb-vorlage press" onClick={() => { setVorlagen(false); setAnsicht({ art: 'karte', karte: structuredClone(v.karte) }); }}>
-                <strong>{v.name}</strong>
-                <span className="leise">{v.karte.typ === 'hypothese' ? 'Hypothese' : 'Strategie'}{v.karte.mechanismus ? ` · ${v.karte.mechanismus}` : ''}</span>
-              </button>
+            {(['strategie', 'hypothese', 'fremd'] as const).map((typ) => (
+              <div key={typ} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <h4 className="nw-h" style={{ margin: '6px 0 0' }}>{typ === 'fremd' ? 'Hypothese mit Fremddaten (Rohstoffe, Wetter, Krieg, Makro …)' : typ === 'hypothese' ? 'Hypothese auf den 28 Devisenpaaren' : 'Strategie'}</h4>
+                {b.vorlagen.filter((v) => v.karte.typ === typ).map((v) => (
+                  <button key={v.id} className="lb-vorlage press" onClick={() => { setVorlagen(false); setAnsicht({ art: 'karte', karte: structuredClone(v.karte) }); }}>
+                    <strong>{v.name.replace(/^Fremddaten: /, '')}</strong>
+                    {v.karte.mechanismus && <span className="leise">{v.karte.mechanismus}</span>}
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         </Popup>
       )}
+      {importOffen && <ImportPopup ideen={liste} onClose={() => setImportOffen(false)} onFertig={(t) => { setImportOffen(false); setMeldung(t); laden(); setTimeout(() => setMeldung(null), 6000); }} />}
     </div>
   );
 }
 
-function UrteilChip({ urteil }: { urteil: string }) {
-  return <span className="lb-chip" style={{ background: URTEIL_FARBE[urteil] || 'var(--muted)', color: '#fff' }}>{urteil}</span>;
-}
-function TypChip({ typ }: { typ: string }) {
-  return <span className="lb-chip">{typ === 'hypothese' ? 'Hypothese' : 'Strategie'}</span>;
-}
 function Fortschritt({ lauf }: { lauf: NonNullable<LIdeeKurz['lauf']> }) {
   const p = lauf.fortschritt ? Math.round((lauf.fortschritt.fertig / Math.max(1, lauf.fortschritt.gesamt)) * 100) : 0;
   return (
@@ -99,10 +195,21 @@ function IdeeZeile({ i, onClick }: { i: LIdeeKurz; onClick: () => void }) {
           <span className="leise" style={{ fontSize: 12.5 }}>Version {i.version}{!i.eingefroren ? ' (Entwurf)' : ''} · {i.varianten} Variante{i.varianten === 1 ? '' : 'n'}{i.forwardOffen ? ' · Forward offen' : ''}</span>
         </div>
         {laeuft && i.lauf ? <Fortschritt lauf={i.lauf} /> : i.lauf?.status === 'fehler' ? <div style={{ fontSize: 12.5, color: 'var(--fehler)' }}>Fehler: {i.lauf.fehler}</div> : null}
+        {(i.tags?.length > 0 || i.extern) && (
+          <div className="lb-tags">
+            {i.tags.map((t) => <span key={t} className="lb-tag">{t}</span>)}
+            {i.extern && <span className="lb-tag" title={i.extern.kernzahl}>Skill {i.extern.datum}: {i.extern.urteil || 'ohne Urteil'}</span>}
+          </div>
+        )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-        {i.ergebnis ? <UrteilChip urteil={i.ergebnis.urteil} /> : <span className="leise" style={{ fontSize: 12.5 }}>noch nicht getestet</span>}
-        {i.ergebnis && <span className="leise" style={{ fontSize: 12.5 }}>N {i.ergebnis.n} · unabh. {i.ergebnis.nUnabhaengig}{i.ergebnis.avgR !== null ? ` · Ø ${rText(i.ergebnis.avgR)}` : ''}</span>}
+        {i.ergebnis ? <UrteilChip urteil={i.ergebnis.urteil} /> : i.extern?.urteil ? <UrteilChip urteil={i.extern.urteil} /> : <span className="leise" style={{ fontSize: 12.5 }}>noch nicht getestet</span>}
+        {i.ergebnis && (
+          <span className="leise" style={{ fontSize: 12.5 }}>
+            N {i.ergebnis.n} · unabh. {i.ergebnis.nUnabhaengig}
+            {i.typ === 'fremd' ? (i.ergebnis.mehrwertProzent !== null && i.ergebnis.mehrwertProzent !== undefined ? ` · Mehrwert ${pText(i.ergebnis.mehrwertProzent, 1)}` : '') : i.ergebnis.avgR !== null ? ` · Ø ${rText(i.ergebnis.avgR)}` : ''}
+          </span>
+        )}
       </div>
     </button>
   );
@@ -186,7 +293,8 @@ function TeilListe({ titel, katalog, liste, setze, leer }: { titel: string; kata
 }
 
 // ---------- Vorab-Karte bearbeiten ----------
-function KarteEditor({ b, start, id, onZurueck, onGespeichert }: { b: LBausteine; start: LKarte; id?: string; onZurueck: () => void; onGespeichert: (id: string) => void }) {
+function KarteEditor({ b, ideen, start, id, onZurueck, onGespeichert }: { b: LBausteine; ideen: LIdeeKurz[]; start: LKarte; id?: string; onZurueck: () => void; onGespeichert: (id: string) => void }) {
+  const fremdIdeen = ideen.filter((i) => i.typ === 'fremd');
   const [k, setK] = useState<LKarte>(() => ({ backtest: { von: b.jahre.von, bis: Math.min(2022, b.jahre.bis - 1) }, forward: { von: Math.min(2023, b.jahre.bis) }, geplanteVarianten: 1, paare: [], filter: [], ...start }));
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
@@ -258,11 +366,32 @@ function KarteEditor({ b, start, id, onZurueck, onGespeichert }: { b: LBausteine
               <Schalter an={!!k.bias} onClick={() => setz('bias', k.bias ? null : { tf: 'D', richtung: 'beide', tage: 5, ereignisse: [] })} titel="Bias-Fenster (Monty Stufe 2)" unter="Trades nur in einem Zeitfenster nach einem Ereignis und in dessen Richtung; der Rest wird als Gegenprobe gerechnet" />
               {k.bias && (
                 <div className="lb-teil" style={{ marginTop: 8 }}>
-                  <div className="lb-felder">
-                    <label className="nw-feld">Zeitrahmen<select value={k.bias.tf} onChange={(e) => setz('bias', { ...k.bias!, tf: e.target.value })}>{b.zeitrahmen.map((z) => <option key={z.wert} value={z.wert}>{z.text}</option>)}</select></label>
-                    <label className="nw-feld">Fenster (Handelstage)<input type="number" min={1} max={60} value={k.bias.tage} onChange={(e) => setz('bias', { ...k.bias!, tage: Number(e.target.value) })} /></label>
+                  <div className="segment" style={{ gridTemplateColumns: '1fr 1fr', maxWidth: 460, marginBottom: 10, background: '#fff' }}>
+                    <button type="button" aria-pressed={k.bias.quelle !== 'fremd'} onClick={() => setz('bias', { tf: 'D', richtung: 'beide', tage: 5, ereignisse: [] })}>Ereignis auf den Kursen</button>
+                    <button type="button" aria-pressed={k.bias.quelle === 'fremd'} disabled={!fremdIdeen.length} onClick={() => setz('bias', { quelle: 'fremd', idee: fremdIdeen[0]?.id || '', richtung: 'beide', tage: 30, ereignisse: [] })}>Fremddaten-Hypothese</button>
                   </div>
-                  <TeilListe titel="Bias-Ereignisse" katalog={b.ereignisse} liste={k.bias.ereignisse} setze={(l) => setz('bias', { ...k.bias!, ereignisse: l })} leer="Ereignis wählen, das die Richtung vorgibt." />
+                  {k.bias.quelle === 'fremd' ? (
+                    <>
+                      <div className="lb-felder">
+                        <label className="nw-feld lb-breit">Hypothese (ihre Ereignisse öffnen das Fenster)
+                          <select value={k.bias.idee || ''} onChange={(e) => setz('bias', { ...k.bias!, idee: e.target.value })}>
+                            {fremdIdeen.map((i) => <option key={i.id} value={i.id}>{i.name}{i.ergebnis ? ` (${i.ergebnis.urteil})` : ''}</option>)}
+                          </select>
+                        </label>
+                        <label className="nw-feld">Richtung der Trades<select value={k.bias.richtung} onChange={(e) => setz('bias', { ...k.bias!, richtung: e.target.value })}><option value="beide">beide</option><option value="long">nur Long</option><option value="short">nur Short</option></select></label>
+                        <label className="nw-feld">Fenster (Kalendertage)<input type="number" min={1} max={365} value={k.bias.tage} onChange={(e) => setz('bias', { ...k.bias!, tage: Number(e.target.value) })} /></label>
+                      </div>
+                      <p className="tr-hilfe" style={{ margin: '0 0 8px' }}>Das Fenster beginnt, wenn das Ereignis bekannt ist (plus Wartezeit der Hypothese), und dauert so viele Kalendertage. Die Richtung legst du hier fest, weil eine Rohstoff-Hypothese nicht automatisch sagt, welches Paar steigt.</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="lb-felder">
+                        <label className="nw-feld">Zeitrahmen<select value={k.bias.tf} onChange={(e) => setz('bias', { ...k.bias!, tf: e.target.value })}>{b.zeitrahmen.map((z) => <option key={z.wert} value={z.wert}>{z.text}</option>)}</select></label>
+                        <label className="nw-feld">Fenster (Handelstage)<input type="number" min={1} max={60} value={k.bias.tage} onChange={(e) => setz('bias', { ...k.bias!, tage: Number(e.target.value) })} /></label>
+                      </div>
+                      <TeilListe titel="Bias-Ereignisse" katalog={b.ereignisse} liste={k.bias.ereignisse} setze={(l) => setz('bias', { ...k.bias!, ereignisse: l })} leer="Ereignis wählen, das die Richtung vorgibt." />
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -280,41 +409,48 @@ function KarteEditor({ b, start, id, onZurueck, onGespeichert }: { b: LBausteine
   );
 }
 
-// ---------- Eine Idee: Status, Läufe, Ergebnis ----------
-function IdeeAnsicht({ b, id, onZurueck, onBearbeiten }: { b: LBausteine; id: string; onZurueck: () => void; onBearbeiten: (k: LKarte) => void }) {
+// ---------- Eine Idee: Status, Läufe, Ergebnis, Notizen, Skill-Ergebnisse ----------
+function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen }: { b: LBausteine; id: string; onZurueck: () => void; onBearbeiten: (k: LKarte, neu?: boolean) => void; onOeffnen: (id: string) => void }) {
   const [i, setI] = useState<LIdee | null>(null);
-  const [erg, setErg] = useState<LErgebnis | null>(null);
+  const [erg, setErg] = useState<LErgebnis | LFErgebnis | null>(null);
   const [laufId, setLaufId] = useState<string | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
-  const [frage, setFrage] = useState<'forward' | 'loeschen' | null>(null);
+  const [frage, setFrage] = useState<'forward' | 'loeschen' | 'verwerfen' | 'lauf' | null>(null);
   const [karteAuf, setKarteAuf] = useState(false);
+  const [versionWahl, setVersionWahl] = useState<number | null>(null);
 
   const laden = useCallback(async () => {
     try { const x = await holen<LIdee>(`/api/labor/idee?id=${id}`); setI(x); setFehler(null); return x; } catch (e) { setFehler((e as Error).message); return null; }
   }, [id]);
-  useEffect(() => { laden(); }, [laden]);
+  useEffect(() => { laden(); setLaufId(null); setVersionWahl(null); }, [laden]);
   const laeuft = i?.lauf && (i.lauf.status === 'laeuft' || i.lauf.status === 'wartet');
   useEffect(() => {
     if (!laeuft) return;
     const t = setInterval(() => { if (!document.hidden) laden(); }, 2000);
     return () => clearInterval(t);
   }, [laeuft, laden]);
-  // Ergebnis des neuesten fertigen Laufs laden
+  // Ergebnis des gewählten oder neuesten fertigen Laufs laden
   const zielLauf = laufId || i?.ergebnis?.lauf || null;
   useEffect(() => {
     if (!zielLauf) { setErg(null); return; }
-    holen<LErgebnis>(`/api/labor/ergebnis?lauf=${zielLauf}`).then(setErg).catch(() => setErg(null));
+    holen<LErgebnis | LFErgebnis>(`/api/labor/ergebnis?lauf=${zielLauf}`).then(setErg).catch(() => setErg(null));
   }, [zielLauf]);
 
   if (fehler && !i) return <div className="karte fehlerbox">{fehler}</div>;
   if (!i) return <div className="karte leise">Lade …</div>;
   const v = i.versionen[i.versionen.length - 1];
+  const gezeigt = i.versionen.find((x) => x.v === versionWahl) || v;
   const fertigeLaeufe = i.laeufe.filter((l) => l.status === 'fertig').slice().reverse();
   const backtestFertig = i.laeufe.some((l) => l.v === i.version && l.status === 'fertig');
+  const istFremd = v.karte.typ === 'fremd';
 
-  const aktion = async (pfad: string, body: unknown) => {
+  const aktion = async (pfad: string, body: unknown, method?: 'POST' | 'DELETE') => {
     setFehler(null);
-    try { await senden(pfad, body); setLaufId(null); await laden(); } catch (e) { setFehler((e as Error).message); }
+    try { await senden(pfad, body, method); setLaufId(null); await laden(); } catch (e) { setFehler((e as Error).message); }
+  };
+  const meta = async (daten: Record<string, unknown>) => {
+    setFehler(null);
+    try { const r = await senden<LIdee>('/api/labor/idee/meta', { id, ...daten }); setI(r); } catch (e) { setFehler((e as Error).message); }
   };
 
   return (
@@ -329,6 +465,7 @@ function IdeeAnsicht({ b, id, onZurueck, onBearbeiten }: { b: LBausteine; id: st
         <div className="leise" style={{ fontSize: 13 }}>
           Version {i.version}{v.eingefroren ? ` · eingefroren ${datumCh(v.eingefroren.slice(0, 10))}` : ' · Entwurf'} · {i.varianten} getestete Variante{i.varianten === 1 ? '' : 'n'}
           {Object.keys(i.forwardGeoeffnet).length ? ` · Forward geöffnet für Version ${Object.keys(i.forwardGeoeffnet).join(', ')}` : ' · Forward gesperrt'}
+          {istFremd && v.karte.maerkte?.length ? ` · ${v.karte.maerkte.map((m) => reiheNameKlient(b.fremd, m.id)).join(', ')}` : ''}
         </div>
         {laeuft && i.lauf && <div style={{ marginTop: 10 }}><Fortschritt lauf={i.lauf} /></div>}
         {i.lauf?.status === 'fehler' && <div className="fehlerbox" style={{ marginTop: 10 }}>Letzter Lauf: {i.lauf.fehler}</div>}
@@ -339,41 +476,130 @@ function IdeeAnsicht({ b, id, onZurueck, onBearbeiten }: { b: LBausteine; id: st
           {!laeuft && i.forwardOffen && <button className="knopf-klein press" onClick={() => aktion('/api/labor/start', { id, art: 'forward' })}>Mit Forward neu rechnen</button>}
           {laeuft && i.lauf && <button className="knopf-klein press" onClick={() => aktion('/api/labor/abbrechen', { lauf: i.lauf!.id })}>Abbrechen</button>}
           <button className="knopf-klein press" onClick={() => onBearbeiten(structuredClone(v.karte))}>{v.eingefroren ? 'Ändern (neue Version)' : 'Bearbeiten'}</button>
+          {!v.eingefroren && i.versionen.length > 1 && <button className="knopf-klein press" onClick={() => setFrage('verwerfen')}>Entwurf verwerfen …</button>}
+          <button className="knopf-klein press" onClick={async () => { try { const r = await senden<LIdee>('/api/labor/idee/kopieren', { id }); onOeffnen(r.id); } catch (e) { setFehler((e as Error).message); } }}>Kopieren</button>
+          {istFremd && <button className="knopf-klein press" title="Kerims Entry-Model (oder eine andere Strategie) nur in den Fenstern dieser Hypothese handeln" onClick={() => {
+            const vorlage = b.vorlagen.find((x) => x.id === 'gva')?.karte;
+            if (vorlage) onBearbeiten({ ...structuredClone(vorlage), name: `GVA im Fenster: ${v.karte.name}`.slice(0, 80), bias: { quelle: 'fremd', idee: id, richtung: 'beide', tage: v.karte.hauptHorizont || 30, ereignisse: [] } }, true);
+          }}>Als Bias-Fenster für eine Strategie …</button>}
           <button className="knopf-klein press" onClick={() => setKarteAuf((x) => !x)}>{karteAuf ? 'Vorab-Karte zu' : 'Vorab-Karte'}</button>
+          <ExportKnoepfe ideen={[id]} />
           <button className="knopf-klein press" style={{ color: 'var(--fehler)' }} onClick={() => setFrage('loeschen')}>Löschen …</button>
         </div>
         {frage === 'forward' && (
-          <div className="lb-frage">
-            <strong>Forward-Zeitraum öffnen?</strong>
-            <p>Der Zeitraum ab {v.karte.forward?.von} wurde bisher nie angeschaut. Nach dem Öffnen ist er für diese Idee «verbraucht»: Jede spätere Version kennt ihn schon und ist dort nicht mehr unvoreingenommen. Öffne ihn erst, wenn die Regel wirklich feststeht.</p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="knopf-akzent press" onClick={() => { setFrage(null); aktion('/api/labor/forward-oeffnen', { id }); }}>Ja, jetzt öffnen</button>
-              <button className="knopf-klein press" onClick={() => setFrage(null)}>Abbrechen</button>
-            </div>
-          </div>
+          <Rueckfrage titel="Forward-Zeitraum öffnen?" ja="Ja, jetzt öffnen" onNein={() => setFrage(null)} onJa={() => { setFrage(null); aktion('/api/labor/forward-oeffnen', { id }); }}
+            text={`Der Zeitraum ab ${v.karte.forward?.von} wurde bisher nie angeschaut. Nach dem Öffnen ist er für diese Idee «verbraucht»: Jede spätere Version kennt ihn schon und ist dort nicht mehr unvoreingenommen. Öffne ihn erst, wenn die Regel wirklich feststeht.`} />
+        )}
+        {frage === 'verwerfen' && (
+          <Rueckfrage titel={`Entwurf (Version ${v.v}) verwerfen?`} text="Die vorige, eingefrorene Version wird wieder die aktuelle." ja="Verwerfen" gefahr onNein={() => setFrage(null)} onJa={() => { setFrage(null); aktion('/api/labor/version-verwerfen', { id }); }} />
         )}
         {frage === 'loeschen' && (
-          <div className="lb-frage">
-            <strong>Idee mit allen Versionen und Ergebnissen löschen?</strong>
-            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button className="knopf-akzent press" style={{ background: 'var(--fehler)' }} onClick={async () => { await senden('/api/labor/idee', { id }, 'DELETE').catch(() => {}); onZurueck(); }}>Löschen</button>
-              <button className="knopf-klein press" onClick={() => setFrage(null)}>Abbrechen</button>
-            </div>
-          </div>
+          <Rueckfrage titel="Idee mit allen Versionen und Ergebnissen löschen?" text="Tipp: vorher als Markdown exportieren, wenn du sie behalten willst." ja="Löschen" gefahr onNein={() => setFrage(null)}
+            onJa={async () => { await senden('/api/labor/idee', { id }, 'DELETE').catch(() => {}); onZurueck(); }} />
         )}
-        {karteAuf && <VorabKarte k={v.karte} b={b} />}
+        {karteAuf && (
+          <>
+            {i.versionen.length > 1 && (
+              <div className="lb-chips" style={{ marginTop: 12 }}>
+                {i.versionen.slice().reverse().map((x) => (
+                  <button key={x.v} type="button" className="lb-wahl press" aria-pressed={gezeigt.v === x.v} onClick={() => setVersionWahl(x.v)}>V{x.v}{x.eingefroren ? '' : ' (Entwurf)'}</button>
+                ))}
+              </div>
+            )}
+            {gezeigt.karte.typ === 'fremd' ? <FremdVorabKarte k={gezeigt.karte} b={b} /> : <VorabKarte k={gezeigt.karte} b={b} />}
+          </>
+        )}
       </section>
 
-      {fertigeLaeufe.length > 1 && (
-        <div className="segment" style={{ gridTemplateColumns: `repeat(${Math.min(fertigeLaeufe.length, 4)}, 1fr)` }}>
-          {fertigeLaeufe.slice(0, 4).map((l) => (
-            <button key={l.id} aria-pressed={(zielLauf || '') === l.id} onClick={() => setLaufId(l.id)}>V{l.v} · {l.art === 'forward' ? 'mit Forward' : 'Backtest'}</button>
-          ))}
+      {fertigeLaeufe.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {fertigeLaeufe.length > 1 && (
+            <div className="segment" style={{ gridTemplateColumns: `repeat(${Math.min(fertigeLaeufe.length, 4)}, 1fr)`, flex: '1 1 320px' }}>
+              {fertigeLaeufe.slice(0, 4).map((l) => (
+                <button key={l.id} aria-pressed={(zielLauf || '') === l.id} onClick={() => setLaufId(l.id)}>V{l.v} · {l.art === 'forward' ? 'mit Forward' : 'Backtest'}</button>
+              ))}
+            </div>
+          )}
+          {zielLauf && <button className="knopf-klein press" onClick={() => setFrage('lauf')}>Dieses Ergebnis löschen …</button>}
         </div>
       )}
+      {frage === 'lauf' && zielLauf && (
+        <Rueckfrage titel="Dieses Ergebnis löschen?" text="Die Version bleibt eingefroren und zählt weiter als getestete Variante." ja="Löschen" gefahr onNein={() => setFrage(null)}
+          onJa={() => { setFrage(null); aktion('/api/labor/lauf', { lauf: zielLauf }, 'DELETE'); }} />
+      )}
 
-      {erg ? (erg.typ === 'hypothese' ? <ErgebnisHypothese e={erg} /> : <ErgebnisStrategie e={erg} />) : !laeuft && <div className="karte leise">Noch kein Ergebnis – starte den Backtest.</div>}
+      {erg ? (erg.typ === 'fremd' ? <ErgebnisFremd e={erg as LFErgebnis} /> : erg.typ === 'hypothese' ? <ErgebnisHypothese e={erg as LErgebnis} /> : <ErgebnisStrategie e={erg as LErgebnis} />)
+        : !laeuft && <div className="karte leise">Noch kein Ergebnis aus der Zentrale – starte den Backtest{istFremd ? ' (oder trage unten ein Ergebnis aus dem Skill ein)' : ''}.</div>}
+
+      <NotizenKarte i={i} speichern={meta} />
+      <SkillErgebnisse i={i} speichern={meta} />
+      <section className="karte in"><MdVorschau key={`${id}-${i.version}-${i.ergebnis?.lauf || ''}-${i.externAlle.length}`} ideeId={id} /></section>
     </div>
+  );
+}
+
+function NotizenKarte({ i, speichern }: { i: LIdee; speichern: (d: Record<string, unknown>) => Promise<void> }) {
+  const [notizen, setNotizen] = useState(i.notizen || '');
+  const [tags, setTags] = useState((i.tags || []).join(', '));
+  const [ok, setOk] = useState(false);
+  useEffect(() => { setNotizen(i.notizen || ''); setTags((i.tags || []).join(', ')); }, [i.id, i.notizen, i.tags]);
+  const geaendert = notizen !== (i.notizen || '') || tags !== (i.tags || []).join(', ');
+  return (
+    <section className="karte in">
+      <h2 className="karte-titel">Notizen und Stichworte <small>gehören nicht zur Vorab-Karte, ändern keine Version</small></h2>
+      <label className="nw-feld">Stichworte (mit Komma)<input value={tags} onChange={(e) => { setTags(e.target.value); setOk(false); }} placeholder="erdgas, winter, wetter" /></label>
+      <label className="nw-feld">Notizen<textarea className="lb-text" rows={4} value={notizen} onChange={(e) => { setNotizen(e.target.value); setOk(false); }} placeholder="Beobachtungen, nächste Schritte, Ideen für Varianten …" /></label>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button className="knopf-klein press" disabled={!geaendert} onClick={async () => { await speichern({ notizen, tags: tags.split(',').map((s) => s.trim()).filter(Boolean) }); setOk(true); }}>Speichern</button>
+        {ok && !geaendert && <span className="leise" style={{ fontSize: 13 }}>Gespeichert ✓</span>}
+      </div>
+    </section>
+  );
+}
+
+const URTEILE = ['Bestätigt', 'Hinweis', 'Nicht bestätigt', 'Zu wenig Daten'];
+const leerExtern = (): LExtern => ({ id: '', datum: new Date().toISOString().slice(0, 10), urteil: null, stufe: '', kernzahl: '', link: '', text: '', n: null, nUnabhaengig: null });
+function SkillErgebnisse({ i, speichern }: { i: LIdee; speichern: (d: Record<string, unknown>) => Promise<void> }) {
+  const [form, setForm] = useState<LExtern | null>(null);
+  const liste = i.externAlle || [];
+  const sichern = async (neu: LExtern[]) => { await speichern({ extern: neu }); setForm(null); };
+  return (
+    <section className="karte in">
+      <h2 className="karte-titel">Ergebnisse aus dem Skill <small>{liste.length}</small></h2>
+      <p className="tr-hilfe" style={{ margin: '0 0 8px' }}>Was der Skill «hypothese-testen» ausserhalb der Zentrale gerechnet hat. Am einfachsten: die Antwort des Skills als Markdown importieren (Bibliothek → Markdown importieren) – oder hier von Hand eintragen.</p>
+      {liste.map((x) => (
+        <div key={x.id} className="lb-extern">
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <b>{x.datum}</b>{x.urteil && <UrteilChip urteil={x.urteil} />}{x.stufe && <span className="lb-tag">Stufe {x.stufe}</span>}
+            {x.n !== null && <span className="leise" style={{ fontSize: 12.5 }}>N {x.n}{x.nUnabhaengig !== null ? ` · unabh. ${x.nUnabhaengig}` : ''}</span>}
+            <span style={{ flex: 1 }} />
+            <button className="knopf-klein press" onClick={() => setForm({ ...x })}>Bearbeiten</button>
+            <button className="knopf-klein press" onClick={() => sichern(liste.filter((y) => y.id !== x.id))}>Entfernen</button>
+          </div>
+          {x.kernzahl && <div style={{ marginTop: 4 }}>{x.kernzahl}</div>}
+          {x.text && <div className="leise" style={{ marginTop: 4, whiteSpace: 'pre-wrap' }}>{x.text}</div>}
+          {x.link && <div style={{ marginTop: 4 }}><a href={x.link} target="_blank" rel="noopener noreferrer">Ergebnis-Seite öffnen</a></div>}
+        </div>
+      ))}
+      {form ? (
+        <div className="lb-teil">
+          <div className="lb-felder">
+            <label className="nw-feld">Datum<input type="date" value={form.datum} onChange={(e) => setForm({ ...form, datum: e.target.value })} /></label>
+            <label className="nw-feld">Urteil<select value={form.urteil || ''} onChange={(e) => setForm({ ...form, urteil: e.target.value || null })}><option value="">—</option>{URTEILE.map((u) => <option key={u} value={u}>{u}</option>)}</select></label>
+            <label className="nw-feld">Monty-Stufe<input value={form.stufe} onChange={(e) => setForm({ ...form, stufe: e.target.value })} placeholder="1, 2, 3 oder 4" /></label>
+            <label className="nw-feld">Fälle (N)<input type="number" value={form.n ?? ''} onChange={(e) => setForm({ ...form, n: e.target.value === '' ? null : Number(e.target.value) })} /></label>
+            <label className="nw-feld">davon unabhängig<input type="number" value={form.nUnabhaengig ?? ''} onChange={(e) => setForm({ ...form, nUnabhaengig: e.target.value === '' ? null : Number(e.target.value) })} /></label>
+            <label className="nw-feld lb-breit">Kernzahlen<input value={form.kernzahl} onChange={(e) => setForm({ ...form, kernzahl: e.target.value })} placeholder="Ø +5,8 % · Saison +2,6 % · p 0,19" /></label>
+            <label className="nw-feld lb-breit">Link zur Ergebnis-Seite<input value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} placeholder="https://claude.ai/artifact/…" /></label>
+            <label className="nw-feld lb-breit">Einordnung<textarea className="lb-text" rows={3} value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} placeholder="Was heisst das? Was würde das Urteil ändern?" /></label>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button className="knopf-akzent press" onClick={() => sichern(form.id ? liste.map((y) => (y.id === form.id ? form : y)) : [...liste, form])}>Speichern</button>
+            <button className="knopf-klein press" onClick={() => setForm(null)}>Abbrechen</button>
+          </div>
+        </div>
+      ) : <button className="knopf-klein press" onClick={() => setForm(leerExtern())}>+ Ergebnis eintragen</button>}
+    </section>
   );
 }
 
@@ -386,7 +612,7 @@ function VorabKarte({ k, b }: { k: LKarte; b: LBausteine }) {
     ['Geplante Varianten', String(k.geplanteVarianten ?? 1)],
     ...(k.typ === 'hypothese'
       ? ([['Zeitrahmen', k.tf || ''], ['Richtung', k.richtung || ''], ['Ereignisse', teile(k.ereignisse)], ['Horizonte', `${(k.horizonte || []).join(', ')} Handelstage (Haupt: ${k.hauptHorizont})`]] as [string, string][])
-      : ([['Strategie', name(b.strategien, k.modell || '')], ['Parameter', Object.entries(k.parameter || {}).map(([a, w]) => `${a} ${Array.isArray(w) ? w.join('/') : w}`).join(', ') || 'Standard'], ['Ereignisse', teile(k.ereignisse)], ['Bias-Fenster', k.bias ? `${teile(k.bias.ereignisse)} · ${k.bias.tage} Tage` : '—']] as [string, string][])),
+      : ([['Strategie', name(b.strategien, k.modell || '')], ['Parameter', Object.entries(k.parameter || {}).map(([a, w]) => `${a} ${Array.isArray(w) ? w.join('/') : w}`).join(', ') || 'Standard'], ['Ereignisse', teile(k.ereignisse)], ['Bias-Fenster', k.bias ? (k.bias.quelle === 'fremd' ? `Fremddaten-Hypothese ${k.bias.idee} · ${k.bias.tage} Kalendertage · ${k.bias.richtung}` : `${teile(k.bias.ereignisse)} · ${k.bias.tage} Handelstage`) : '—']] as [string, string][])),
     ['Filter', teile(k.filter)],
   ];
   return (
@@ -397,21 +623,6 @@ function VorabKarte({ k, b }: { k: LKarte; b: LBausteine }) {
 }
 
 // ---------- Ergebnis-Bausteine ----------
-function Raster({ zeilen }: { zeilen: LZeile[] }) {
-  const zeichen = { ja: '✓', nein: '✗', offen: '–' } as const;
-  const farbe = { ja: 'var(--gruen)', nein: 'var(--fehler)', offen: 'var(--muted)' } as const;
-  return (
-    <div className="lb-raster">
-      {zeilen.map((z) => (
-        <div key={z.id} className="lb-raster-zeile">
-          <span className="lb-zeichen" style={{ color: farbe[z.status] }} aria-label={z.status}>{zeichen[z.status]}</span>
-          <div style={{ minWidth: 0 }}><strong>{z.name}</strong><div className="tr-hilfe">{z.text}</div></div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function Kurve({ punkte, forward }: { punkte: [number, number][]; forward?: [number, number][] | null }) {
   const alle = useMemo(() => {
     const letzte = punkte.length ? punkte[punkte.length - 1][1] : 0;
@@ -439,28 +650,6 @@ function Kurve({ punkte, forward }: { punkte: [number, number][]; forward?: [num
       {alle.fw.length > 0 && <path d={pfad([alle.bt[alle.bt.length - 1] || alle.fw[0], ...alle.fw])} fill="none" stroke="#d6a23a" strokeWidth={1.8} />}
     </svg>
   );
-}
-
-function Gruppenbalken({ gruppen, einheit }: { gruppen: LGruppe[]; einheit: 'R' | 'ATR' }) {
-  if (!gruppen.length) return null;
-  const max = Math.max(...gruppen.map((g) => Math.abs(g.avg ?? 0)), 1e-9);
-  return (
-    <div className="lb-gruppen">
-      {gruppen.map((g) => (
-        <div key={g.schluessel} className="lb-gruppe" title={`${g.schluessel}: ${g.n} · Ø ${g.avg}`}>
-          <span className="lb-gruppe-name">{g.schluessel}</span>
-          <div className="lb-gruppe-spur">
-            <span style={{ left: (g.avg ?? 0) >= 0 ? '50%' : `${50 - (Math.abs(g.avg ?? 0) / max) * 50}%`, width: `${(Math.abs(g.avg ?? 0) / max) * 50}%`, background: (g.avg ?? 0) >= 0 ? 'var(--gruen)' : 'var(--fehler)' }} />
-          </div>
-          <span className="lb-gruppe-wert">{einheit === 'R' ? rText(g.avg) : atrText(g.avg)} <span className="leise">({g.n})</span></span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Kachel({ titel, wert, unter }: { titel: string; wert: string; unter?: string }) {
-  return <div className="lb-kachel"><span className="leise">{titel}</span><strong>{wert}</strong>{unter && <small className="leise">{unter}</small>}</div>;
 }
 
 function Kopf({ e }: { e: LErgebnis }) {
