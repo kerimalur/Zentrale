@@ -25,7 +25,7 @@ export function KursdatenLeiste({ onOeffnen }: { onOeffnen: () => void }) {
   const status = d.gesperrtBis
     ? `Pause (${d.fehler ?? 'Fehler'}), neuer Versuch um ${new Date(d.gesperrtBis).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' })}`
     : d.laeuft
-      ? `lädt ${d.art === 'm5' ? '5-Min' : 'Stunden'} ${d.paar ?? ''}${d.restMin !== null ? ` · noch ca. ${dauerText(d.restMin)}${d.art === 'h1' ? ' (Stunden)' : ''}` : ''}`
+      ? `lädt ${d.art === 'm5' ? '5-Min ' : d.art === 'h1' ? 'Stunden ' : ''}${d.paar ?? ''}${d.restMin !== null ? ` · noch ca. ${dauerText(d.restMin)}${d.art === 'h1' ? ' (Stunden)' : ''}` : ''}`
       : 'wartet auf den nächsten Start';
 
   const balken = (titel: string, p: number, aktiv: boolean) => (
