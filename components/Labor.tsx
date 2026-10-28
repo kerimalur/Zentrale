@@ -2,7 +2,7 @@
 // Trading → Labor: eigene und fremde Strategien sowie Hypothesen aufstellen, backtesten und (einmal, bewusst) forward-testen.
 // Ablauf pro Idee: Vorab-Karte → Starten (Version wird eingefroren) → Ergebnis mit Robustheits-Raster und Urteil →
 // Forward öffnen → Urteil mit Forward. Jede Änderung nach dem Start ist eine neue Version (zählt als getestete Variante).
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { holen, senden } from '@/lib/api';
 import { datumCh } from '@/lib/trading';
 import {
@@ -10,6 +10,7 @@ import {
   type LBaustein, type LBausteine, type LErgebnis, type LFErgebnis, type LExtern, type LIdee, type LIdeeKurz, type LKarte, type LParam, type LTeil, type LTrade, type LZettel, pText,
 } from '@/lib/labor';
 import { Schalter } from './ui';
+import { TradeChart } from './LaborTradeChart';
 import { UrteilChip, TypChip, Raster, Gruppenbalken, Kachel, Rueckfrage, FazitKarte, Erweitert } from './LaborTeile';
 import { Popup } from './NetzBausteine';
 import { FremdEditor, FremdVorabKarte, ErgebnisFremd, reiheNameKlient } from './LaborFremd';
@@ -684,6 +685,7 @@ function Kopf({ e }: { e: LErgebnis }) {
 function ErgebnisStrategie({ e }: { e: LErgebnis }) {
   const k = e.kennzahlen!;
   const [mehr, setMehr] = useState(60);
+  const [chartOffen, setChartOffen] = useState<number | null>(null);
   const trades = useMemo(() => [...(e.trades || []), ...(e.forwardTrades || []).map((t) => ({ ...t, fw: true }))].sort((a, b) => b.tEin - a.tEin), [e]);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -734,15 +736,19 @@ function ErgebnisStrategie({ e }: { e: LErgebnis }) {
         <h2 className="karte-titel">Trades <small>neueste zuerst</small></h2>
         <div style={{ overflowX: 'auto' }}>
           <table className="lb-tabelle">
-            <thead><tr><th>Einstieg</th><th>Paar</th><th>Seite</th><th>Risiko</th><th>Ausstieg</th><th>R</th></tr></thead>
+            <thead><tr><th>Einstieg</th><th>Paar</th><th>Seite</th><th>Risiko</th><th>Ausstieg</th><th>R</th><th></th></tr></thead>
             <tbody>
               {trades.slice(0, mehr).map((t: LTrade & { fw?: boolean }, x) => (
-                <tr key={x} style={t.fw ? { background: 'rgba(214,162,58,.08)' } : undefined}>
-                  <td>{new Date(t.tEin * 1000).toLocaleString('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}{t.fw ? ' · F' : ''}</td>
-                  <td>{t.pair}</td><td>{t.seite > 0 ? 'Long' : 'Short'}</td><td>{t.risikoPips} Pips</td>
-                  <td>{t.grund === 'tp' ? 'TP' : t.grund === 'sl' ? 'SL' : t.grund === 'zeit' ? 'Zeit' : 'offen'}</td>
-                  <td style={{ color: t.r >= 0 ? 'var(--gruen)' : 'var(--fehler)', fontWeight: 600 }}>{rText(t.r)}</td>
-                </tr>
+                <Fragment key={x}>
+                  <tr style={t.fw ? { background: 'rgba(214,162,58,.08)' } : undefined}>
+                    <td>{new Date(t.tEin * 1000).toLocaleString('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}{t.fw ? ' · F' : ''}</td>
+                    <td>{t.pair}</td><td>{t.seite > 0 ? 'Long' : 'Short'}</td><td>{t.risikoPips} Pips</td>
+                    <td>{t.grund === 'tp' ? 'TP' : t.grund === 'sl' ? 'SL' : t.grund === 'zeit' ? 'Zeit' : 'offen'}</td>
+                    <td style={{ color: t.r >= 0 ? 'var(--gruen)' : 'var(--fehler)', fontWeight: 600 }}>{rText(t.r)}</td>
+                    <td><button className="knopf-klein press" onClick={() => setChartOffen(chartOffen === x ? null : x)}>{chartOffen === x ? 'Zu' : 'Chart'}</button></td>
+                  </tr>
+                  {chartOffen === x && <tr><td colSpan={7} style={{ whiteSpace: 'normal' }}><TradeChart t={t} parameter={e.parameter} /></td></tr>}
+                </Fragment>
               ))}
             </tbody>
           </table>

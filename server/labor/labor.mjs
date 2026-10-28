@@ -18,6 +18,7 @@ import { reiheHolen, reiheVorschau, eigeneReihen, csvZuPunkten, tagIso } from '.
 import { bedingungenVorbereiten, ereignisseFinden } from './fremd/motor.mjs';
 import { ideeMd, zettelMd, sammlungMd, mdLesen, katalogNamen } from './fremd/markdown.mjs';
 import { fazitBauen, fazitKurz } from './fazit.mjs';
+import { dukascopyFuenfMinuten, dukascopyStunden, DUKA_PAARE } from '../dukascopy.mjs';
 
 const ordner = () => path.join(config.dataDir, 'labor');
 const JAHR = new Date().getUTCFullYear();
@@ -586,4 +587,36 @@ export function laborStart() {
   for (const x of l.laeufe) if (x.status === 'laeuft') { x.status = 'fehler'; x.fehler = 'Zentrale wurde neu gestartet'; }
   save();
   setTimeout(naechster, 5_000);
+}
+
+
+// Kerzen rund um einen einzelnen Trade (zum Nachprüfen im Chart). von/bis in Unix-Sekunden, tf: 5m | 15m | 30m | 1H.
+// Es werden nur Kerzen aus den gespeicherten Kursdaten geliefert; die Trades selbst stehen schon im (freigegebenen) Ergebnis.
+const CHART_TF = { '5m': 300, '15m': 900, '30m': 1800, '1H': 3600 };
+export function laborTradeChart({ pair, von, bis, tf = '15m' }) {
+  if (!DUKA_PAARE.includes(pair)) return { fehler: 'Unbekanntes Paar' };
+  von = Math.floor(Number(von)); bis = Math.floor(Number(bis));
+  const sek = CHART_TF[tf];
+  if (!sek || !(von > 0) || !(bis > von)) return { fehler: 'Ungültiger Zeitraum' };
+  if ((bis - von) / sek > 2500) return { fehler: 'Zeitraum zu lang für diesen Zeitrahmen – gröberen Zeitrahmen wählen' };
+  const mt = (x) => { const d = new Date(x * 1000); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
+  let t = [], o = [], h = [], l = [], c = [], res = 300, quelle = 'Dukascopy 5 Min';
+  const m5 = dukascopyFuenfMinuten(pair, mt(von), mt(bis));
+  if (m5 && m5.n) { for (let i = 0; i < m5.n; i++) if (m5.t[i] >= von && m5.t[i] <= bis) { t.push(m5.t[i]); o.push(m5.o[i]); h.push(m5.h[i]); l.push(m5.l[i]); c.push(m5.c[i]); } }
+  if (!t.length) {
+    const h1 = dukascopyStunden(pair);
+    if (!h1) return { fehler: 'Keine Kursdaten für dieses Paar' };
+    res = 3600; quelle = 'Dukascopy 1 Std';
+    for (let i = 0; i < h1.t.length; i++) { const s = h1.t[i] / 1000; if (s >= von && s <= bis) { t.push(s); o.push(h1.o[i]); h.push(h1.h[i]); l.push(h1.l[i]); c.push(h1.c[i]); } }
+  }
+  if (!t.length) return { fehler: 'Keine Kerzen in diesem Zeitraum' };
+  const k = Math.max(sek, res);
+  const kerzen = [];
+  let letzter = null;
+  for (let i = 0; i < t.length; i++) {
+    const key = Math.floor(t[i] / k) * k;
+    if (letzter && letzter.t === key) { if (h[i] > letzter.h) letzter.h = h[i]; if (l[i] < letzter.l) letzter.l = l[i]; letzter.c = c[i]; }
+    else { letzter = { t: key, o: o[i], h: h[i], l: l[i], c: c[i] }; kerzen.push(letzter); }
+  }
+  return { pair, tf: k === sek ? tf : (k === 3600 ? '1H' : tf), zuGrob: k > sek, quelle, kerzen };
 }
