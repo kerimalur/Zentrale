@@ -546,8 +546,69 @@ registrierePruefung('trading', async () => {
   return r;
 });
 
+// ---------- GVA-Prüfer ----------
+// Für ein Paar und einen Zeitraum: alle HTF-Kerzen mit der Musterprüfung gegen die Vorkerze (warum entsteht hier eine Linie –
+// oder warum nicht) und alle Linien mit Kerze A/B, Status und Treffer. So lässt sich jede Linie gegen TradingView prüfen.
+export function gvaPruefer({ pair, tf = '3D', von, bis }) {
+  if (!PAARE.includes(pair)) return { fehler: 'Unbekanntes Paar' };
+  if (!TFS.includes(tf)) return { fehler: 'Unbekannter Zeitrahmen' };
+  const d = zustand.daten.get(pair);
+  if (!d) return { fehler: 'Kurse für dieses Paar sind noch nicht geladen' };
+  return prueferRechnen(pair, d, tradingEinstellungen(), tf, von, bis);
+}
+function prueferRechnen(pair, d, e, tf, von, bis) {
+  const n = d.t.length;
+  const vonTag = /^\d{4}-\d{2}-\d{2}$/.test(von || '') ? isoTag(von) : d.sd[n - 1] - 120;
+  const bisTag = /^\d{4}-\d{2}-\d{2}$/.test(bis || '') ? isoTag(bis) : d.sd[n - 1];
+  if (!(bisTag >= vonTag)) return { fehler: 'Ungültiger Zeitraum' };
+  if (bisTag - vonTag > 3700) return { fehler: 'Zeitraum zu lang (höchstens 10 Jahre)' };
+  const pip = pipVon(pair);
+  const { kerzen } = kerzenBauen(d, tf, e);
+  const atr = atrReihe(kerzen, e.atrLen);
+  const r = (x) => runden(pair, x);
+  const liste = [];
+  for (let i = 0; i < kerzen.length; i++) {
+    const B = kerzen[i];
+    if (B.tag < vonTag || B.tag > bisTag) continue;
+    const fertig = i < kerzen.length - 1; // die letzte Kerze läuft noch
+    const z = { start: tagIso(B.tag), ende: tagIso(d.sd[B.e]), o: r(B.o), h: r(B.h), l: r(B.l), c: r(B.c), koerperPips: Number(((B.c - B.o) / pip).toFixed(1)), alt: !!B.alt, fertig, pruefung: null };
+    if (i > 0) {
+      const A = kerzen[i - 1];
+      const bodyA = Math.abs(A.c - A.o), bodyB = Math.abs(B.c - B.o);
+      const atrB = atr[i] ?? 0;
+      const tol = e.tolBasis === 'atr' ? atrB * (e.tolPct / 100) : bodyA * (e.tolPct / 100);
+      const noetig = 1 + e.k2Pct / 100;
+      const farbeA = A.c < A.o ? 'rot' : A.c > A.o ? 'grün' : 'neutral', farbeB = B.c > B.o ? 'grün' : B.c < B.o ? 'rot' : 'neutral';
+      const seite = farbeA === 'rot' && farbeB === 'grün' ? 'long' : farbeA === 'grün' && farbeB === 'rot' ? 'short' : null;
+      const abstand = seite === 'long' ? Math.abs(Math.min(A.o, A.c) - Math.min(B.o, B.c)) : seite === 'short' ? Math.abs(Math.max(A.o, A.c) - Math.max(B.o, B.c)) : null;
+      const verhaeltnis = bodyA > 0 ? bodyB / bodyA : null;
+      const gruende = [];
+      if (!seite) gruende.push(`Farben ${farbeA} → ${farbeB} (nötig rot → grün für Long, grün → rot für Short)`);
+      if (!(bodyA > 0)) gruende.push('Kerze A ohne Körper');
+      else if (verhaeltnis < noetig) gruende.push(`Körper B nur ${verhaeltnis.toFixed(2)}× A (nötig ${noetig.toFixed(2)}×)`);
+      if (seite && abstand > tol) gruende.push(`${seite === 'long' ? 'Böden' : 'Tops'} ${(abstand / pip).toFixed(1)} Pips auseinander (erlaubt ${(tol / pip).toFixed(1)})`);
+      if (!fertig) gruende.push('Kerze B läuft noch');
+      z.pruefung = {
+        vorStart: tagIso(A.tag), farbeA, farbeB, verhaeltnis: verhaeltnis === null ? null : Number(verhaeltnis.toFixed(2)), noetig: Number(noetig.toFixed(2)),
+        abstandPips: abstand === null ? null : Number((abstand / pip).toFixed(1)), tolPips: Number((tol / pip).toFixed(1)),
+        linie: gruende.length ? null : seite, level: gruende.length ? null : r(seite === 'long' ? Math.min(B.o, B.c) : Math.max(B.o, B.c)), gruende,
+      };
+    }
+    liste.push(z);
+  }
+  const linien = linienFinden(pair, d, e, [tf])
+    .filter((l) => (l.B.tag >= vonTag && l.B.tag <= bisTag) || (l.j >= 0 && d.sd[l.j] >= vonTag && d.sd[l.j] <= bisTag))
+    .map((l) => ({
+      id: l.id, seite: l.seite, lvl: l.lvl, entstanden: l.entstanden, status: l.status, alt: l.alt,
+      treffer: l.j >= 0 ? d.t[l.j] : null, trefferUngefaehr: l.j >= 0 ? d.quelle[l.j] === 0 : false,
+      A: { start: tagIso(l.A.tag), o: r(l.A.o), c: r(l.A.c) }, B: { start: tagIso(l.B.tag), o: r(l.B.o), c: r(l.B.c) },
+      verhaeltnis: Number(l.verhaeltnis.toFixed(2)), passungPips: Number(((l.passung * Math.abs(l.A.c - l.A.o)) / pip).toFixed(1)),
+    }));
+  return { pair, tf, pip, von: tagIso(vonTag), bis: tagIso(bisTag), einstellungen: e, kerzen: liste, linien, preis: r(d.c[n - 1]) };
+}
+
 // Für Tests ohne Server.
-export const _intern = { atrReihe, handelstageVorFn: (t, e) => handelstageVor(t, e), kerzenBauen, vollLaden, rechnen, sessionTag, keyFn, tagIso, handelstageVor, STANDARD };
+export const _intern = { prueferRechnen, atrReihe, handelstageVorFn: (t, e) => handelstageVor(t, e), kerzenBauen, vollLaden, rechnen, sessionTag, keyFn, tagIso, handelstageVor, STANDARD };
 
 // Aktueller Kurs eines Paars (für Umrechnungen im Journal), null wenn noch nicht geladen.
 export function tradingKurs(pair) {

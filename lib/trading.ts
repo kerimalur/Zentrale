@@ -75,6 +75,8 @@ export interface TPaarDetail {
 }
 
 export const TF_TEXT: Record<TTf, string> = { '3D': '3 Tage', W: 'Woche', M: 'Monat' };
+const W8 = ['EUR', 'GBP', 'AUD', 'NZD', 'USD', 'CAD', 'CHF', 'JPY'];
+export const PAARE_LISTE: string[] = W8.flatMap((a, i) => W8.slice(i + 1).map((b) => a + b));
 export const stellen = (pair: string) => (pair.endsWith('JPY') ? 3 : 5);
 export const kurs = (pair: string, x: number) => x.toFixed(stellen(pair));
 export const datumCh = (iso: string) => { const [j, m, t] = iso.split('-'); return `${t}.${m}.${j.slice(2)}`; };
