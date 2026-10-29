@@ -251,10 +251,9 @@ function kerzenBauen(d, tf, e) {
       letzte.h = Math.max(letzte.h, d.h[i]); letzte.l = Math.min(letzte.l, d.l[i]); letzte.c = d.c[i]; letzte.e = i;
       if (d.quelle[i] === 0) letzte.alt = true;
     } else {
-      // Open einer neuen Kerze: An Werktagen der Schluss der Kerze davor. Die erste Kerze nach 17:00 New York öffnet in den
-      // Bid-Kursen oft 10–25 Pips daneben (Spread-Sprung beim Rollover) – das würde Opens und damit GVA-Levels verfälschen.
-      // Nach dem Wochenende (Lücke > 24 Std) gilt das echte Open.
-      const o = i > 0 && d.t[i] - d.t[i - 1] < 24 * STUNDE ? d.c[i - 1] : d.o[i];
+      // Open einer neuen Kerze: der echte erste Kurs der Kerze, wie bei TradingView (geprüft 29.10.2026 an EURCAD 3D 13.03.26:
+      // TradingView-Open 1.57042 statt Close der Vorkerze 1.56960). Das GVA-Level ist der Open von Kerze B.
+      const o = d.o[i];
       kerzen.push({ k, o, h: Math.max(d.h[i], o), l: Math.min(d.l[i], o), c: d.c[i], s: i, e: i, tag: d.sd[i], alt: d.quelle[i] === 0 });
     }
   }
