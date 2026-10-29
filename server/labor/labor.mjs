@@ -605,11 +605,17 @@ export function laborTradeChart({ pair, von, bis, tf = '15m' }) {
   const e = tradingEinstellungen();
   const opens = [];
   let altTag = null;
-  const tagOpen = (s, op) => { const tag = tradingIntern.sessionTag(s * 1000, e); if (tag !== altTag) { altTag = tag; opens.push({ t: s, o: op }); } };
+  // Open an Werktagen = Schluss der Kerze davor (Rollover-Sprung der Bid-Kurse), nach dem Wochenende das echte Open
+  let altS = null, altC = null;
+  const tagOpen = (s, op, cl) => {
+    const tag = tradingIntern.sessionTag(s * 1000, e);
+    if (tag !== altTag) { altTag = tag; opens.push({ t: s, o: altS !== null && s - altS < 86_400 ? altC : op }); }
+    altS = s; altC = cl;
+  };
   const m5 = dukascopyFuenfMinuten(pair, mt(von - 86_400), mt(bis));
   if (m5 && m5.n) {
     for (let i = 0; i < m5.n; i++) {
-      if (m5.t[i] >= von - 86_400 && m5.t[i] <= bis) tagOpen(m5.t[i], m5.o[i]);
+      if (m5.t[i] >= von - 86_400 && m5.t[i] <= bis) tagOpen(m5.t[i], m5.o[i], m5.c[i]);
       if (m5.t[i] >= von && m5.t[i] <= bis) { t.push(m5.t[i]); o.push(m5.o[i]); h.push(m5.h[i]); l.push(m5.l[i]); c.push(m5.c[i]); }
     }
   }
@@ -617,10 +623,10 @@ export function laborTradeChart({ pair, von, bis, tf = '15m' }) {
     const h1 = dukascopyStunden(pair);
     if (!h1) return { fehler: 'Keine Kursdaten für dieses Paar' };
     res = 3600; quelle = 'Kursdaten 1 Std';
-    opens.length = 0; altTag = null;
+    opens.length = 0; altTag = null; altS = null; altC = null;
     for (let i = 0; i < h1.t.length; i++) {
       const s = h1.t[i] / 1000;
-      if (s >= von - 86_400 && s <= bis) tagOpen(s, h1.o[i]);
+      if (s >= von - 86_400 && s <= bis) tagOpen(s, h1.o[i], h1.c[i]);
       if (s >= von && s <= bis) { t.push(s); o.push(h1.o[i]); h.push(h1.h[i]); l.push(h1.l[i]); c.push(h1.c[i]); }
     }
   }

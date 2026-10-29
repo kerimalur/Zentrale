@@ -65,7 +65,9 @@ export function zeitrahmen(basis, tf) {
       C[j] = c[i]; E[j] = i;
     } else {
       letzter = k;
-      T.push(t[i]); S.push(i); E.push(i); O.push(o[i]); H.push(h[i]); L.push(l[i]); C.push(c[i]); SD.push(sd[i]);
+      // Tag/3D/Woche/Monat: Open an Werktagen = Schluss davor (Rollover-Sprung der Bid-Kurse, siehe trading.mjs kerzenBauen)
+      const op = !sek && i > 0 && t[i] - t[i - 1] < 86_400 ? c[i - 1] : o[i];
+      T.push(t[i]); S.push(i); E.push(i); O.push(op); H.push(Math.max(h[i], op)); L.push(Math.min(l[i], op)); C.push(c[i]); SD.push(sd[i]);
     }
   }
   const z = { tf, n: T.length, t: Int32Array.from(T), s: Int32Array.from(S), en: Int32Array.from(E), o: Float64Array.from(O), h: Float64Array.from(H), l: Float64Array.from(L), c: Float64Array.from(C), sd: Int32Array.from(SD) };
