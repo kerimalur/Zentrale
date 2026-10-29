@@ -14,10 +14,11 @@ import { TradeChart, grundText } from './LaborTradeChart';
 import { UrteilChip, TypChip, Raster, Gruppenbalken, Kachel, Rueckfrage, FazitKarte, Erweitert } from './LaborTeile';
 import { Popup } from './NetzBausteine';
 import { FremdEditor, FremdVorabKarte, ErgebnisFremd, reiheNameKlient } from './LaborFremd';
+import { LaborVergleich } from './LaborVergleich';
 import { Brainstorm, ExportKnoepfe, ImportPopup, MdVorschau } from './LaborWerkzeuge';
 
 type Ansicht =
-  | { art: 'liste' } | { art: 'brainstorm' } | { art: 'idee'; id: string }
+  | { art: 'liste' } | { art: 'brainstorm' } | { art: 'vergleich'; ids?: string[] } | { art: 'idee'; id: string }
   | { art: 'karte'; karte: LKarte; id?: string; zettel?: string };
 type Filter = '' | 'strategie' | 'hypothese' | 'fremd';
 
@@ -71,15 +72,25 @@ export function Labor() {
   }
   if (ansicht.art === 'idee') {
     return <IdeeAnsicht b={b} id={ansicht.id} onZurueck={() => { setAnsicht({ art: 'liste' }); laden(); }} onBearbeiten={(karte, neu) => setAnsicht(neu ? { art: 'karte', karte } : { art: 'karte', karte, id: ansicht.id })}
-      onOeffnen={(id) => setAnsicht({ art: 'idee', id })} />;
+      onOeffnen={(id) => setAnsicht({ art: 'idee', id })} onVergleich={(ids) => setAnsicht({ art: 'vergleich', ids })} />;
   }
 
   const bereich = (
-    <div className="segment" style={{ gridTemplateColumns: '1fr 1fr', maxWidth: 420 }} role="tablist" aria-label="Labor-Bereich">
+    <div className="segment" style={{ gridTemplateColumns: '1fr 1fr 1fr', maxWidth: 560 }} role="tablist" aria-label="Labor-Bereich">
       <button role="tab" aria-selected={ansicht.art === 'liste'} aria-pressed={ansicht.art === 'liste'} onClick={() => { setAnsicht({ art: 'liste' }); laden(); }}>Bibliothek</button>
       <button role="tab" aria-selected={ansicht.art === 'brainstorm'} aria-pressed={ansicht.art === 'brainstorm'} onClick={() => setAnsicht({ art: 'brainstorm' })}>Brainstorm</button>
+      <button role="tab" aria-selected={ansicht.art === 'vergleich'} aria-pressed={ansicht.art === 'vergleich'} onClick={() => setAnsicht({ art: 'vergleich' })}>Vergleich</button>
     </div>
   );
+
+  if (ansicht.art === 'vergleich') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {bereich}
+        <LaborVergleich key={(ansicht.ids || []).join(',')} startIds={ansicht.ids} />
+      </div>
+    );
+  }
 
   if (ansicht.art === 'brainstorm') {
     return (
@@ -419,7 +430,7 @@ function KarteEditor({ b, ideen, start, id, onZurueck, onGespeichert }: { b: LBa
 }
 
 // ---------- Eine Idee: Status, Läufe, Ergebnis, Notizen, Skill-Ergebnisse ----------
-function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen }: { b: LBausteine; id: string; onZurueck: () => void; onBearbeiten: (k: LKarte, neu?: boolean) => void; onOeffnen: (id: string) => void }) {
+function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen, onVergleich }: { b: LBausteine; id: string; onZurueck: () => void; onBearbeiten: (k: LKarte, neu?: boolean) => void; onOeffnen: (id: string) => void; onVergleich: (ids: string[]) => void }) {
   const [i, setI] = useState<LIdee | null>(null);
   const [erg, setErg] = useState<LErgebnis | LFErgebnis | null>(null);
   const [laufId, setLaufId] = useState<string | null>(null);
@@ -530,6 +541,7 @@ function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen }: { b: LBauste
               ))}
             </div>
           )}
+          {fertigeLaeufe.length > 1 && <button className="knopf-klein press" onClick={() => onVergleich(fertigeLaeufe.slice(0, Math.min(4, fertigeLaeufe.length)).map((l) => l.id))}>Läufe vergleichen</button>}
           {zielLauf && <button className="knopf-klein press" onClick={() => setFrage('lauf')}>Dieses Ergebnis löschen …</button>}
         </div>
       )}

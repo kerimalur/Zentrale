@@ -27,7 +27,7 @@ import { dukascopyTakt, dukascopyZustand } from './dukascopy.mjs';
 import { tradingZustand, tradingPaar, tradingLauf, tradingNeuLaden, tradingEinstellungenSetzen, tradingTestMeldung, gvaPruefer, PAARE } from './trading.mjs';
 import { heuteZustand, anmeldeUrl, rueckkehr, trennen as googleTrennen, mailAktion, scanStarten, scanZustand, absenderAktion, werbefilterSetzen, terminNeu, aufgabeNeu, aufgabeErledigt } from './google.mjs';
 import { statistik as gvaStatistik, statistikStandardSetzen, beispiel as gvaBeispiel } from './tradingStatistik.mjs';
-import { laborListe, laborIdee, laborIdeeSpeichern, laborIdeeLoeschen, laborStarten, laborForwardOeffnen, laborLauf, laborErgebnis, laborAbbrechen, laborBausteine, laborStart, laborIdeeMeta, laborIdeeKopieren, laborZettel, laborZettelSpeichern, laborZettelLoeschen, laborReiheSpeichern, laborReiheLoeschen, laborReiheVorschau, laborExport, laborImport, laborVersionVerwerfen, laborLaufLoeschen, laborTradeChart } from './labor/labor.mjs';
+import { laborListe, laborIdee, laborIdeeSpeichern, laborIdeeLoeschen, laborStarten, laborForwardOeffnen, laborLauf, laborErgebnis, laborAbbrechen, laborBausteine, laborStart, laborIdeeMeta, laborIdeeKopieren, laborZettel, laborZettelSpeichern, laborZettelLoeschen, laborReiheSpeichern, laborReiheLoeschen, laborReiheVorschau, laborExport, laborImport, laborVersionVerwerfen, laborLaufLoeschen, laborTradeChart, laborLaeufeFertig, laborVergleich } from './labor/labor.mjs';
 import { journalZustand, tradeSpeichern, tradeLoeschen, journalEinstellungenSetzen, bildSpeichern, bildPfad, importieren } from './journal.mjs';
 import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
@@ -259,6 +259,11 @@ async function api(req, res, url) {
     return r ? json(res, 200, r) : json(res, 404, { fehler: 'Kein Ergebnis' });
   }
 
+  if (p === '/api/labor/laeufe-fertig' && m === 'GET') return json(res, 200, laborLaeufeFertig());
+  if (p === '/api/labor/vergleich' && m === 'POST') {
+    const r = laborVergleich((await body(req)).ids);
+    return r.fehler ? json(res, 400, r) : json(res, 200, r);
+  }
   if (p === '/api/labor/trade-chart' && m === 'GET') {
     const r = laborTradeChart({ pair: String(url.searchParams.get('pair') || ''), von: url.searchParams.get('von'), bis: url.searchParams.get('bis'), tf: String(url.searchParams.get('tf') || '15m') });
     return r.fehler ? json(res, 400, r) : json(res, 200, r);

@@ -650,3 +650,95 @@ export function laborTradeChart({ pair, von, bis, tf = '15m' }) {
   }
   return { pair, tf: k === sek ? tf : (k === 3600 ? '1H' : tf), zuGrob: k > sek, quelle, kerzen, dailyOpens, weeklyOpens, monthlyOpens };
 }
+
+// ---------- Läufe vergleichen ----------
+// Alle fertigen Läufe (neueste zuerst) für die Auswahl
+export function laborLaeufeFertig() {
+  const l = lab();
+  const out = [];
+  for (const x of [...l.laeufe].reverse()) {
+    if (x.status !== 'fertig') continue;
+    const i = l.ideen.find((y) => y.id === x.idee);
+    if (!i) continue;
+    const v = i.versionen.find((y) => y.v === x.v) || aktuelle(i);
+    out.push({ id: x.id, idee: x.idee, name: v.karte.name, typ: v.karte.typ, v: x.v, art: x.art, ende: x.ende, kurz: x.kurz });
+  }
+  return { laeufe: out };
+}
+
+// Spezifikation einer Karte als flache Zeilen { schluessel, name, wert } – Parameter mit ihren Namen aus dem Schema
+function spezifikation(k, parameter) {
+  const zeilen = [];
+  const add = (schluessel, name, wert) => zeilen.push({ schluessel, name, wert: wert === undefined || wert === null || wert === '' ? '—' : String(wert) });
+  const teile = (liste, katalog) => (liste || []).map((t) => `${katalog[t.id]?.name || t.id}${Object.keys(t.p || {}).length ? ` (${Object.entries(t.p).map(([a, w]) => `${a} ${Array.isArray(w) ? w.join('/') : w}`).join(', ')})` : ''}`).join(' + ') || '—';
+  add('typ', 'Art', k.typ === 'strategie' ? 'Strategie' : k.typ === 'fremd' ? 'Hypothese · Fremddaten' : 'Hypothese · Kurse');
+  add('backtest', 'Backtest', `${k.backtest?.von}–${k.backtest?.bis}`);
+  add('forward', 'Forward ab', k.forward?.von);
+  if (k.typ !== 'fremd') add('paare', 'Paare', k.paare?.length ? k.paare.join(', ') : 'alle 28');
+  if (k.typ === 'strategie') {
+    const mod = STRATEGIE[k.modell];
+    add('modell', 'Strategie', mod?.name || k.modell);
+    const p = parameter || k.parameter || {};
+    for (const s of mod?.parameter || []) {
+      let w = p[s.key];
+      if (w === undefined) w = s.standard;
+      const optText = (x) => s.optionen?.find((o) => o.wert === x)?.text ?? x;
+      const txt = s.typ === 'schalter' ? (w ? 'an' : 'aus') : s.typ === 'mehrfach' ? (Array.isArray(w) ? w.map(optText).join(', ') : w) : s.typ === 'auswahl' ? optText(w) : w;
+      add(`p.${s.key}`, s.name, txt);
+    }
+    if (mod?.mitEreignissen) add('ereignisse', 'Ereignisse', teile(k.ereignisse, EREIGNIS));
+    add('bias', 'Bias-Fenster', k.bias ? (k.bias.quelle === 'fremd' ? `Fremddaten-Hypothese · ${k.bias.tage} Tage · ${k.bias.richtung}` : `${teile(k.bias.ereignisse, EREIGNIS)} · ${k.bias.tage} Handelstage · ${k.bias.richtung}`) : null);
+  } else if (k.typ === 'hypothese') {
+    add('tf', 'Zeitrahmen', TF_TEXT[k.tf] || k.tf);
+    add('richtung', 'Richtung', k.richtung);
+    add('ereignisse', 'Ereignisse', teile(k.ereignisse, EREIGNIS));
+    add('horizonte', 'Horizonte', (k.horizonte || []).join(', '));
+  } else {
+    add('richtung', 'Richtung', k.richtung);
+    add('maerkte', 'Märkte', (k.maerkte || []).map((m) => m.id).join(', '));
+    add('bedingungen', 'Bedingungen', (k.bedingungen || []).map((b) => `${b.reihe} ${b.mess?.art} ${b.vergleich} ${b.schwelle}`).join(' + ') || (k.liste?.length ? `${k.liste.length} Ereignisse aus Liste` : null));
+    add('horizonte', 'Horizonte (Tage)', (k.horizonte || []).join(', '));
+    add('warten', 'Wartezeit', k.warten);
+  }
+  if (k.typ !== 'fremd') add('filter', 'Filter', teile(k.filter, FILTER_ID));
+  return zeilen;
+}
+
+export function laborVergleich(ids) {
+  const liste = [...new Set((Array.isArray(ids) ? ids : []).map((x) => String(x).replace(/[^0-9a-f-]/g, '')))].slice(0, 4);
+  if (liste.length < 2) return { fehler: 'Mindestens zwei Läufe wählen' };
+  const spalten = [], specs = [], tradeKeys = [];
+  for (const id of liste) {
+    const e = laborErgebnis(id);
+    if (!e) return { fehler: `Ergebnis ${id.slice(0, 8)} nicht gefunden` };
+    const x = lab().laeufe.find((y) => y.id === id);
+    const i = lab().ideen.find((y) => y.id === x?.idee);
+    const k = e.karte || {};
+    specs.push(spezifikation(k, e.parameter));
+    const trades = e.trades || [];
+    tradeKeys.push(new Set(trades.map((t) => `${t.pair}|${t.seite}|${t.tEin}`)));
+    spalten.push({
+      id, idee: x?.idee || null, name: k.name || i?.versionen?.[0]?.karte?.name || 'Lauf', v: e.lauf?.v ?? x?.v, art: e.lauf?.art ?? x?.art, ende: e.lauf?.ende ?? x?.ende, typ: e.typ,
+      urteil: e.urteil, warum: e.warum, n: e.n, nUnabhaengig: e.nUnabhaengig, varianten: e.varianten,
+      kennzahlen: e.kennzahlen || null, forward: e.forward ? { kennzahlen: e.forward.kennzahlen } : null,
+      kurve: e.kurve || null, forwardKurve: e.forward?.kurve || null,
+      trichter: e.trichter || null, raster: (e.raster || []).map((z) => ({ id: z.id, name: z.name, status: z.status, text: z.text })),
+      proJahr: e.proJahr || null, grundAusstieg: e.grundAusstieg || null, mfeMedian: e.mfeMedian ?? null, maeMedian: e.maeMedian ?? null,
+      monteCarlo: e.monteCarlo ? { dd95: e.monteCarlo.dd95, serie95: e.monteCarlo.serie95 } : null, fazit: e.fazit ? { ampel: e.fazit.ampel, satz: e.fazit.satz } : null,
+    });
+  }
+  // Spezifikation: alle Schlüssel, die in einem Lauf vorkommen; «verschieden», wenn die Werte nicht überall gleich sind
+  const schluessel = [];
+  for (const s of specs) for (const z of s) if (!schluessel.some((x) => x.schluessel === z.schluessel)) schluessel.push({ schluessel: z.schluessel, name: z.name });
+  const spezifikationZeilen = schluessel.map(({ schluessel: sk, name }) => {
+    const werte = specs.map((s) => s.find((z) => z.schluessel === sk)?.wert ?? '—');
+    return { schluessel: sk, name, werte, verschieden: new Set(werte).size > 1 };
+  });
+  // Trades: wie viele gibt es in allen Läufen, wie viele nur in diesem
+  const tradesVergleich = tradeKeys.map((s, i) => {
+    let gemeinsam = 0, nurHier = 0;
+    for (const t of s) { const anderswo = tradeKeys.filter((x, j) => j !== i && x.has(t)).length; if (anderswo === tradeKeys.length - 1) gemeinsam++; if (anderswo === 0) nurHier++; }
+    return { gesamt: s.size, gemeinsam, nurHier };
+  });
+  return { spalten, spezifikation: spezifikationZeilen, trades: tradesVergleich };
+}
