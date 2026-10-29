@@ -87,7 +87,7 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
     return M;
   }, [t, info, neu]);
 
-  const B = 900, H = 400, rand = { l: 8, r: 170, o: 22, u: 26 };
+  const B = 960, H = 470, rand = { l: 8, r: 215, o: 44, u: 26 };
   const geo = useMemo(() => {
     if (!d?.kerzen.length) return null;
     const k = d.kerzen;
@@ -138,7 +138,8 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
           <svg viewBox={`0 0 ${B} ${H}`} style={{ width: '100%', height: 'auto', background: 'var(--bg)', borderRadius: 8 }} onMouseLeave={() => setHover(null)}>
             {[0, 1, 2, 3, 4].map((i) => {
               const p = geo.lo + ((geo.hi - geo.lo) * i) / 4;
-              return <g key={i}><line x1={rand.l} x2={B - rand.r} y1={geo.y(p)} y2={geo.y(p)} stroke="var(--track)" strokeWidth={0.5} /><text x={B - rand.r + 4} y={geo.y(p) + 3} fontSize={10} fill="var(--muted)">{p.toFixed(de)}</text></g>;
+              const frei = !linien.some((l) => Math.abs(geo.y(l.preis) - geo.y(p)) < 13);
+              return <g key={i}><line x1={rand.l} x2={B - rand.r} y1={geo.y(p)} y2={geo.y(p)} stroke="var(--track)" strokeWidth={0.5} />{frei && <text x={B - rand.r + 4} y={geo.y(p) + 3} fontSize={9.5} fill="var(--muted)">{p.toFixed(de)}</text>}</g>;
             })}
             {[0, 1, 2, 3, 4, 5].map((i) => {
               const k = geo.k[Math.min(geo.k.length - 1, Math.floor((geo.k.length * i) / 6))];
@@ -159,7 +160,7 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
               return (
                 <g key={`${kurz}-${x.t}`}>
                   <line x1={xa} x2={xb} y1={geo.y(x.o)} y2={geo.y(x.o)} stroke={farbe} strokeWidth={1} strokeDasharray="5 3" opacity={0.75} />
-                  <text x={xa + 2} y={geo.y(x.o) - 3} fontSize={9} fill={farbe}>{kurz} {x.o.toFixed(de)}</text>
+                  {xb - xa > 90 && <text x={xa + 2} y={geo.y(x.o) - 3} fontSize={8.5} fill={farbe} opacity={0.9}>{kurz} {x.o.toFixed(de)}</text>}
                 </g>
               );
             }))}
@@ -183,24 +184,45 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
                 </g>
               );
             })}
-            {linien.map((l, i) => geo.y(l.preis) >= 0 && geo.y(l.preis) <= H - rand.u && (
-              <g key={i}>
-                <line x1={l.ab ? geo.x(l.ab) : rand.l} x2={B - rand.r} y1={geo.y(l.preis)} y2={geo.y(l.preis)} stroke={l.farbe} strokeWidth={l.ab ? 1.5 : 1} strokeDasharray={l.strich} opacity={0.9} />
-                <text x={B - rand.r + 4} y={geo.y(l.preis) + 3} fontSize={10} fill={l.farbe} fontWeight={600}>{l.text} {l.preis.toFixed(de)}</text>
-              </g>
-            ))}
+            {(() => {
+              // Beschriftungen rechts von oben nach unten mit Mindestabstand verteilen (Linie bleibt am echten Preis, kleiner Strich führt zum Text)
+              const sicht = linien.map((l) => ({ l, y: geo.y(l.preis) })).filter((v) => v.y >= rand.o - 2 && v.y <= H - rand.u).sort((a, b) => a.y - b.y);
+              const ABST = 12.5;
+              let last = -Infinity;
+              const ly = sicht.map((v) => { last = Math.max(v.y, last + ABST); return last; });
+              for (let j = ly.length - 1; j >= 0; j--) ly[j] = Math.min(ly[j], j === ly.length - 1 ? H - rand.u : ly[j + 1] - ABST);
+              return sicht.map((v, j) => (
+                <g key={j}>
+                  <line x1={v.l.ab ? geo.x(v.l.ab) : rand.l} x2={B - rand.r} y1={v.y} y2={v.y} stroke={v.l.farbe} strokeWidth={v.l.ab ? 1.5 : 1} strokeDasharray={v.l.strich} opacity={0.9} />
+                  {Math.abs(ly[j] - v.y) > 1 && <line x1={B - rand.r} x2={B - rand.r + 6} y1={v.y} y2={ly[j]} stroke={v.l.farbe} strokeWidth={0.8} opacity={0.8} />}
+                  <text x={B - rand.r + 8} y={ly[j] + 3} fontSize={10} fill={v.l.farbe} fontWeight={600}>{v.l.text} {v.l.preis.toFixed(de)}</text>
+                </g>
+              ));
+            })()}
             {confVon(t)?.liste.map((c) => geo.y(c.preis) >= 0 && geo.y(c.preis) <= H - rand.u && (
               <g key={`c${c.art}`}>
                 <title>{`${confName(c.art, t.seite)} ${c.preis.toFixed(de)}`}</title>
                 <rect x={geo.x(t.tEin) - 4} y={geo.y(c.preis) - 4} width={8} height={8} transform={`rotate(45 ${geo.x(t.tEin)} ${geo.y(c.preis)})`} fill={CONF_FARBE[c.art]} stroke="var(--bg)" strokeWidth={1} />
               </g>
             ))}
-            {marken.map((m, i) => m.t > 0 && m.t >= geo.t0 && m.t <= geo.t1 + geo.dt && (
-              <g key={`${m.text}-${i}`}>
-                <line x1={geo.x(m.t)} x2={geo.x(m.t)} y1={rand.o} y2={H - rand.u} stroke={m.farbe} strokeWidth={1} strokeDasharray="3 3" />
-                <text x={geo.x(m.t) + 3} y={rand.o - 8 + (i % 2) * 12} fontSize={10} fill={m.farbe} fontWeight={600}>{m.text}</text>
-              </g>
-            ))}
+            {(() => {
+              // Beschriftungen oben in bis zu 3 Zeilen, damit sie sich nicht überdecken
+              const sicht = marken.filter((m) => m.t > 0 && m.t >= geo.t0 && m.t <= geo.t1 + geo.dt).sort((a, b) => a.t - b.t);
+              const ende: number[] = [];
+              return sicht.map((m, i) => {
+                const px = geo.x(m.t), breite = m.text.length * 6.2 + 8;
+                let zeile = ende.findIndex((e) => e < px);
+                if (zeile < 0) zeile = ende.length < 3 ? ende.length : 0;
+                ende[zeile] = px + breite;
+                return (
+                  <g key={`${m.text}-${i}`}>
+                    <line x1={px} x2={px} y1={rand.o - 4 - (2 - zeile) * 0} y2={H - rand.u} stroke={m.farbe} strokeWidth={1} strokeDasharray="3 3" opacity={0.7} />
+                    <text x={px + 3} y={12 + zeile * 12} fontSize={10} fill={m.farbe} fontWeight={600}>{m.text}</text>
+                    <line x1={px} x2={px} y1={14 + zeile * 12} y2={rand.o} stroke={m.farbe} strokeWidth={1} opacity={0.5} />
+                  </g>
+                );
+              });
+            })()}
           </svg>
           <div className="tr-hilfe" style={{ marginTop: 6, minHeight: 18 }}>
             {hover ? `${zeit(hover.t)} · O ${hover.o.toFixed(de)} H ${hover.h.toFixed(de)} L ${hover.l.toFixed(de)} C ${hover.c.toFixed(de)}` : `Signal ${zeit(t.tSignal)} · Einstieg ${zeit(t.tEin)} · Ausstieg ${t.tAus ? zeit(t.tAus) : 'offen'} · Risiko ${t.risikoPips} Pips · Quelle ${d.quelle}`}

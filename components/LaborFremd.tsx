@@ -338,7 +338,7 @@ export function passendeFallen(fb: FB, k: Pick<LKarte, 'name' | 'mechanismus' | 
 }
 
 // ---------- Editor der Vorab-Karte ----------
-export function FremdEditor({ b, start, id, onZurueck, onGespeichert, onBausteine }: { b: LBausteine; start: LKarte; id?: string; onZurueck: () => void; onGespeichert: (id: string) => void; onBausteine: () => void }) {
+export function FremdEditor({ b, start, id, basis, onZurueck, onGespeichert, onBausteine }: { b: LBausteine; start: LKarte; id?: string; basis?: string; onZurueck: () => void; onGespeichert: (id: string) => void; onBausteine: () => void }) {
   const fb = b.fremd;
   const [k, setK] = useState<LKarte>(() => ({
     modus: 'bedingung', start: 'beginn', richtung: 'long', warten: 0, horizonte: [7, 30, 60], hauptHorizont: 30, bedingungen: [], maerkte: [], liste: [], kette: {}, wege: [],
@@ -361,7 +361,7 @@ export function FremdEditor({ b, start, id, onZurueck, onGespeichert, onBaustein
     try {
       const horizonte = horizText.split(/[,;\s]+/).map(Number).filter((x) => x >= 1);
       const karte: LKarte = { ...k, horizonte, liste: k.modus === 'liste' ? textZuListe(listeText) : k.liste };
-      const r = await senden<LIdee>('/api/labor/idee', { id, karte });
+      const r = await senden<LIdee>('/api/labor/idee', { id, basis, karte });
       if (starten) await senden('/api/labor/start', { id: r.id });
       onGespeichert(r.id);
     } catch (e) { setFehler((e as Error).message); setLaeuft(false); }
@@ -389,7 +389,7 @@ export function FremdEditor({ b, start, id, onZurueck, onGespeichert, onBaustein
 
       <section className="karte in">
         <h2 className="karte-titel">Vorab-Karte <small>Hypothese mit Fremddaten</small></h2>
-        <p className="tr-hilfe" style={{ margin: '0 0 12px' }}>Nur das Wichtige ausfüllen: Name, ein Satz Mechanismus und ein Erfolgskriterium als Zahl. Alles hier wird beim Start eingefroren; jede Änderung danach ist eine neue Version und zählt als getestete Variante (strengere Grenze für den p-Wert). Leere Felder sind in Ordnung.</p>
+        <p className="tr-hilfe" style={{ margin: '0 0 12px' }}>Nur das Wichtige ausfüllen: Name, ein Satz Mechanismus und ein Erfolgskriterium als Zahl. Der Name muss einmalig sein. Alles hier wird beim Start eingefroren; jede Änderung danach ist eine neue Version und zählt als getestete Variante (strengere Grenze für den p-Wert). Leere Felder sind in Ordnung.</p>
         <label className="nw-feld">Name<input value={k.name} onChange={(e) => setz('name', e.target.value)} maxLength={80} /></label>
         <label className="nw-feld">Mechanismus (warum sollte es wirken? Ein Satz genügt)<textarea className="lb-text" rows={2} value={k.mechanismus || ''} onChange={(e) => setz('mechanismus', e.target.value)} /></label>
         <label className="nw-feld">Erfolgskriterium (vorab als Zahl, z. B. «Mehrwert &gt; 0, p &lt; 0,05, beide Hälften gleiche Richtung»)<textarea className="lb-text" rows={2} value={k.erfolgskriterium || ''} onChange={(e) => setz('erfolgskriterium', e.target.value)} /></label>
@@ -710,7 +710,7 @@ export function ErgebnisFremd({ e }: { e: LFErgebnis }) {
           {e.ereignisseGesamt} Ereignisse im Backtest, davon {H.n} Fälle ohne Überlappung ({H.nUnabhaengig} unabhängige Ereignistage). Nach {e.haupt} Tagen im Schnitt <b>{pText(H.mittel)}</b> in der erwarteten Richtung; der gleiche Kalendertag in anderen Jahren brachte <b>{pText(H.saison)}</b>. Der Mehrwert des Ereignisses ist also <b>{pText(H.mehrwert)}</b>{H.p !== null ? ` (p = ${String(H.p).replace('.', ',')})` : ''}. Während der Ereignis-Periode selbst (gleichzeitig, nicht handelbar): {pText(H.gleichzeitig)}.
         </p>
         <div className="leise" style={{ fontSize: 12.5, marginTop: 8, lineHeight: 1.5 }}>
-          Version {e.lauf.v} · {e.lauf.art === 'forward' ? 'Backtest + Forward' : 'nur Backtest'} · {e.karte.backtest?.von}–{e.karte.backtest?.bis}{e.lauf.art === 'forward' ? `, Forward ab ${e.karte.forward?.von}` : ''} · {e.varianten} getestete Variante{e.varianten === 1 ? '' : 'n'} · gerechnet in {e.dauerSek} s
+          {e.lauf.art === 'forward' ? 'Backtest + Forward' : 'nur Backtest'} · {e.karte.backtest?.von}–{e.karte.backtest?.bis}{e.lauf.art === 'forward' ? `, Forward ab ${e.karte.forward?.von}` : ''} · {e.varianten} getestete Variante{e.varianten === 1 ? '' : 'n'} · gerechnet in {e.dauerSek} s
           {veraltet.length > 0 && <span style={{ color: '#b7791f' }}> · {veraltet.map((a) => `${a.name}: ${a.veraltet}`).join(' · ')}</span>}
           {e.schonGesehen && <span style={{ color: 'var(--fehler)' }}> · Achtung: Der Forward wurde schon bei einer früheren Version angeschaut</span>}
         </div>

@@ -54,6 +54,7 @@ export interface LImportEintrag { nr: string; art: 'idee' | 'zettel' | 'ergebnis
 export interface LReiheVorschau { id: string; name: string; freq: string; quelle: string; link: string | null; hinweis: string | null; veraltet: string | null; von: string; bis: string; n: number; letzte: [string, number][]; verlauf: [number, number][]; fehler?: string }
 export interface LIdeeKurz {
   id: string; name: string; typ: 'strategie' | 'hypothese' | 'fremd'; version: number; eingefroren: boolean; erstellt: string; geaendert: string;
+  gesperrt: boolean; familie: string; basis: { id: string; name: string } | null;
   varianten: number; forwardOffen: boolean; forwardGeoeffnet: Record<string, string>; lauf: LLauf | null;
   ergebnis: ({ lauf: string; v: number; art: string } & NonNullable<LLauf['kurz']>) | null;
   tags: string[]; extern: LExtern | null; maerkte: string[] | null;

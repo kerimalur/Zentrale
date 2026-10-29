@@ -1,7 +1,7 @@
 // Kerims GVA-Strategie nach dem Regelwerk vom 29.10.2026 (Beschreibung für Long, Short gespiegelt).
 // Strikte Reihenfolge – nichts darf vor dem vorherigen Schritt «vorbereitet» werden:
 //   1. GVA-Hit: Eine Long-GVA-Linie (3D) wird zum ersten Mal berührt. Erst ab jetzt läuft der tiefe Zeitrahmen (15/30 Min).
-//   2. Im Moment des Hits wird das LETZTE HOCH fixiert: letztes bestätigtes Swing-Hoch (Fractal mit N Kerzen links/rechts)
+//   2. Im Moment des Hits wird das LETZTE HOCH fixiert (Parameter «hochZeit»: alternativ erst das erste Hoch NACH dem Hit): letztes bestätigtes Swing-Hoch (Fractal mit N Kerzen links/rechts)
 //      vor der Treffer-Kerze. Es bleibt das BOS-Level, auch wenn der Kurs danach tiefer läuft und neue, tiefere Hochs macht.
 //   3. BOS = Körper-Schluss (Body Close) über dem letzten Hoch UND über dem Daily Open (17:00 New York).
 //      Daily Open: vom Tag des Hits oder vom Tag des BOS – eines reicht (einstellbar). Liegt das Hoch unter dem Daily Open,
@@ -41,6 +41,10 @@ export default {
     mehrfach('tfs', 'GVA-Linien von', ['3D'], ['3D', 'W', 'M']),
     auswahl('tiefTf', 'Tiefer Zeitrahmen (Swings und BOS)', '15m', [{ wert: '15m', text: '15 Min' }, { wert: '30m', text: '30 Min' }]),
     zahl('swingN', 'Letztes Hoch: Kerzen links/rechts', 10, 1, 30, 1, 'Ein Hoch zählt, wenn es höher ist als N Kerzen davor und danach. Grösser = nur deutlichere Hochs (kleine Zwischenhochs im Abwärtszug zählen nicht).'),
+    auswahl('hochZeit', 'Welches Hoch (Short: Tief) zählt als BOS-Level?', 'vorHit', [
+      { wert: 'vorHit', text: 'Das letzte Hoch VOR dem GVA-Hit (fixiert beim Hit)' },
+      { wert: 'nachHit', text: 'Nur ein Hoch, das sich NACH dem GVA-Hit gebildet hat' },
+    ], 'Vor dem Hit: das Hoch gab es schon, der Kurs kommt erst danach an die GVA-Linie. Nach dem Hit: das erste bestätigte Hoch ab der Treffer-Kerze wird das BOS-Level – der BOS kann erst nach seiner Bestätigung kommen.'),
     zahl('swingAlter', 'Letztes Hoch höchstens so alt (Handelstage vor dem Hit)', 3, 0, 15, 1),
     zahl('fenster', 'Zeit für den BOS (Handelstage ab dem Hit)', 2, 0, 10, 1, 'Der Treffertag zählt als Tag 0'),
     schalter('koerper', 'BOS nur mit Körper-Schluss', true, 'aus: schon der Docht über dem Hoch zählt'),
@@ -108,9 +112,11 @@ export default {
 
       // 2. Letztes Hoch (Short: letztes Tief) – bestätigt vor der Treffer-Kerze, danach fix
       const liste = lang ? sw.hoch : sw.tief;
-      const si = letzterBekannt(liste, kT);
+      const nachHit = p.hochZeit === 'nachHit';
+      // vorHit: letztes bestätigtes Hoch vor der Treffer-Kerze; nachHit: erstes Hoch, dessen Kerze ab der Treffer-Kerze liegt
+      const si = nachHit ? liste.findIndex((x) => x.k >= kT) : letzterBekannt(liste, kT);
       const swing = si >= 0 ? liste[si] : null;
-      if (!swing || handelstagNr(z.sd[swing.k], e) < htStart - p.swingAlter || !ueber(swing.preis, L.lvl)) { zaehl('keinHoch'); continue; }
+      if (!swing || (!nachHit && handelstagNr(z.sd[swing.k], e) < htStart - p.swingAlter) || !ueber(swing.preis, L.lvl)) { zaehl('keinHoch'); continue; }
       const level = swing.preis;
 
       // Zeitfenster für den BOS (Basis-Index)
@@ -121,7 +127,8 @@ export default {
 
       // 3. BOS: Schluss über dem Level und über dem Daily Open
       let bos = null, nurUnterOpen = false;
-      for (let k = kT; k <= kEnde; k++) {
+      // nachHit: das Hoch ist erst ab seiner Bestätigung bekannt (k + N) – ein BOS davor ist nicht möglich
+      for (let k = nachHit ? Math.max(kT, swing.bekannt + 1) : kT; k <= kEnde; k++) {
         const wert = p.koerper ? z.c[k] : lang ? z.h[k] : z.l[k];
         if (!ueber(wert, level)) continue;
         const openBos = D.o[dIdx[z.en[k]]];

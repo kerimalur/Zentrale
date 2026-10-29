@@ -22,7 +22,7 @@ import { Brainstorm, ExportKnoepfe, ImportPopup, MdVorschau } from './LaborWerkz
 
 type Ansicht =
   | { art: 'liste' } | { art: 'brainstorm' } | { art: 'vergleich'; ids?: string[] } | { art: 'idee'; id: string }
-  | { art: 'karte'; karte: LKarte; id?: string; zettel?: string };
+  | { art: 'karte'; karte: LKarte; id?: string; zettel?: string; basis?: string };
 type Filter = '' | 'strategie' | 'hypothese' | 'fremd';
 
 export function Labor() {
@@ -70,11 +70,11 @@ export function Labor() {
 
   if (ansicht.art === 'karte') {
     const zurueck = () => { setAnsicht(ansicht.id ? { art: 'idee', id: ansicht.id } : ansicht.zettel ? { art: 'brainstorm' } : { art: 'liste' }); laden(); };
-    if (ansicht.karte.typ === 'fremd') return <FremdEditor b={b} start={ansicht.karte} id={ansicht.id} onZurueck={zurueck} onGespeichert={(id) => nachSpeichern(id, ansicht.zettel)} onBausteine={bausteineLaden} />;
-    return <KarteEditor b={b} ideen={liste} start={ansicht.karte} id={ansicht.id} onZurueck={zurueck} onGespeichert={(id) => nachSpeichern(id, ansicht.zettel)} />;
+    if (ansicht.karte.typ === 'fremd') return <FremdEditor b={b} start={ansicht.karte} id={ansicht.id} basis={ansicht.basis} onZurueck={zurueck} onGespeichert={(id) => nachSpeichern(id, ansicht.zettel)} onBausteine={bausteineLaden} />;
+    return <KarteEditor b={b} ideen={liste} start={ansicht.karte} id={ansicht.id} basis={ansicht.basis} onZurueck={zurueck} onGespeichert={(id) => nachSpeichern(id, ansicht.zettel)} />;
   }
   if (ansicht.art === 'idee') {
-    return <IdeeAnsicht b={b} id={ansicht.id} onZurueck={() => { setAnsicht({ art: 'liste' }); laden(); }} onBearbeiten={(karte, neu) => setAnsicht(neu ? { art: 'karte', karte } : { art: 'karte', karte, id: ansicht.id })}
+    return <IdeeAnsicht b={b} id={ansicht.id} onZurueck={() => { setAnsicht({ art: 'liste' }); laden(); }} onBearbeiten={(karte, neu, basis) => setAnsicht(neu ? { art: 'karte', karte, basis } : { art: 'karte', karte, id: ansicht.id })}
       onOeffnen={(id) => setAnsicht({ art: 'idee', id })} onVergleich={(ids) => setAnsicht({ art: 'vergleich', ids })} />;
   }
 
@@ -207,7 +207,10 @@ function IdeeZeile({ i, onClick }: { i: LIdeeKurz; onClick: () => void }) {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <strong style={{ fontSize: 15 }}>{i.name}</strong>
           <TypChip typ={i.typ} />
-          <span className="leise" style={{ fontSize: 12.5 }}>Version {i.version}{!i.eingefroren ? ' (Entwurf)' : ''} · {i.varianten} Variante{i.varianten === 1 ? '' : 'n'}{i.forwardOffen ? ' · Forward offen' : ''}</span>
+          <span className="leise" style={{ fontSize: 12.5 }}>
+            {i.gesperrt ? 'Backtest + Forward · gesperrt' : i.eingefroren ? 'Backtest' : 'Entwurf'}
+            {i.basis ? ` · Variante von «${i.basis.name}»` : ''}
+          </span>
         </div>
         {laeuft && i.lauf ? <Fortschritt lauf={i.lauf} /> : i.lauf?.status === 'fehler' ? <div style={{ fontSize: 12.5, color: 'var(--fehler)' }}>Fehler: {i.lauf.fehler}</div> : null}
         {!laeuft && i.ergebnis && (
@@ -314,7 +317,7 @@ function TeilListe({ titel, katalog, liste, setze, leer }: { titel: string; kata
 }
 
 // ---------- Vorab-Karte bearbeiten ----------
-function KarteEditor({ b, ideen, start, id, onZurueck, onGespeichert }: { b: LBausteine; ideen: LIdeeKurz[]; start: LKarte; id?: string; onZurueck: () => void; onGespeichert: (id: string) => void }) {
+function KarteEditor({ b, ideen, start, id, basis, onZurueck, onGespeichert }: { b: LBausteine; ideen: LIdeeKurz[]; start: LKarte; id?: string; basis?: string; onZurueck: () => void; onGespeichert: (id: string) => void }) {
   const fremdIdeen = ideen.filter((i) => i.typ === 'fremd');
   const [k, setK] = useState<LKarte>(() => ({ backtest: { von: b.jahre.von, bis: Math.min(2022, b.jahre.bis - 1) }, forward: { von: Math.min(2023, b.jahre.bis) }, geplanteVarianten: 1, paare: [], filter: [], ...start }));
   const [laeuft, setLaeuft] = useState(false);
@@ -328,7 +331,7 @@ function KarteEditor({ b, ideen, start, id, onZurueck, onGespeichert }: { b: LBa
     setLaeuft(true); setFehler(null);
     try {
       const horizonte = horizText.split(/[,;\s]+/).map(Number).filter((x) => x >= 1);
-      const r = await senden<LIdee>('/api/labor/idee', { id, karte: { ...k, horizonte } });
+      const r = await senden<LIdee>('/api/labor/idee', { id, basis, karte: { ...k, horizonte } });
       if (starten) await senden('/api/labor/start', { id: r.id });
       onGespeichert(r.id);
     } catch (e) { setFehler((e as Error).message); setLaeuft(false); }
@@ -339,7 +342,7 @@ function KarteEditor({ b, ideen, start, id, onZurueck, onGespeichert }: { b: LBa
       <div><button className="knopf-klein press" onClick={onZurueck}>← Zurück</button></div>
       <section className="karte in">
         <h2 className="karte-titel">Vorab-Karte <small>{istH ? 'Hypothese' : 'Strategie'}</small></h2>
-        <p className="tr-hilfe" style={{ margin: '0 0 12px' }}>Alles hier wird beim Start eingefroren – damit sich die Torpfosten nachher nicht verschieben.</p>
+        <p className="tr-hilfe" style={{ margin: '0 0 12px' }}>Der Name muss einmalig sein. Alles hier wird beim Start eingefroren – damit sich die Torpfosten nachher nicht verschieben.</p>
         <label className="nw-feld">Name<input value={k.name} onChange={(e) => setz('name', e.target.value)} maxLength={80} /></label>
         <label className="nw-feld">Mechanismus (warum sollte es funktionieren? Ein Satz genügt)<textarea className="lb-text" rows={2} value={k.mechanismus || ''} onChange={(e) => setz('mechanismus', e.target.value)} /></label>
         <label className="nw-feld">Erfolgskriterium (vorab als Zahl, z. B. «Ø R &gt; 0,1, p &lt; 0,05, beide Hälften positiv»)<textarea className="lb-text" rows={2} value={k.erfolgskriterium || ''} onChange={(e) => setz('erfolgskriterium', e.target.value)} /></label>
@@ -433,20 +436,19 @@ function KarteEditor({ b, ideen, start, id, onZurueck, onGespeichert }: { b: LBa
 }
 
 // ---------- Eine Idee: Status, Läufe, Ergebnis, Notizen, Skill-Ergebnisse ----------
-function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen, onVergleich }: { b: LBausteine; id: string; onZurueck: () => void; onBearbeiten: (k: LKarte, neu?: boolean) => void; onOeffnen: (id: string) => void; onVergleich: (ids: string[]) => void }) {
+function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen, onVergleich }: { b: LBausteine; id: string; onZurueck: () => void; onBearbeiten: (k: LKarte, neu?: boolean, basis?: string) => void; onOeffnen: (id: string) => void; onVergleich: (ids: string[]) => void }) {
   const [i, setI] = useState<LIdee | null>(null);
   const [erg, setErg] = useState<LErgebnis | LFErgebnis | null>(null);
   const [laufId, setLaufId] = useState<string | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
-  const [frage, setFrage] = useState<'forward' | 'loeschen' | 'verwerfen' | 'lauf' | null>(null);
+  const [frage, setFrage] = useState<'forward' | 'loeschen' | 'lauf' | 'aendern' | null>(null);
   const [karteAuf, setKarteAuf] = useState(false);
-  const [versionWahl, setVersionWahl] = useState<number | null>(null);
   const [detailsAuf, setDetailsAuf] = useState(false);
 
   const laden = useCallback(async () => {
     try { const x = await holen<LIdee>(`/api/labor/idee?id=${id}`); setI(x); setFehler(null); return x; } catch (e) { setFehler((e as Error).message); return null; }
   }, [id]);
-  useEffect(() => { laden(); setLaufId(null); setVersionWahl(null); }, [laden]);
+  useEffect(() => { laden(); setLaufId(null); }, [laden]);
   const laeuft = i?.lauf && (i.lauf.status === 'laeuft' || i.lauf.status === 'wartet');
   useEffect(() => {
     if (!laeuft) return;
@@ -463,9 +465,9 @@ function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen, onVergleich }:
   if (fehler && !i) return <div className="karte fehlerbox">{fehler}</div>;
   if (!i) return <div className="karte leise">Lade …</div>;
   const v = i.versionen[i.versionen.length - 1];
-  const gezeigt = i.versionen.find((x) => x.v === versionWahl) || v;
   const fertigeLaeufe = i.laeufe.filter((l) => l.status === 'fertig').slice().reverse();
   const backtestFertig = i.laeufe.some((l) => l.v === i.version && l.status === 'fertig');
+  const forwardFertig = i.laeufe.some((l) => l.v === i.version && l.art === 'forward' && l.status === 'fertig');
   const istFremd = v.karte.typ === 'fremd';
 
   const aktion = async (pfad: string, body: unknown, method?: 'POST' | 'DELETE') => {
@@ -487,21 +489,21 @@ function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen, onVergleich }:
           {erg && <UrteilChip urteil={erg.urteil} />}
         </div>
         <div className="leise" style={{ fontSize: 13 }}>
-          Version {i.version}{v.eingefroren ? ` · eingefroren ${datumCh(v.eingefroren.slice(0, 10))}` : ' · Entwurf'} · {i.varianten} getestete Variante{i.varianten === 1 ? '' : 'n'}
-          {Object.keys(i.forwardGeoeffnet).length ? ` · Forward geöffnet für Version ${Object.keys(i.forwardGeoeffnet).join(', ')}` : ' · Forward gesperrt'}
+          {i.gesperrt ? 'Gesperrt – Backtest und Forward abgeschlossen' : v.eingefroren ? `Backtest gestartet ${datumCh(v.eingefroren.slice(0, 10))}` : 'Entwurf'} · Familie: {i.varianten} getestete Variante{i.varianten === 1 ? '' : 'n'}
+          {i.basis ? ` · Variante von «${i.basis.name}»` : ''}
+          {i.forwardOffen ? ` · Forward geöffnet ${datumCh(Object.values(i.forwardGeoeffnet)[0].slice(0, 10))}` : ' · Forward gesperrt'}
           {istFremd && v.karte.maerkte?.length ? ` · ${v.karte.maerkte.map((m) => reiheNameKlient(b.fremd, m.id)).join(', ')}` : ''}
         </div>
         {laeuft && i.lauf && <div style={{ marginTop: 10 }}><Fortschritt lauf={i.lauf} /></div>}
         {i.lauf?.status === 'fehler' && <div className="fehlerbox" style={{ marginTop: 10 }}>Letzter Lauf: {i.lauf.fehler}</div>}
         {fehler && <div className="fehlerbox" style={{ marginTop: 10 }}>{fehler}</div>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-          {!laeuft && <button className="knopf-akzent press" onClick={() => aktion('/api/labor/start', { id })}>{backtestFertig ? 'Backtest neu rechnen' : 'Backtest starten'}</button>}
+          {!laeuft && !backtestFertig && !i.forwardOffen && <button className="knopf-akzent press" onClick={() => aktion('/api/labor/start', { id })}>Backtest starten</button>}
           {!laeuft && backtestFertig && !i.forwardOffen && <button className="knopf-klein press" onClick={() => setFrage('forward')}>Forward öffnen …</button>}
-          {!laeuft && i.forwardOffen && <button className="knopf-klein press" onClick={() => aktion('/api/labor/start', { id, art: 'forward' })}>Mit Forward neu rechnen</button>}
+          {!laeuft && i.forwardOffen && !forwardFertig && <button className="knopf-klein press" onClick={() => aktion('/api/labor/start', { id, art: 'forward' })}>Forward-Lauf neu starten</button>}
           {laeuft && i.lauf && <button className="knopf-klein press" onClick={() => aktion('/api/labor/abbrechen', { lauf: i.lauf!.id })}>Abbrechen</button>}
-          <button className="knopf-klein press" onClick={() => onBearbeiten(structuredClone(v.karte))}>{v.eingefroren ? 'Ändern (neue Version)' : 'Bearbeiten'}</button>
-          {!v.eingefroren && i.versionen.length > 1 && <button className="knopf-klein press" onClick={() => setFrage('verwerfen')}>Entwurf verwerfen …</button>}
-          <button className="knopf-klein press" onClick={async () => { try { const r = await senden<LIdee>('/api/labor/idee/kopieren', { id }); onOeffnen(r.id); } catch (e) { setFehler((e as Error).message); } }}>Kopieren</button>
+          {!i.gesperrt && <button className="knopf-klein press" onClick={() => (v.eingefroren ? setFrage('aendern') : onBearbeiten(structuredClone(v.karte)))}>Bearbeiten</button>}
+          <button className="knopf-klein press" onClick={async () => { try { const r = await senden<{ karte: LKarte; basis: string }>('/api/labor/idee/variante', { id }); onBearbeiten(r.karte, true, r.basis); } catch (e) { setFehler((e as Error).message); } }}>Neue Variante …</button>
           {istFremd && <button className="knopf-klein press" title="Kerims Entry-Model (oder eine andere Strategie) nur in den Fenstern dieser Hypothese handeln" onClick={() => {
             const vorlage = b.vorlagen.find((x) => x.id === 'gva')?.karte;
             if (vorlage) onBearbeiten({ ...structuredClone(vorlage), name: `GVA im Fenster: ${v.karte.name}`.slice(0, 80), bias: { quelle: 'fremd', idee: id, richtung: 'beide', tage: v.karte.hauptHorizont || 30, ereignisse: [] } }, true);
@@ -514,23 +516,16 @@ function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen, onVergleich }:
           <Rueckfrage titel="Forward-Zeitraum öffnen?" ja="Ja, jetzt öffnen" onNein={() => setFrage(null)} onJa={() => { setFrage(null); aktion('/api/labor/forward-oeffnen', { id }); }}
             text={`Der Zeitraum ab ${v.karte.forward?.von} wurde bisher nie angeschaut. Nach dem Öffnen ist er für diese Idee «verbraucht»: Jede spätere Version kennt ihn schon und ist dort nicht mehr unvoreingenommen. Öffne ihn erst, wenn die Regel wirklich feststeht.`} />
         )}
-        {frage === 'verwerfen' && (
-          <Rueckfrage titel={`Entwurf (Version ${v.v}) verwerfen?`} text="Die vorige, eingefrorene Version wird wieder die aktuelle." ja="Verwerfen" gefahr onNein={() => setFrage(null)} onJa={() => { setFrage(null); aktion('/api/labor/version-verwerfen', { id }); }} />
+        {frage === 'aendern' && (
+          <Rueckfrage titel="Karte ändern?" text="Der Backtest-Lauf passt danach nicht mehr zur Karte und wird gelöscht. Willst du das Ergebnis behalten und trotzdem etwas anders testen, nimm «Neue Variante …»." ja="Ja, ändern und Ergebnis löschen" gefahr onNein={() => setFrage(null)} onJa={() => { setFrage(null); onBearbeiten(structuredClone(v.karte)); }} />
         )}
         {frage === 'loeschen' && (
-          <Rueckfrage titel="Idee mit allen Versionen und Ergebnissen löschen?" text="Tipp: vorher als Markdown exportieren, wenn du sie behalten willst." ja="Löschen" gefahr onNein={() => setFrage(null)}
+          <Rueckfrage titel="Eintrag mit allen Ergebnissen löschen?" text="Tipp: vorher als Markdown exportieren, wenn du sie behalten willst." ja="Löschen" gefahr onNein={() => setFrage(null)}
             onJa={async () => { await senden('/api/labor/idee', { id }, 'DELETE').catch(() => {}); onZurueck(); }} />
         )}
         {karteAuf && (
           <>
-            {i.versionen.length > 1 && (
-              <div className="lb-chips" style={{ marginTop: 12 }}>
-                {i.versionen.slice().reverse().map((x) => (
-                  <button key={x.v} type="button" className="lb-wahl press" aria-pressed={gezeigt.v === x.v} onClick={() => setVersionWahl(x.v)}>V{x.v}{x.eingefroren ? '' : ' (Entwurf)'}</button>
-                ))}
-              </div>
-            )}
-            {gezeigt.karte.typ === 'fremd' ? <FremdVorabKarte k={gezeigt.karte} b={b} /> : <VorabKarte k={gezeigt.karte} b={b} />}
+            {v.karte.typ === 'fremd' ? <FremdVorabKarte k={v.karte} b={b} /> : <VorabKarte k={v.karte} b={b} />}
           </>
         )}
       </section>
@@ -540,7 +535,7 @@ function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen, onVergleich }:
           {fertigeLaeufe.length > 1 && (
             <div className="segment" style={{ gridTemplateColumns: `repeat(${Math.min(fertigeLaeufe.length, 4)}, 1fr)`, flex: '1 1 320px' }}>
               {fertigeLaeufe.slice(0, 4).map((l) => (
-                <button key={l.id} aria-pressed={(zielLauf || '') === l.id} onClick={() => setLaufId(l.id)}>V{l.v} · {l.art === 'forward' ? 'mit Forward' : 'Backtest'}</button>
+                <button key={l.id} aria-pressed={(zielLauf || '') === l.id} onClick={() => setLaufId(l.id)}>{l.art === 'forward' ? 'Backtest + Forward' : 'Backtest'}</button>
               ))}
             </div>
           )}
@@ -550,7 +545,7 @@ function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen, onVergleich }:
         </div>
       )}
       {frage === 'lauf' && zielLauf && (
-        <Rueckfrage titel="Dieses Ergebnis löschen?" text="Die Version bleibt eingefroren und zählt weiter als getestete Variante." ja="Löschen" gefahr onNein={() => setFrage(null)}
+        <Rueckfrage titel="Dieses Ergebnis löschen?" text="Der Eintrag bleibt gestartet und zählt weiter als getestete Variante." ja="Löschen" gefahr onNein={() => setFrage(null)}
           onJa={() => { setFrage(null); aktion('/api/labor/lauf', { lauf: zielLauf }, 'DELETE'); }} />
       )}
 
@@ -689,7 +684,7 @@ function Kopf({ e }: { e: LErgebnis }) {
         <span className="leise">{e.warum}</span>
       </div>
       <div className="leise" style={{ fontSize: 12.5, marginTop: 6, lineHeight: 1.5 }}>
-        Version {e.lauf.v} · {e.lauf.art === 'forward' ? 'Backtest + Forward' : 'nur Backtest'} · {e.karte.backtest?.von}–{e.karte.backtest?.bis}{e.lauf.art === 'forward' ? `, Forward ab ${e.karte.forward?.von}` : ''} · gerechnet in {e.dauerSek} s · Daten: {quellen || '—'}
+        {e.lauf.art === 'forward' ? 'Backtest + Forward' : 'nur Backtest'} · {e.karte.backtest?.von}–{e.karte.backtest?.bis}{e.lauf.art === 'forward' ? `, Forward ab ${e.karte.forward?.von}` : ''} · gerechnet in {e.dauerSek} s · Daten: {quellen || '—'}
         {grob > 0 && <span style={{ color: '#b7791f' }}> · {grob} Paar{grob === 1 ? '' : 'e'} nur mit gröberen Daten als nötig (5-Min-Kerzen noch nicht geladen)</span>}
         {fehlt > 0 && <span style={{ color: 'var(--fehler)' }}> · {fehlt} Paar{fehlt === 1 ? '' : 'e'} ohne Daten</span>}
         {e.schonGesehen && <span style={{ color: 'var(--fehler)' }}> · Achtung: Der Forward wurde schon bei einer früheren Version angeschaut</span>}

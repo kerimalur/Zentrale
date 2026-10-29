@@ -185,7 +185,18 @@ export function karteNormal(k = {}) {
 // ---------- Ideen ----------
 const jetztIso = () => new Date().toISOString();
 const aktuelle = (i) => i.versionen[i.versionen.length - 1];
-const varianten = (i) => Math.max(i.versionen.filter((v) => v.eingefroren).length, ...i.versionen.filter((v) => v.eingefroren).map((v) => v.karte.geplanteVarianten || 1), 1);
+// Getestete Varianten = gestartete Einträge derselben Familie (Basis + alle «V2, V3 …»), mindestens die vorab geplanten
+const familieVon = (i) => i.familie || i.id;
+const varianten = (i) => {
+  const fam = lab().ideen.filter((x) => familieVon(x) === familieVon(i));
+  const gestartet = fam.filter((x) => x.versionen.some((v) => v.eingefroren)).length;
+  return Math.max(gestartet, ...fam.flatMap((x) => x.versionen.filter((v) => v.eingefroren).map((v) => v.karte.geplanteVarianten || 1)), 1);
+};
+// Gesperrt = Forward wurde geöffnet (dann läuft/lief der Forward-Test): nichts mehr änderbar, nur noch PDF, Notizen und neue Variante
+const gesperrt = (i) => !!i.forward?.[aktuelle(i).v];
+const nameKey = (n) => String(n || '').trim().replace(/\s+/g, ' ').toLowerCase();
+const nameVergeben = (name, ausserId) => lab().ideen.find((x) => x.id !== ausserId && nameKey(aktuelle(x).karte.name) === nameKey(name));
+const basisName = (n) => String(n || '').replace(/\s+V\d+$/i, '').trim();
 
 function ideeKurz(i) {
   const v = aktuelle(i);
@@ -194,6 +205,7 @@ function ideeKurz(i) {
   const letzterFertig = [...laeufe].reverse().find((l) => l.status === 'fertig') || null;
   return {
     id: i.id, name: v.karte.name, typ: v.karte.typ, version: v.v, eingefroren: !!v.eingefroren, erstellt: i.erstellt, geaendert: i.geaendert,
+    gesperrt: gesperrt(i), familie: familieVon(i), basis: i.basis ? { id: i.basis.id, name: i.basis.name } : null,
     varianten: varianten(i), forwardOffen: !!i.forward?.[v.v], forwardGeoeffnet: i.forward || {},
     lauf: letzter, ergebnis: letzterFertig ? { lauf: letzterFertig.id, v: letzterFertig.v, art: letzterFertig.art, ...letzterFertig.kurz } : null,
     tags: i.tags || [], extern: i.extern?.length ? i.extern[i.extern.length - 1] : null, maerkte: v.karte.typ === 'fremd' ? (v.karte.maerkte || []).map((m) => m.id) : null,
@@ -202,7 +214,12 @@ function ideeKurz(i) {
 
 export function laborListe() {
   const l = lab();
-  return { ideen: l.ideen.map(ideeKurz).sort((a, b) => (b.geaendert > a.geaendert ? 1 : -1)), warteschlange: l.laeufe.filter((x) => x.status === 'wartet' || x.status === 'laeuft').map((x) => x.id) };
+  // Familien zusammen (Basis zuerst, dann V2, V3 …); Familien nach letzter Änderung
+  const kurz = l.ideen.map(ideeKurz);
+  const letzte = new Map();
+  for (const k of kurz) if (!letzte.has(k.familie) || k.geaendert > letzte.get(k.familie)) letzte.set(k.familie, k.geaendert);
+  kurz.sort((a, b) => (a.familie === b.familie ? (a.erstellt > b.erstellt ? 1 : -1) : letzte.get(b.familie) > letzte.get(a.familie) ? 1 : -1));
+  return { ideen: kurz, warteschlange: l.laeufe.filter((x) => x.status === 'wartet' || x.status === 'laeuft').map((x) => x.id) };
 }
 
 export function laborIdee(id) {
@@ -227,13 +244,41 @@ export function laborIdeeMeta(b) {
   save();
   return laborIdee(i.id);
 }
-export function laborIdeeKopieren(id) {
+// Neue Variante vorbereiten (legt noch nichts an): Karte der Basis mit dem nächsten freien Namen «Name V2», «Name V3» …
+// Angelegt wird erst beim Speichern (POST /api/labor/idee mit basis).
+export function laborVarianteVorbereiten(id) {
   const i = lab().ideen.find((x) => x.id === id);
   if (!i) return null;
   const k = structuredClone(aktuelle(i).karte);
-  k.name = `${k.name} (Kopie)`.slice(0, 80);
-  const neu = laborIdeeSpeichern({ karte: k });
-  return laborIdeeMeta({ id: neu.id, tags: i.tags || [], notizen: i.notizen || '' });
+  const stamm = basisName(k.name) || 'Variante';
+  const fam = lab().ideen.filter((x) => familieVon(x) === familieVon(i)).map((x) => aktuelle(x).karte.name);
+  let n = Math.max(1, ...fam.map((nm) => Number((String(nm).match(/\sV(\d+)$/i) || [])[1] || 1))) + 1;
+  while (nameVergeben(`${stamm} V${n}`, null)) n++;
+  k.name = `${stamm} V${n}`.slice(0, 80);
+  return { karte: k, basis: id };
+}
+
+// Änderungen einer Karte gegenüber der Basis als lesbare Zeilen
+const flach = (o, pre = '', out = {}) => {
+  if (o && typeof o === 'object' && !Array.isArray(o)) { for (const [k, v] of Object.entries(o)) flach(v, pre ? `${pre}.${k}` : k, out); if (!Object.keys(o).length && pre) out[pre] = '{}'; }
+  else out[pre] = JSON.stringify(o);
+  return out;
+};
+const kurzWert = (v) => (v === undefined ? '—' : String(v).length > 70 ? `${String(v).slice(0, 67)}…` : String(v));
+function karteDiff(alt, neu) {
+  const a = flach(alt), b = flach(neu), zeilen = [];
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (k === 'name' || a[k] === b[k] || a[k] === '{}' && b[k] === undefined || b[k] === '{}' && a[k] === undefined) continue;
+    zeilen.push(`- ${k}: ${kurzWert(a[k])} → ${kurzWert(b[k])}`);
+  }
+  return zeilen.slice(0, 60);
+}
+const AEND_RE = /\n*── Änderungen zu «[^\n]*» \(automatisch\) ──[\s\S]*?── Ende Änderungen ──\n*/;
+function aenderungSchreiben(i) {
+  if (!i.basis) return;
+  const z = karteDiff(i.basis.karte, aktuelle(i).karte);
+  const block = `── Änderungen zu «${i.basis.name}» (automatisch) ──\n${z.length ? z.join('\n') : 'Noch keine Änderung gegenüber der Basis.'}\n── Ende Änderungen ──`;
+  i.notizen = `${(i.notizen || '').replace(AEND_RE, '').trim()}\n\n${block}`.trim().slice(0, 20_000);
 }
 
 // ---------- Brainstorm-Zettel ----------
@@ -320,8 +365,8 @@ export function laborImport({ text: t, uebernehmen = false, auswahl = null, zuor
   const r = mdLesen(String(t || '').slice(0, 2_000_000));
   const ideeZiel = (x) => {
     const i = x.id && l.ideen.find((y) => y.id === x.id);
-    if (!i) return 'neu';
-    return gleicheKarte(aktuelle(i).karte, x.karte || {}) ? 'unverändert' : aktuelle(i).eingefroren ? 'neue Version' : 'Entwurf ersetzen';
+    if (!i) return nameVergeben(x.karte?.name, null) ? 'Name vergeben – übersprungen' : 'neu';
+    return gleicheKarte(aktuelle(i).karte, x.karte || {}) ? 'unverändert' : gesperrt(i) ? 'gesperrt – übersprungen' : 'ersetzen';
   };
   const eintraege = [
     ...r.ideen.map((x, n) => ({ nr: `i${n}`, art: 'idee', name: x.karte?.name || 'Idee', typ: x.karte?.typ, ziel: ideeZiel(x) })),
@@ -340,6 +385,7 @@ export function laborImport({ text: t, uebernehmen = false, auswahl = null, zuor
     const vorhanden = x.id && l.ideen.find((y) => y.id === x.id);
     if (vorhanden && gleicheKarte(aktuelle(vorhanden).karte, x.karte)) { laborIdeeMeta({ id: vorhanden.id, tags: x.tags?.length ? x.tags : vorhanden.tags, notizen: x.notizen || vorhanden.notizen }); angelegt.ideen++; return; }
     const neu = laborIdeeSpeichern({ id: vorhanden ? x.id : undefined, karte: x.karte });
+    if (neu.fehler) { (angelegt.uebersprungen ||= []).push(`${x.karte.name}: ${neu.fehler}`); return; }
     laborIdeeMeta({ id: neu.id, tags: x.tags, notizen: x.notizen });
     angelegt.ideen++;
   });
@@ -364,33 +410,36 @@ export function laborImport({ text: t, uebernehmen = false, auswahl = null, zuor
   return { ok: true, angelegt };
 }
 
-// Anlegen oder ändern: Ist die letzte Version eingefroren, entsteht eine neue Version.
+// Anlegen oder ändern. Ein Eintrag = eine Karte (keine Versionen im Eintrag): Änderungen daran gibt es nur bis zum Forward-Test.
+// Neue Variante: mit basis = id des Ursprungs – eigener Eintrag, Änderungen gegenüber der Basis kommen automatisch in die Notizen.
+// Rückgabe bei Regelverstoss: { fehler }.
 export function laborIdeeSpeichern(b) {
   const l = lab();
   const karte = karteNormal(b.karte || {});
+  if (!String(karte.name || '').trim()) return { fehler: 'Name fehlt' };
+  const doppelt = nameVergeben(karte.name, b.id || null);
+  if (doppelt) return { fehler: `Der Name «${aktuelle(doppelt).karte.name}» ist schon vergeben – jeder Eintrag braucht einen eigenen Namen (für eine Variante z. B. «${basisName(String(karte.name).replace(/\s+/g, ' '))} V2»)` };
   let i = b.id ? l.ideen.find((x) => x.id === b.id) : null;
   if (!i) {
+    const basis = b.basis ? l.ideen.find((x) => x.id === b.basis) : null;
     i = { id: crypto.randomUUID(), erstellt: jetztIso(), geaendert: jetztIso(), versionen: [{ v: 1, karte, erstellt: jetztIso(), eingefroren: null }], forward: {} };
+    if (basis) { i.familie = familieVon(basis); i.basis = { id: basis.id, name: aktuelle(basis).karte.name, karte: structuredClone(aktuelle(basis).karte) }; }
+    else i.familie = i.id;
     l.ideen.push(i);
+    aenderungSchreiben(i);
   } else {
+    if (gesperrt(i)) return { fehler: 'Gesperrt: Der Forward-Test wurde geöffnet, an diesem Eintrag ist nichts mehr änderbar. Erstelle stattdessen eine neue Variante.' };
     const v = aktuelle(i);
-    if (v.eingefroren) i.versionen.push({ v: v.v + 1, karte, erstellt: jetztIso(), eingefroren: null });
-    else v.karte = karte;
+    if (v.eingefroren && !gleicheKarte(v.karte, karte)) {
+      // Karte nach dem Backtest geändert: die Ergebnisse gehören nicht mehr zur Karte → löschen, Eintrag wird wieder Entwurf
+      for (const x of l.laeufe.filter((y) => y.idee === i.id && y.v === v.v && y.status !== 'laeuft' && y.status !== 'wartet')) { try { fs.unlinkSync(path.join(ordner(), `${x.id}.json`)); } catch {} }
+      l.laeufe = l.laeufe.filter((y) => !(y.idee === i.id && y.v === v.v) || y.status === 'laeuft' || y.status === 'wartet');
+      v.eingefroren = null;
+    }
+    v.karte = karte;
     i.geaendert = jetztIso();
+    aenderungSchreiben(i);
   }
-  save();
-  return laborIdee(i.id);
-}
-
-// Entwurf verwerfen: die letzte, noch nicht eingefrorene Version löschen (die vorige bleibt)
-export function laborVersionVerwerfen(id) {
-  const i = lab().ideen.find((x) => x.id === id);
-  if (!i) return { fehler: 'Idee nicht gefunden' };
-  const v = aktuelle(i);
-  if (v.eingefroren) return { fehler: 'Eingefrorene Versionen bleiben – sie zählen als getestete Variante' };
-  if (i.versionen.length < 2) return { fehler: 'Das ist die einzige Version – lösche stattdessen die ganze Idee' };
-  i.versionen.pop();
-  i.geaendert = jetztIso();
   save();
   return laborIdee(i.id);
 }
@@ -435,6 +484,8 @@ export function laborStarten(id, art = 'backtest') {
   if (k.bias?.quelle === 'fremd' && aktuelle(l.ideen.find((x) => x.id === k.bias.idee) || { versionen: [{ karte: {} }] }).karte.typ !== 'fremd') return { fehler: 'Die Fremddaten-Hypothese für das Bias-Fenster gibt es nicht mehr' };
   if (art === 'forward' && !i.forward?.[v.v]) return { fehler: 'Forward-Zeitraum ist für diese Version noch gesperrt' };
   if (l.laeufe.some((x) => x.idee === id && (x.status === 'wartet' || x.status === 'laeuft'))) return { fehler: 'Für diese Idee läuft schon etwas' };
+  if (l.laeufe.some((x) => x.idee === id && x.v === v.v && x.status === 'fertig' && x.art === art)) return { fehler: art === 'forward' ? 'Der Forward-Test existiert schon – pro Eintrag gibt es genau einen' : 'Der Backtest existiert schon – pro Eintrag gibt es genau einen. Für eine Änderung: neue Variante erstellen' };
+  if (art === 'backtest' && i.forward?.[v.v]) return { fehler: 'Forward ist schon geöffnet – der Backtest ist abgeschlossen' };
   if (!v.eingefroren) { v.eingefroren = jetztIso(); i.geaendert = jetztIso(); }
   const lauf = { id: crypto.randomUUID(), idee: id, v: v.v, art, status: 'wartet', erstellt: jetztIso(), start: null, ende: null, fortschritt: null, fehler: null, kurz: null };
   l.laeufe.push(lauf);
