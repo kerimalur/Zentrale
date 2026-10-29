@@ -607,8 +607,59 @@ function prueferRechnen(pair, d, e, tf, von, bis) {
   return { pair, tf, pip, von: tagIso(vonTag), bis: tagIso(bisTag), einstellungen: e, kerzen: liste, linien, preis: r(d.c[n - 1]) };
 }
 
+// ---------- GVA-Kalender: erste Treffer nach Monat, Detail je Linie ----------
+const ZH_FORMAT = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Zurich', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+function zuerichZeit(ms) {
+  const p = Object.fromEntries(ZH_FORMAT.formatToParts(new Date(ms)).map((x) => [x.type, x.value]));
+  return { jahr: Number(p.year), monat: Number(p.month), datum: `${p.year}-${p.month}-${p.day}`, uhr: `${p.hour}:${p.minute}` };
+}
+// Alle ersten Treffer eines Jahres (Monat nach Zürcher Zeit), neueste zuletzt – gruppiert wird im Browser.
+export function gvaMonat(jahr) {
+  const j = Number.isInteger(Number(jahr)) && Number(jahr) > 2000 && Number(jahr) < 2100 ? Number(jahr) : new Date().getFullYear();
+  const von = Date.UTC(j, 0, 1) - 2 * TAG, bis = Date.UTC(j + 1, 0, 1) + 2 * TAG;
+  const treffer = [];
+  for (const r of zustand.ergebnis.values()) {
+    for (const t of r.treffer) {
+      if (t.t >= bis) continue;
+      if (t.t < von) break; // treffer sind nach Zeit absteigend sortiert
+      const z = zuerichZeit(t.t);
+      if (z.jahr !== j) continue;
+      treffer.push({ id: t.id, pair: r.pair, tf: t.tf, seite: t.seite, lvl: t.lvl, entstanden: t.entstanden, t: t.t, monat: z.monat, datum: z.datum, uhr: z.uhr, ungefaehr: t.ungefaehr });
+    }
+  }
+  treffer.sort((a, b) => a.t - b.t);
+  return { jahr: j, bereit: zustand.ergebnis.size, gesamt: PAARE.length, treffer };
+}
+// Eine Linie: die 12 Kerzen im Muster (bis und mit B), Preis und Datum der Entstehung, Stundenkerzen um den Treffer.
+export function gvaDetail(id) {
+  const [pair, tf, , seite] = String(id || '').split('|');
+  if (!PAARE.includes(pair) || !TFS.includes(tf) || !['long', 'short'].includes(seite)) return { fehler: 'Ungültige Linie' };
+  const d = zustand.daten.get(pair);
+  if (!d) return { fehler: 'Kurse für dieses Paar sind noch nicht geladen' };
+  const e = tradingEinstellungen();
+  const l = linienFinden(pair, d, e, [tf]).find((x) => x.id === id);
+  if (!l) return { fehler: 'Linie nicht gefunden (Einstellungen geändert?)' };
+  const r = (x) => runden(pair, x);
+  const { kerzen } = kerzenBauen(d, tf, e);
+  const iB = kerzen.findIndex((k) => k.s === l.B.s);
+  const muster = kerzen.slice(Math.max(0, iB - 11), iB + 1).map((k) => ({ start: tagIso(k.tag), ende: tagIso(d.sd[k.e]), o: r(k.o), h: r(k.h), l: r(k.l), c: r(k.c) }));
+  const C = kerzen[iB + 1];
+  const n = d.t.length;
+  let stunden = [];
+  if (l.j >= 0) {
+    for (let i = Math.max(0, l.j - 72); i <= Math.min(n - 1, l.j + 24); i++) stunden.push({ t: d.t[i], o: r(d.o[i]), h: r(d.h[i]), l: r(d.l[i]), c: r(d.c[i]), treffer: i === l.j });
+  }
+  const treffer = l.j >= 0 ? { t: d.t[l.j], ungefaehr: d.quelle[l.j] === 0, ...zuerichZeit(d.t[l.j]) } : null;
+  return {
+    id, pair, tf, seite, status: l.status, lvl: l.lvl, pip: pipVon(pair), alt: l.alt,
+    entstanden: tagIso(l.B.tag), bestaetigt: C ? tagIso(C.tag) : null,
+    A: { start: tagIso(l.A.tag), o: r(l.A.o), c: r(l.A.c) }, B: { start: tagIso(l.B.tag), o: r(l.B.o), c: r(l.B.c) },
+    verhaeltnis: Number(l.verhaeltnis.toFixed(2)), muster, treffer, stunden,
+  };
+}
+
 // Für Tests ohne Server.
-export const _intern = { prueferRechnen, atrReihe, handelstageVorFn: (t, e) => handelstageVor(t, e), kerzenBauen, vollLaden, rechnen, sessionTag, keyFn, tagIso, handelstageVor, STANDARD };
+export const _intern = { zustand, rechnen, prueferRechnen, atrReihe, handelstageVorFn: (t, e) => handelstageVor(t, e), kerzenBauen, vollLaden, rechnen, sessionTag, keyFn, tagIso, handelstageVor, STANDARD };
 
 // Aktueller Kurs eines Paars (für Umrechnungen im Journal), null wenn noch nicht geladen.
 export function tradingKurs(pair) {

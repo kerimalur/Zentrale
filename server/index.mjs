@@ -24,7 +24,7 @@ import { garminDaten, garminHistorie } from './collect/garmin.mjs';
 import { tagescheckSenden } from './tagescheck.mjs';
 import { fokusZustand, fokusLauf, koppelcodeErzeugen, koppeln, geraetVonToken, geraetEntfernen, geraetSetzen as fokusGeraetSetzen, bericht as fokusBericht, diagnoseSpeichern, sperreSetzen, sperreLoeschen, kategorieSetzen, piholeSync } from './fokus.mjs';
 import { dukascopyTakt, dukascopyZustand } from './dukascopy.mjs';
-import { tradingZustand, tradingPaar, tradingLauf, tradingNeuLaden, tradingEinstellungenSetzen, tradingTestMeldung, gvaPruefer, PAARE } from './trading.mjs';
+import { tradingZustand, tradingPaar, tradingLauf, tradingNeuLaden, tradingEinstellungenSetzen, tradingTestMeldung, gvaPruefer, gvaMonat, gvaDetail, PAARE } from './trading.mjs';
 import { heuteZustand, anmeldeUrl, rueckkehr, trennen as googleTrennen, mailAktion, scanStarten, scanZustand, absenderAktion, werbefilterSetzen, terminNeu, aufgabeNeu, aufgabeErledigt } from './google.mjs';
 import { statistik as gvaStatistik, statistikStandardSetzen, beispiel as gvaBeispiel } from './tradingStatistik.mjs';
 import { laborListe, laborIdee, laborIdeeSpeichern, laborIdeeLoeschen, laborStarten, laborForwardOeffnen, laborLauf, laborErgebnis, laborAbbrechen, laborBausteine, laborStart, laborIdeeMeta, laborVarianteVorbereiten, laborZettel, laborZettelSpeichern, laborZettelLoeschen, laborReiheSpeichern, laborReiheLoeschen, laborReiheVorschau, laborExport, laborImport, laborLaufLoeschen, laborTradeChart, laborGvaMuster, laborLaeufeFertig, laborVergleich } from './labor/labor.mjs';
@@ -170,6 +170,11 @@ async function api(req, res, url) {
   if (p === '/api/trading/einstellungen' && m === 'POST') return json(res, 200, tradingEinstellungenSetzen(await body(req)));
   if (p === '/api/trading/pruefer' && m === 'GET') {
     const r = gvaPruefer({ pair: String(url.searchParams.get('p') || '').toUpperCase(), tf: String(url.searchParams.get('tf') || '3D'), von: url.searchParams.get('von'), bis: url.searchParams.get('bis') });
+    return r.fehler ? json(res, 400, r) : json(res, 200, r);
+  }
+  if (p === '/api/trading/monat' && m === 'GET') return json(res, 200, gvaMonat(url.searchParams.get('jahr')));
+  if (p === '/api/trading/gva' && m === 'GET') {
+    const r = gvaDetail(url.searchParams.get('id'));
     return r.fehler ? json(res, 400, r) : json(res, 200, r);
   }
   if (p === '/api/trading/test' && m === 'POST') return json(res, 200, await tradingTestMeldung());

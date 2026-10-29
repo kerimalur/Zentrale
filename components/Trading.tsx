@@ -10,6 +10,7 @@ import { Journal } from './Journal';
 import { DatenHinweis, TradingStatistik } from './TradingStatistik';
 import { Labor } from './Labor';
 import { GvaPruefer } from './GvaPruefer';
+import { GvaKalender } from './GvaKalender';
 
 const TFS: TTf[] = ['3D', 'W', 'M'];
 const GRUEN = '21, 128, 61';
@@ -172,6 +173,8 @@ function GvaLive() {
           </button>
         ))}
       </section>
+
+      <GvaKalender />
 
       {paar && <PaarPopup pair={paar} onClose={() => setPaar(null)} />}
     </div>
