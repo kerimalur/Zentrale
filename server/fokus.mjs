@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { db, save } from './store.mjs';
 import { clientIp } from './auth.mjs';
 import { tagKey, uhrzeit, minutenJetzt, zuMinuten } from './util.mjs';
+import { config } from './config.mjs';
 import { piholeAnfrage } from './collect/services.mjs';
 import { ereignis } from './ereignisse.mjs';
 
@@ -148,8 +149,127 @@ export function bericht(g, b, req) {
   if (gueltigeIp(ci)) ips.add(ci);
   for (const ip of Array.isArray(b?.ips) ? b.ips.slice(0, 6) : []) if (gueltigeIp(String(ip))) ips.add(String(ip));
   g.ips = [...ips].slice(-6);
+  parkBericht(g, b?.parken);
   save();
-  return { ok: true, sperren: sperrenFuerGeraet(g), bereiche: BEREICHE, bereichRegeln: BEREICH_REGELN, intervall: 30 };
+  const pk = parkDb().konfig;
+  return { ok: true, sperren: sperrenFuerGeraet(g), bereiche: BEREICHE, bereichRegeln: BEREICH_REGELN, intervall: 30, parken: { dnd: pk.dnd, spiele: pk.spiele, apps: pk.apps } };
+}
+
+// ---------- Handy-Parkplatz (Pixel Stand): Parkzeit = Handy-freie Zeit ----------
+const PARK_STANDARD = { dnd: true, spiele: true, apps: ['Snapchat', 'YouTube'], von: '07:30', bis: '23:00' };
+const MIN_SITZUNG_MS = 60_000;      // kürzere Parkzeiten (Wackler beim Auflegen) zählen nicht
+const OFFEN_VERALTET_MS = 20 * 60_000; // offene Sitzung ohne Meldung: nur bis zur letzten Meldung zählen
+
+function parkDb() {
+  const f = fokusDb();
+  f.parken ||= { sitzungen: [], konfig: { ...PARK_STANDARD } };
+  f.parken.sitzungen ||= [];
+  f.parken.konfig = { ...PARK_STANDARD, ...(f.parken.konfig || {}) };
+  return f.parken;
+}
+
+// Das Handy meldet abgeschlossene Sitzungen (fertig: [{von, bis}]) und die laufende (aktiv, seit). Alles in ms.
+function parkBericht(g, p) {
+  if (!p || typeof p !== 'object') return;
+  const pd = parkDb();
+  const nun = jetzt();
+  const zahl = (x) => Math.round(Number(x) || 0);
+  const gut = (t) => t > nun - AUFBEWAHRUNG_TAGE * 86_400_000 && t <= nun + 5 * 60_000;
+  for (const e of Array.isArray(p.fertig) ? p.fertig.slice(0, 200) : []) {
+    const von = zahl(e?.von);
+    const bis = zahl(e?.bis);
+    if (!gut(von) || !gut(bis) || bis <= von) continue;
+    const s = pd.sitzungen.find((x) => x.g === g.id && x.von === von);
+    if (s) { s.bis = bis; s.zuletzt = bis; } else pd.sitzungen.push({ g: g.id, von, bis, zuletzt: bis });
+  }
+  const seit = zahl(p.seit);
+  const aktiv = p.aktiv === true && gut(seit);
+  for (const s of pd.sitzungen) {
+    if (s.g !== g.id || s.bis !== null) continue;
+    if (aktiv && s.von === seit) { s.zuletzt = nun; continue; }
+    s.bis = Math.max(s.von, Math.min(s.zuletzt || nun, nun)); // veraltete offene Sitzung abschliessen
+  }
+  if (aktiv && !pd.sitzungen.some((x) => x.g === g.id && x.von === seit)) pd.sitzungen.push({ g: g.id, von: seit, bis: null, zuletzt: nun });
+  pd.sitzungen.sort((a, b) => a.von - b.von);
+  if (pd.sitzungen.length > 20_000) pd.sitzungen.splice(0, pd.sitzungen.length - 20_000);
+}
+
+// Lokale Uhrzeit (Zeitzone des Pi) eines Kalendertags als Zeitstempel; berücksichtigt Sommerzeit.
+const fmtTeile = new Intl.DateTimeFormat('en-US', { timeZone: config.zeitzone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function zonenVersatz(t) {
+  const p = Object.fromEntries(fmtTeile.formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - Math.floor(t / 1000) * 1000;
+}
+export function lokalMs(tag, hhmm) {
+  const [y, m, d] = tag.split('-').map(Number);
+  const [h, mi] = hhmm.split(':').map(Number);
+  const roh = Date.UTC(y, m - 1, d, h, mi);
+  return roh - zonenVersatz(roh - zonenVersatz(roh));
+}
+
+// Parkzeit eines Tages, begrenzt aufs Fenster (Standard 07:30–23:00): Nachtladen zählt nicht.
+export function parkTag(tag, nun = jetzt()) {
+  const pd = parkDb();
+  const von = lokalMs(tag, pd.konfig.von);
+  const bis = lokalMs(tag, pd.konfig.bis);
+  const roh = [];
+  for (const s of pd.sitzungen) {
+    const ende = s.bis ?? (nun - (s.zuletzt || s.von) < OFFEN_VERALTET_MS ? nun : (s.zuletzt || s.von));
+    const a = Math.max(s.von, von);
+    const b = Math.min(ende, bis);
+    if (b - a < MIN_SITZUNG_MS) continue;
+    roh.push({ von: a, bis: b, laeuft: s.bis === null && ende === nun && nun <= bis });
+  }
+  roh.sort((x, y) => x.von - y.von);
+  const liste = [];
+  for (const e of roh) { // überlappende Sitzungen (z. B. zwei Geräte) zusammenfassen
+    const l = liste[liste.length - 1];
+    if (l && e.von <= l.bis) { l.bis = Math.max(l.bis, e.bis); l.laeuft = l.laeuft || e.laeuft; } else liste.push({ ...e });
+  }
+  for (const e of liste) e.sek = Math.round((e.bis - e.von) / 1000);
+  const sek = liste.reduce((x, e) => x + e.sek, 0);
+  const zeitraumSek = Math.max(0, Math.round((Math.min(bis, nun) - von) / 1000));
+  return {
+    tag, fensterVon: von, fensterBis: bis, sek, zeitraumSek,
+    anteil: zeitraumSek ? Math.min(1, sek / zeitraumSek) : 0,
+    anzahl: liste.length,
+    erste: liste[0] || null,
+    letzte: liste[liste.length - 1] || null,
+    laengste: liste.reduce((x, e) => Math.max(x, e.sek), 0),
+    sitzungen: liste,
+  };
+}
+
+export function parkZustand(tag) {
+  const pd = parkDb();
+  const nun = jetzt();
+  const offen = pd.sitzungen.filter((s) => s.bis === null && nun - (s.zuletzt || s.von) < OFFEN_VERALTET_MS).pop();
+  const verlauf = [];
+  for (let i = 13; i >= 0; i--) {
+    const t = tagKey(nun - i * 86_400_000);
+    verlauf.push({ tag: t, sek: parkTag(t, nun).sek });
+  }
+  return {
+    konfig: pd.konfig,
+    aktiv: offen ? { seit: offen.von, geraet: fokusDb().geraete[offen.g]?.name || null } : null,
+    tag: parkTag(tag, nun),
+    verlauf,
+  };
+}
+
+export function parkKonfigSetzen(b) {
+  const pd = parkDb();
+  const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const k = { ...pd.konfig };
+  if (typeof b?.dnd === 'boolean') k.dnd = b.dnd;
+  if (typeof b?.spiele === 'boolean') k.spiele = b.spiele;
+  if (Array.isArray(b?.apps)) k.apps = [...new Set(b.apps.map((a) => String(a).trim().slice(0, 40)).filter(Boolean))].slice(0, 30);
+  if (hhmm.test(b?.von)) k.von = b.von;
+  if (hhmm.test(b?.bis)) k.bis = b.bis;
+  if (zuMinuten(k.von) >= zuMinuten(k.bis)) return { fehler: 'Das Fenster muss am selben Tag enden (Von vor Bis).' };
+  pd.konfig = k;
+  save();
+  return { ok: true, konfig: k };
 }
 
 // ---------- Sperren ----------
@@ -355,6 +475,7 @@ export function fokusZustand(tagParam) {
     pihole: { gruppe: f.pihole.gruppe, fehler: f.pihole.fehler, zeit: f.pihole.zeit, domains: f.pihole.domains || 0, clients: f.pihole.clients || 0 },
     code: f.code && f.code.bis > nun ? { bis: f.code.bis } : null,
     diagnose: f.diagnose || null,
+    parken: parkZustand(tag),
   };
 }
 
@@ -365,5 +486,10 @@ export async function fokusLauf() {
   const grenze = tagKey(jetzt() - AUFBEWAHRUNG_TAGE * 86_400_000);
   let geaendert = false;
   for (const tag of Object.keys(f.tage)) if (tag < grenze) { delete f.tage[tag]; delete f.stunden[tag]; geaendert = true; }
+  const pd = parkDb();
+  const vorher = pd.sitzungen.length;
+  const ms = jetzt() - AUFBEWAHRUNG_TAGE * 86_400_000;
+  pd.sitzungen = pd.sitzungen.filter((s) => (s.bis ?? s.zuletzt ?? s.von) >= ms);
+  if (pd.sitzungen.length !== vorher) geaendert = true;
   if (geaendert) save();
 }

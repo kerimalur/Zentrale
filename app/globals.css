@@ -995,3 +995,16 @@ button.szene-chip { font-family: inherit; line-height: inherit; }
   .lb-kette-glied { flex-basis: 100%; }
   .tr-bereich { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ---------- Handy-Parkplatz (Fokus-Tab) ---------- */
+.fk-park-kopf { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.fk-park-gross { font-size: 30px; font-weight: 800; letter-spacing: -0.02em; }
+.fk-park-zeit { position: relative; height: 14px; border-radius: 999px; background: var(--track); overflow: hidden; }
+.fk-park-zeit span { position: absolute; top: 0; bottom: 0; background: var(--gruen); border-radius: 999px; min-width: 3px; }
+.fk-park-achse { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.fk-park-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.fk-park-grid div { background: var(--bg); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.fk-park-grid b { font-size: 16px; letter-spacing: -0.01em; } .fk-park-grid small { color: var(--muted); font-size: 12px; }
+.fk-park-tage { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; height: 56px; }
+.fk-park-tage button { display: flex; align-items: flex-end; border: 0; background: transparent; padding: 0; cursor: pointer; height: 100%; }
+.fk-park-tage span { display: block; width: 100%; background: var(--gruen); border-radius: 4px; min-height: 2px; }

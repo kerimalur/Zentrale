@@ -30,6 +30,30 @@ class Speicher(ctx: Context) {
         get() = p.getString("puffer", "{}")!!
         set(v) = p.edit().putString("puffer", v).apply()
 
+    // ---------- Handy-Parkplatz ----------
+    /** Beginn der laufenden Parkzeit (ms), 0 = nicht geparkt. */
+    var parkSeit: Long
+        get() = p.getLong("parkSeit", 0L)
+        set(v) = p.edit().putLong("parkSeit", v).apply()
+    /** Letzter Zeitpunkt, an dem das Handy sicher geparkt war (für den Fall, dass die App neu startet). */
+    var parkZuletzt: Long
+        get() = p.getLong("parkZuletzt", 0L)
+        set(v) = p.edit().putLong("parkZuletzt", v).apply()
+    /** Abgeschlossene Parkzeiten, die die Zentrale noch nicht bestätigt hat: [{von, bis}]. */
+    var parkFertig: String
+        get() = p.getString("parkFertig", "[]")!!
+        set(v) = p.edit().putString("parkFertig", v).apply()
+    /** Hat diese App Nicht stören eingeschaltet (dann schaltet sie es beim Abholen wieder aus)? */
+    var dndGesetzt: Boolean
+        get() = p.getBoolean("dndGesetzt", false)
+        set(v) = p.edit().putBoolean("dndGesetzt", v).apply()
+    /** Einstellungen aus der Zentrale: {dnd, spiele, apps[]}. Vorgabe gilt, bis die Zentrale etwas liefert. */
+    var parkKonfig: String
+        get() = p.getString("parkKonfig", "{\"dnd\":true,\"spiele\":true,\"apps\":[\"Snapchat\",\"YouTube\"]}")!!
+        set(v) = p.edit().putString("parkKonfig", v).apply()
+
+    fun parkKonfigJson(): JSONObject = try { JSONObject(parkKonfig) } catch (e: Exception) { JSONObject() }
+
     val gekoppelt: Boolean get() = !token.isNullOrEmpty()
 
     fun entkoppeln() {

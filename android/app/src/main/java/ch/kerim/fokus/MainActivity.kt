@@ -65,10 +65,22 @@ class MainActivity : Activity() {
         return an.split(':').any { it.equals(name, true) }
     }
 
+    private fun dndErlaubt(): Boolean = try {
+        (getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager).isNotificationPolicyAccessGranted
+    } catch (_: Exception) { false }
+
+    /** Lädt das Handy gerade kabellos (Pixel Stand)? */
+    private fun kabellosLaedt(): Boolean {
+        val i = registerReceiver(null, android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return false
+        return (i.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) and android.os.BatteryManager.BATTERY_PLUGGED_WIRELESS) != 0
+    }
+
+    private fun uhr(ms: Long) = java.text.SimpleDateFormat("HH:mm", java.util.Locale.GERMAN).format(java.util.Date(ms))
+
     private var letzteAnsicht = ""
 
     private fun zeichnen() {
-        val ansicht = "${s.gekoppelt}|${dienstAn()}|${s.letzterStatus}"
+        val ansicht = "${s.gekoppelt}|${dienstAn()}|${s.letzterStatus}|${s.parkSeit}|${dndErlaubt()}|${kabellosLaedt()}"
         if (ansicht == letzteAnsicht) return
         // Während der Eingabe nicht neu zeichnen
         if (!s.gekoppelt && letzteAnsicht.startsWith("false|") && wurzel.childCount > 0) { letzteAnsicht = ansicht; return }
@@ -113,6 +125,25 @@ class MainActivity : Activity() {
             }
             wurzel.addView(text("Status: ${s.letzterStatus}", 14f))
             wurzel.addView(text("Sperren: ${s.sperren().length()} aktiv", 14f))
+
+            // Handy-Parkplatz
+            wurzel.addView(text("Handy-Parkplatz", 20f, true))
+            val geparkt = s.parkSeit > 0L
+            wurzel.addView(text(
+                if (geparkt) "Geparkt seit ${uhr(s.parkSeit)} Uhr" else "Nicht geparkt",
+                16f, true, if (geparkt) Color.parseColor("#15803d") else Color.parseColor("#151a26")))
+            wurzel.addView(text("Laden: " + if (kabellosLaedt()) "kabellos (Stand erkannt)" else "nicht kabellos – Parken zählt nur auf dem Stand", 14f))
+            if (dndErlaubt()) {
+                wurzel.addView(text("Nicht stören beim Parken: erlaubt ✓", 14f, farbe = Color.parseColor("#15803d")))
+            } else {
+                wurzel.addView(text("Nicht stören beim Parken: nicht erlaubt – ohne diese Freigabe bleibt Nicht stören aus.", 14f, farbe = Color.parseColor("#b42318")))
+                wurzel.addView(knopf("Zugriff auf «Nicht stören» erlauben") { startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) })
+            }
+            val konfig = s.parkKonfigJson()
+            val apps = konfig.optJSONArray("apps")
+            val liste = (0 until (apps?.length() ?: 0)).joinToString(", ") { apps!!.optString(it) }
+            wurzel.addView(text("Gesperrt beim Parken: " + (if (konfig.optBoolean("spiele", true)) "alle Spiele" else "keine Spiele") + (if (liste.isNotEmpty()) ", $liste" else ""), 14f))
+            wurzel.addView(text("Die Auswahl änderst du in der Zentrale (Fokus → Handy-Parkplatz).", 12f, farbe = Color.GRAY))
             wurzel.addView(knopf("Inspektor starten (30 Sek)") {
                 val dienst = FokusService.instanz
                 if (dienst == null) s.letzterStatus = "Bedienungshilfe ist aus"

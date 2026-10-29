@@ -47,13 +47,13 @@ object Api {
     }
 
     /** Sendet die gesammelte Zeit und liefert die aktuellen Sperren zurück. */
-    fun bericht(s: Speicher, zeiten: Map<String, Int>, jetzt: String?): Antwort {
+    fun bericht(s: Speicher, zeiten: Map<String, Int>, jetzt: String?, parken: JSONObject): Antwort {
         val eintraege = JSONArray()
         for ((key, sek) in zeiten) {
             val (art, name) = teilen(key)
             eintraege.put(JSONObject().put("art", art).put("name", name).put("sek", sek))
         }
-        val body = JSONObject().put("version", "android-1.2").put("eintraege", eintraege)
+        val body = JSONObject().put("version", "android-1.3").put("eintraege", eintraege).put("parken", parken)
         if (jetzt != null) {
             val (art, name) = teilen(jetzt)
             body.put("jetzt", JSONObject().put("art", art).put("name", name))

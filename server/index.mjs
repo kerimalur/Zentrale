@@ -22,7 +22,7 @@ import { pcWecken, pcAusschalten, pcSchluesselZeile } from './pc.mjs';
 import { tvAbfragen, tvTaste, tvLautstaerke, tvEinschalten } from './tv.mjs';
 import { garminDaten, garminHistorie } from './collect/garmin.mjs';
 import { tagescheckSenden } from './tagescheck.mjs';
-import { fokusZustand, fokusLauf, koppelcodeErzeugen, koppeln, geraetVonToken, geraetEntfernen, geraetSetzen as fokusGeraetSetzen, bericht as fokusBericht, diagnoseSpeichern, sperreSetzen, sperreLoeschen, kategorieSetzen, piholeSync } from './fokus.mjs';
+import { fokusZustand, fokusLauf, koppelcodeErzeugen, koppeln, geraetVonToken, geraetEntfernen, geraetSetzen as fokusGeraetSetzen, bericht as fokusBericht, diagnoseSpeichern, sperreSetzen, sperreLoeschen, kategorieSetzen, piholeSync, parkKonfigSetzen } from './fokus.mjs';
 import { dukascopyTakt, dukascopyZustand } from './dukascopy.mjs';
 import { tradingZustand, tradingPaar, tradingLauf, tradingNeuLaden, tradingEinstellungenSetzen, tradingTestMeldung, gvaPruefer, gvaMonat, gvaDetail, PAARE } from './trading.mjs';
 import { heuteZustand, anmeldeUrl, rueckkehr, trennen as googleTrennen, mailAktion, scanStarten, scanZustand, absenderAktion, werbefilterSetzen, terminNeu, aufgabeNeu, aufgabeErledigt } from './google.mjs';
@@ -155,6 +155,10 @@ async function api(req, res, url) {
   if (p === '/api/fokus/sperre' && m === 'DELETE') {
     const b = await body(req);
     return sperreLoeschen(String(b.id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
+  }
+  if (p === '/api/fokus/parken' && m === 'POST') {
+    const r = parkKonfigSetzen(await body(req));
+    return r.fehler ? json(res, 400, { fehler: r.fehler }) : json(res, 200, r);
   }
   if (p === '/api/fokus/pihole' && m === 'POST') { await piholeSync(true); return json(res, 200, fokusZustand().pihole); }
 

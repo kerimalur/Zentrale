@@ -23,6 +23,7 @@ class FokusService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private val netz = Executors.newSingleThreadExecutor()
     private lateinit var speicher: Speicher
+    lateinit var parken: Parken
 
     private val puffer = HashMap<String, Int>()
     private var jetzt: String? = null
@@ -110,12 +111,16 @@ class FokusService : AccessibilityService() {
             o.keys().forEach { puffer[it] = o.getInt(it) }
         } catch (_: Exception) {}
         ignorierte = ignorierteSammeln()
+        if (::parken.isInitialized) parken.stop()
+        parken = Parken(this, speicher, handler) { sekSeitSenden = 0; senden() }
+        parken.start()
         handler.removeCallbacks(ticker)
         handler.postDelayed(ticker, tick * 1000L)
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         instanz = null
+        if (::parken.isInitialized) parken.stop()
         handler.removeCallbacks(ticker)
         speichern()
         return super.onUnbind(intent)
@@ -182,6 +187,7 @@ class FokusService : AccessibilityService() {
 
     private fun zaehlen() {
         jetzt = null
+        if (::parken.isInitialized) parken.tick()
         if (aktiv()) {
             val pkg = vordergrundPaket()
             if (pkg != null && pkg !in ignorierte) {
@@ -206,10 +212,14 @@ class FokusService : AccessibilityService() {
         if (!speicher.gekoppelt) return
         val kopie = HashMap(puffer)
         val j = jetzt
+        val parkBericht = parken.berichtJson()
+        val gesendet = HashSet<Long>()
+        val fertig = parkBericht.optJSONArray("fertig")
+        if (fertig != null) for (i in 0 until fertig.length()) gesendet.add(fertig.getJSONObject(i).optLong("von"))
         speichern()
         netz.execute {
             try {
-                val a = Api.bericht(speicher, kopie, j)
+                val a = Api.bericht(speicher, kopie, j, parkBericht)
                 if (a.status == 200 && a.json != null) {
                     handler.post {
                         for ((k, v) in kopie) {
@@ -217,7 +227,9 @@ class FokusService : AccessibilityService() {
                             if (rest > 0) puffer[k] = rest else puffer.remove(k)
                         }
                         speichern()
+                        parken.bestaetigt(gesendet)
                     }
+                    a.json.optJSONObject("parken")?.let { speicher.parkKonfig = it.toString() }
                     speicher.letzteSperren = (a.json.optJSONArray("sperren") ?: org.json.JSONArray()).toString()
                     speicher.bereichRegeln = (a.json.optJSONObject("bereichRegeln") ?: JSONObject()).toString()
                     speicher.letzterStatus = "gesendet " + java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.GERMAN).format(java.util.Date())
@@ -245,6 +257,11 @@ class FokusService : AccessibilityService() {
         letzteAuswertung = nun
         val pkg = event.packageName?.toString() ?: return
         if (pkg in ignorierte) return
+        // Handy geparkt (Pixel Stand): Spiele und die gewählten Apps (Standard: Snapchat, YouTube) sind gesperrt
+        if (::parken.isInitialized && parken.blockiert(pkg, label(pkg))) {
+            sperrenAktion { performGlobalAction(GLOBAL_ACTION_HOME); hinweis("Handy ist geparkt – ${label(pkg)} gesperrt") }
+            return
+        }
         val sperren = speicher.sperren()
         if (sperren.length() == 0) return
         val regeln = speicher.regeln()

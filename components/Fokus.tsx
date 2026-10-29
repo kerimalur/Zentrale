@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { holen, senden, kopieren } from '@/lib/api';
 import { relativ } from '@/lib/format';
-import type { FEintrag, FGeraet, FKategorie, FSperre, FokusZustand } from '@/lib/fokus';
+import type { FEintrag, FGeraet, FKategorie, FParken, FSperre, FokusZustand } from '@/lib/fokus';
 import { Icon, Schalter, type IconName } from './ui';
 import { Popup } from './NetzBausteine';
 
@@ -31,6 +31,7 @@ export function Fokus() {
   const [eintrag, setEintrag] = useState<FEintrag | null>(null);
   const [geraet, setGeraet] = useState<FGeraet | null>(null);
   const [diag, setDiag] = useState(false);
+  const [parkPopup, setParkPopup] = useState(false);
 
   const laden = useCallback(async () => {
     try { setD(await holen<FokusZustand>('/api/fokus' + (tag ? `?tag=${tag}` : ''))); setFehler(null); }
@@ -76,6 +77,8 @@ export function Fokus() {
           {total === 0 ? <span className="leer" /> : KAT.map((k) => d.gesamt[k.id] > 0 && <span key={k.id} style={{ width: `${(d.gesamt[k.id] / total) * 100}%`, background: k.farbe }} />)}
         </div>
       </section>
+
+      <ParkKarte p={d.parken} heute={d.heute} onEinstellungen={() => setParkPopup(true)} onTag={(t) => setTag(t >= d.heute ? null : t)} />
 
       <section className="karte in" aria-label="Geräte">
         <h2 className="karte-titel">Geräte <small><button className="knopf-klein press" onClick={() => setKoppeln(true)}>Gerät koppeln</button></small></h2>
@@ -174,11 +177,89 @@ export function Fokus() {
         </section>
       )}
       {diag && d.diagnose && <DiagnosePopup text={d.diagnose.text} onClose={() => setDiag(false)} />}
+      {parkPopup && <ParkPopup p={d.parken} onClose={() => { setParkPopup(false); laden(); }} />}
       {koppeln && <KoppelPopup onClose={() => { setKoppeln(false); laden(); }} />}
       {sperrePopup && <SperrePopup s={sperrePopup === 'neu' ? null : sperrePopup} d={d} onClose={() => { setSperrePopup(null); laden(); }} />}
       {eintrag && <EintragPopup e={eintrag} d={d} onClose={() => { setEintrag(null); laden(); }} onSperre={(wert, typ) => { setEintrag(null); setSperrePopup({ id: '', typ, wert, modus: 'immer', von: '08:00', bis: '18:00', limitMin: 30, geraete: 'alle', an: true, aktiv: false, nutzungMin: null }); }} />}
       {geraet && <GeraetPopup g={geraet} onClose={() => { setGeraet(null); laden(); }} />}
     </div>
+  );
+}
+
+const uhr = (ms: number) => new Date(ms).toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+
+// Handy-Parkplatz: Zeit auf dem Pixel Stand = Handy-freie Zeit, nur innerhalb des Fensters (Standard 07:30–23:00).
+function ParkKarte({ p, heute, onEinstellungen, onTag }: { p: FParken; heute: string; onEinstellungen: () => void; onTag: (tag: string) => void }) {
+  const t = p.tag;
+  const fenster = Math.max(1, (t.fensterBis - t.fensterVon) / 1000);
+  const pos = (ms: number) => `${Math.max(0, Math.min(100, ((ms - t.fensterVon) / (t.fensterBis - t.fensterVon)) * 100))}%`;
+  const bereich = (e: { von: number; bis: number; laeuft: boolean } | null) => (e ? `${uhr(e.von)}–${e.laeuft ? 'jetzt' : uhr(e.bis)}` : '–');
+  return (
+    <section className="karte in" aria-label="Handy-Parkplatz">
+      <h2 className="karte-titel">Handy-Parkplatz <small><button className="knopf-klein press" onClick={onEinstellungen}>Einstellungen</button></small></h2>
+      <div className="fk-park-kopf">
+        <span className="fk-park-gross">{dauer(t.sek)}</span>
+        <span className="leise">handyfrei{t.zeitraumSek > 0 ? ` · ${Math.round(t.anteil * 100)} % von ${dauer(t.zeitraumSek)} im Zeitfenster` : ''}</span>
+      </div>
+      <div style={{ fontSize: 13, margin: '6px 0 12px' }}>
+        {p.aktiv
+          ? <b style={{ color: 'var(--gruen)' }}>Geparkt seit {uhr(p.aktiv.seit)} Uhr{p.aktiv.geraet ? ` · ${p.aktiv.geraet}` : ''}</b>
+          : <span className="leise">Gerade nicht geparkt</span>}
+        <span className="leise"> · zählt {p.konfig.von}–{p.konfig.bis} Uhr, die Nacht nicht</span>
+      </div>
+      <div className="fk-park-zeit" role="img" aria-label="Parkzeiten im Tagesfenster">
+        {t.sitzungen.map((e) => <span key={e.von} title={`${uhr(e.von)}–${uhr(e.bis)} · ${dauer(e.sek)}`} style={{ left: pos(e.von), width: `calc(${pos(e.bis)} - ${pos(e.von)})` }} />)}
+      </div>
+      <div className="fk-park-achse"><span>{p.konfig.von}</span><span>{p.konfig.bis}</span></div>
+      <div className="fk-park-grid" style={{ marginTop: 12 }}>
+        <div><small>Erste Parkzeit</small><b>{bereich(t.erste)}</b><small>{t.erste ? dauer(t.erste.sek) : 'noch keine'}</small></div>
+        <div><small>Letzte Parkzeit</small><b>{bereich(t.letzte)}</b><small>{t.letzte ? dauer(t.letzte.sek) : 'noch keine'}</small></div>
+        <div><small>Parkzeiten</small><b>{t.anzahl}</b><small>an diesem Tag</small></div>
+        <div><small>Längste Parkzeit</small><b>{dauer(t.laengste)}</b><small>am Stück</small></div>
+      </div>
+      <h4 className="nw-h" style={{ marginTop: 14 }}>14 Tage handyfrei</h4>
+      <div className="fk-park-tage" role="img" aria-label="Handyfreie Zeit der letzten 14 Tage">
+        {p.verlauf.map((v) => (
+          <button key={v.tag} title={`${v.tag} · ${dauer(v.sek)}`} onClick={() => onTag(v.tag)} aria-label={`${v.tag}: ${dauer(v.sek)}`} style={{ opacity: v.tag === t.tag ? 1 : 0.55 }}>
+            <span style={{ height: `${Math.min(100, (v.sek / fenster) * 100)}%` }} />
+          </button>
+        ))}
+      </div>
+      <div className="fk-park-achse"><span>vor 14 Tagen</span><span>{t.tag === heute ? 'heute' : t.tag}</span></div>
+      <div className="leise" style={{ fontSize: 12.5, marginTop: 10, lineHeight: 1.5 }}>
+        Als geparkt gilt das Handy, solange es <b>kabellos</b> auf dem Pixel Stand lädt. Dann ist Nicht stören an und Spiele sowie {p.konfig.apps.length ? p.konfig.apps.join(', ') : 'die gewählten Apps'} sind gesperrt.
+      </div>
+    </section>
+  );
+}
+
+function ParkPopup({ p, onClose }: { p: FParken; onClose: () => void }) {
+  const k = p.konfig;
+  const [dnd, setDnd] = useState(k.dnd);
+  const [spiele, setSpiele] = useState(k.spiele);
+  const [apps, setApps] = useState(k.apps.join(', '));
+  const [von, setVon] = useState(k.von);
+  const [bis, setBis] = useState(k.bis);
+  const [fehler, setFehler] = useState<string | null>(null);
+  async function speichern() {
+    try { await senden('/api/fokus/parken', { dnd, spiele, apps: apps.split(',').map((a) => a.trim()).filter(Boolean), von, bis }); onClose(); }
+    catch (e) { setFehler((e as Error).message); }
+  }
+  return (
+    <Popup titel="Handy-Parkplatz" unter="Gilt, sobald das Handy kabellos auf dem Pixel Stand lädt." onClose={onClose}>
+      <Schalter an={dnd} onClick={() => setDnd(!dnd)} titel="Nicht stören beim Parken" unter="Schaltet sich beim Abholen wieder aus (nur, wenn die App es eingeschaltet hat)." />
+      <Schalter an={spiele} onClick={() => setSpiele(!spiele)} titel="Alle Spiele sperren" unter="Erkannt über die Kategorie «Spiel» der installierten Apps." />
+      <label className="nw-feld">Weitere gesperrte Apps (Namen, mit Komma getrennt)<input value={apps} onChange={(e) => setApps(e.target.value)} placeholder="Snapchat, YouTube" /></label>
+      <div className="fk-zeiten">
+        <label className="nw-feld">Zählt ab<input type="time" value={von} onChange={(e) => setVon(e.target.value)} /></label>
+        <label className="nw-feld">Zählt bis<input type="time" value={bis} onChange={(e) => setBis(e.target.value)} /></label>
+      </div>
+      <div className="leise" style={{ fontSize: 12.5 }}>Parkzeit ausserhalb dieses Fensters (Nacht) zählt nicht als Handy-freie Zeit. Die Handy-App holt sich die Einstellungen bei der nächsten Meldung (spätestens nach 30 Sekunden).</div>
+      {fehler && <div className="fehlerbox">{fehler}</div>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+        <button className="knopf-akzent press" onClick={speichern}>Speichern</button>
+      </div>
+    </Popup>
   );
 }
 
