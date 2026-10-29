@@ -1,3 +1,5 @@
+// ALT – nur für bestehende Versionen. Fehler: Das Swing-Hoch wird nach dem Treffer laufend neu gewählt (auch Hochs, die erst
+// nach dem Treffer entstehen), dadurch BOS an Zwischenhochs. Neu: gva-kerim.mjs (Regelwerk 29.10.2026).
 // Kerims Fix Entry Model: GVA-Linie (erster Treffer) → BOS auf 15/30 Min → Einstieg in der Fib-Zone.
 //   1. Eine GVA-Linie (3D/W/M, Regeln wie Live) wird zum ersten Mal getroffen.
 //   2. Innerhalb des Zeitfensters (Handelstage ab dem Treffer) kommt ein BOS: Körper-Schluss ÜBER dem letzten Swing-Hoch
@@ -18,7 +20,7 @@ const { zahl, auswahl, mehrfach, schalter } = param;
 
 export default {
   id: 'gva-bos-fib',
-  name: 'GVA + BOS + Fib (Kerim)',
+  name: 'GVA + BOS + Fib (alt, vor Regelwerk 29.10.)',
   beschreibung: 'Erster Treffer einer GVA-Linie, danach BOS auf 15/30 Min mit Körper-Schluss über/unter Swing und Daily Open, Einstieg in der Fib-Zone.',
   aufloesung: (p) => (p.swingTf === '30m' ? 1800 : 900),
   parameter: [

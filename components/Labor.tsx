@@ -10,7 +10,7 @@ import {
   type LBaustein, type LBausteine, type LErgebnis, type LFErgebnis, type LExtern, type LIdee, type LIdeeKurz, type LKarte, type LParam, type LTeil, type LTrade, type LZettel, pText,
 } from '@/lib/labor';
 import { Schalter } from './ui';
-import { TradeChart } from './LaborTradeChart';
+import { TradeChart, grundText } from './LaborTradeChart';
 import { UrteilChip, TypChip, Raster, Gruppenbalken, Kachel, Rueckfrage, FazitKarte, Erweitert } from './LaborTeile';
 import { Popup } from './NetzBausteine';
 import { FremdEditor, FremdVorabKarte, ErgebnisFremd, reiheNameKlient } from './LaborFremd';
@@ -701,8 +701,13 @@ function ErgebnisStrategie({ e }: { e: LErgebnis }) {
         </div>
         {e.trichter && Object.keys(e.trichter).length > 0 && (
           <div className="leise" style={{ fontSize: 12.5, marginTop: 10 }}>
-            {Object.entries(e.trichter).filter(([a]) => a !== 'ungueltig').map(([a, w]) => `${a === 'linien' ? 'GVA-Treffer' : a === 'bos' ? 'mit BOS' : a === 'einstieg' ? 'Einstieg erreicht' : a} ${w}`).join(' → ')}
-            {e.trichter.ungueltig ? ` · davon ${e.trichter.ungueltig} ungültig (Kurs schon weggelaufen)` : ''}
+            {Object.entries(e.trichter).filter(([a]) => ['linien', 'bos', 'einstieg'].includes(a)).map(([a, w]) => `${a === 'linien' ? 'GVA-Treffer' : a === 'bos' ? 'mit BOS' : 'Einstieg erreicht'} ${w}`).join(' → ')}
+            {(() => {
+              const T = e.trichter as Record<string, number>;
+              const GRUND: [string, string][] = [['keinHoch', 'kein letztes Hoch vor dem Hit'], ['keinBos', 'kein BOS im Zeitfenster'], ['bosNurUnterOpen', 'BOS nur unter dem Daily Open'], ['ungueltig', 'ungültig (Kurs schon weggelaufen)'], ['gebrochen', 'Low vor dem Einstieg gebrochen'], ['verfallen', 'verfallen (kein Einstieg)'], ['zuWenigConf', 'zu wenig Confluences in der Box'], ['gegenBos', 'wegen Gegen-BOS-Regel']];
+              const teile = GRUND.filter(([k]) => T[k]).map(([k, txt]) => `${T[k]} ${txt}`);
+              return teile.length ? ` · ausgeschieden: ${teile.join(', ')}` : '';
+            })()}
             {e.uebersprungen ? ` · ${e.uebersprungen} übersprungen (Position offen)` : ''} · Ø MFE {e.mfeMedian ?? '—'} R, MAE {e.maeMedian ?? '—'} R (Median)
           </div>
         )}
@@ -743,7 +748,7 @@ function ErgebnisStrategie({ e }: { e: LErgebnis }) {
                   <tr style={t.fw ? { background: 'rgba(214,162,58,.08)' } : undefined}>
                     <td>{new Date(t.tEin * 1000).toLocaleString('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}{t.fw ? ' · F' : ''}</td>
                     <td>{t.pair}</td><td>{t.seite > 0 ? 'Long' : 'Short'}</td><td>{t.risikoPips} Pips</td>
-                    <td>{t.grund === 'tp' ? 'TP' : t.grund === 'sl' ? 'SL' : t.grund === 'zeit' ? 'Zeit' : 'offen'}</td>
+                    <td>{grundText(t)}</td>
                     <td style={{ color: t.r >= 0 ? 'var(--gruen)' : 'var(--fehler)', fontWeight: 600 }}>{rText(t.r)}</td>
                     <td><button className="knopf-klein press" onClick={() => setChartOffen(chartOffen === x ? null : x)}>{chartOffen === x ? 'Zu' : 'Chart'}</button></td>
                   </tr>

@@ -92,7 +92,7 @@ export function mdHerunterladen(datei: string, md: string) {
 export interface LZeile { id: string; name: string; status: 'ja' | 'nein' | 'offen'; text: string }
 export interface LGruppe { schluessel: string; n: number; avg: number | null; quote: number }
 export interface LKennzahlen { n: number; gewinner?: number; quote?: number; bereich?: [number, number] | null; avgR?: number | null; summeR?: number | null; avgGewinn?: number | null; avgVerlust?: number | null; pf?: number | null; maxDD?: number | null; verlustSerie?: number; sqn?: number | null; median?: number | null; bester?: number | null; schlechtester?: number | null }
-export interface LTrade { pair: string; seite: number; tSignal: number; tEin: number; tAus: number; ein: number; sl: number; tp: number | null; aus: number; grund: string; risikoPips: number; r: number; spreadR: number; mfe: number; mae: number; spiegel: number; info: Record<string, unknown> }
+export interface LTrade { pair: string; seite: number; tSignal: number; tEin: number; tAus: number; ein: number; sl: number; tp: number | null; aus: number; grund: string; teil?: boolean; risikoPips: number; r: number; spreadR: number; mfe: number; mae: number; spiegel: number; info: Record<string, unknown> }
 export interface LAbdeckung { pair: string; quelle: string | null; ab?: number; bis?: number; zuGrob?: boolean; fehlt?: boolean }
 export interface LHorizont {
   h: number; n: number; nUnabhaengig: number; mittel: number | null; median: number | null; quote: number | null; bereich: [number, number] | null;

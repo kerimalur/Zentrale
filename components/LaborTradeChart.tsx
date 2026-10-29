@@ -1,27 +1,36 @@
 'use client';
-// Chart eines einzelnen Labor-Trades zum Nachprüfen: Kerzen + alle Linien, die das Programm für diesen Trade benutzt hat.
+// Chart eines einzelnen Labor-Trades zum Nachprüfen: Kerzen + alle Linien und Zeitpunkte, die das Programm für diesen Trade benutzt hat
+// (GVA-Hit, letztes Hoch = BOS-Level, BOS, Daily Opens, Low/Hoch der Fib, Box mit Confluences, Teilgewinn, Break-Even, Ungültig).
 import { useEffect, useMemo, useState } from 'react';
 import { holen } from '@/lib/api';
 import type { LTrade } from '@/lib/labor';
 
 interface Kerze { t: number; o: number; h: number; l: number; c: number }
-interface Antwort { pair: string; tf: string; zuGrob: boolean; quelle: string; kerzen: Kerze[] }
-interface Linie { preis: number; text: string; farbe: string; strich?: string }
+interface Antwort { pair: string; tf: string; zuGrob: boolean; quelle: string; kerzen: Kerze[]; dailyOpens?: { t: number; o: number }[] }
+interface Linie { preis: number; text: string; farbe: string; strich?: string; ab?: number }
+interface Marke { t: number; text: string; farbe: string }
 
 const TFS = ['5m', '15m', '30m', '1H'] as const;
-const VORLAUF = [{ h: 24, text: '1 Tag' }, { h: 72, text: '3 Tage' }, { h: 168, text: '1 Woche' }] as const;
+const VORLAUF = [{ h: 6, text: '6 Std' }, { h: 24, text: '1 Tag' }, { h: 72, text: '3 Tage' }, { h: 168, text: '1 Woche' }] as const;
 const zeit = (s: number) => new Date(s * 1000).toLocaleString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const dez = (pair: string) => (pair.endsWith('JPY') ? 3 : 5);
+const CONF_TEXT: Record<string, string> = { gva: 'GVA-Linie', d: 'Daily Open', w: 'Weekly Open', m: 'Monthly Open' };
+export const grundText = (t: Pick<LTrade, 'grund' | 'teil'>) =>
+  `${t.grund === 'tp' ? 'TP' : t.grund === 'sl' ? 'SL' : t.grund === 'be' ? 'Break-Even' : t.grund === 'zeit' ? 'Zeit' : 'offen'}${t.teil ? ' + Teil' : ''}`;
 
 export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<string, unknown> }) {
   const [tf, setTf] = useState<(typeof TFS)[number]>('15m');
-  const [vor, setVor] = useState(24);
+  const [vor, setVor] = useState(6);
   const [d, setD] = useState<Antwort | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
   const [hover, setHover] = useState<Kerze | null>(null);
 
+  const info = t.info as Record<string, unknown>;
+  const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+  // Der Chart beginnt vor dem frühesten Schritt (letztes Hoch, Hit, Signal oder Einstieg)
+  const frueheste = Math.min(...[num(info.tSwing), num(info.tTreffer), t.tSignal, t.tEin].filter((x): x is number => x !== null && x > 0));
   const ende = (t.tAus && t.tAus > t.tEin ? t.tAus : t.tEin + 48 * 3600) + 6 * 3600;
-  const von = Math.min(t.tSignal, t.tEin) - vor * 3600;
+  const von = frueheste - vor * 3600;
 
   useEffect(() => {
     let weg = false;
@@ -32,29 +41,43 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
     return () => { weg = true; };
   }, [t.pair, von, ende, tf]);
 
-  const info = t.info as Record<string, number | string | undefined>;
+  const neu = num(info.tTreffer) !== null; // Trades der Strategie nach Regelwerk (mit allen Schritten)
   const linien = useMemo<Linie[]>(() => {
     const L: Linie[] = [];
-    const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
     const lvl = num(info.lvl), swing = num(info.swing), f0 = num(info.fib0), f100 = num(info.fib100);
     if (lvl !== null) L.push({ preis: lvl, text: `GVA-Linie${info.tf ? ` (${info.tf})` : ''}`, farbe: '#a78bfa', strich: '6 4' });
-    if (swing !== null) L.push({ preis: swing, text: 'Swing (BOS)', farbe: '#94a3b8', strich: '2 3' });
+    if (swing !== null) L.push({ preis: swing, text: neu ? 'Letztes Hoch (BOS-Level)' : 'Swing (BOS)', farbe: '#2dd4bf', strich: neu ? undefined : '2 3', ab: num(info.tSwing) ?? undefined });
     if (f0 !== null && f100 !== null) {
       const fib = (f: number) => f0 + f * (f100 - f0);
-      L.push({ preis: f0, text: 'Fib 0 %', farbe: '#d6a23a', strich: '4 3' });
-      L.push({ preis: f100, text: 'Fib 100 % (SL)', farbe: '#d6a23a', strich: '4 3' });
+      L.push({ preis: f0, text: 'Fib 0 % (Hoch)', farbe: '#d6a23a', strich: '4 3' });
+      L.push({ preis: f100, text: 'Fib 100 % (Low = SL)', farbe: '#d6a23a', strich: '4 3' });
       L.push({ preis: fib(0.618), text: 'Fib 0,618', farbe: '#60a5fa', strich: '2 2' });
       L.push({ preis: fib(0.786), text: 'Fib 0,786', farbe: '#60a5fa', strich: '2 2' });
-      const u = num(parameter?.ungueltig);
-      if (parameter?.ungueltigAn !== false && u !== null) L.push({ preis: fib(u), text: `Ungültig (${Math.round(u * 100)} %)`, farbe: '#f87171', strich: '1 3' });
+      const u = num(info.ungueltig) ?? (parameter?.ungueltigAn !== false && num(parameter?.ungueltig) !== null ? fib(num(parameter?.ungueltig) as number) : null);
+      if (u !== null) L.push({ preis: u, text: 'Ungültig', farbe: '#f87171', strich: '1 3' });
     }
+    const teil = num(info.teil), be = num(info.be);
+    if (teil !== null) L.push({ preis: teil, text: 'Teilgewinn', farbe: '#86efac', strich: '3 3' });
+    if (be !== null) L.push({ preis: be, text: 'Break-Even ab', farbe: '#cbd5e1', strich: '1 2' });
     L.push({ preis: t.ein, text: 'Einstieg', farbe: '#e5e7eb' });
     L.push({ preis: t.sl, text: 'SL', farbe: '#ef4444' });
     if (t.tp != null) L.push({ preis: t.tp, text: 'TP', farbe: '#22c55e' });
     return L;
-  }, [t, info, parameter]);
+  }, [t, info, parameter, neu]);
 
-  const B = 900, H = 380, rand = { l: 8, r: 150, o: 10, u: 26 };
+  const marken = useMemo<Marke[]>(() => {
+    const M: Marke[] = [];
+    const tS = num(info.tSwing), tH = num(info.tTreffer), tB = num(info.tBos), tG = num(info.gegenBos);
+    if (tS !== null) M.push({ t: tS, text: 'Hoch', farbe: '#2dd4bf' });
+    if (tH !== null) M.push({ t: tH, text: 'GVA-Hit', farbe: '#a78bfa' });
+    M.push({ t: tB ?? t.tSignal, text: neu ? 'BOS' : 'Signal', farbe: '#f59e0b' });
+    if (tG !== null) M.push({ t: tG, text: 'Gegen-BOS', farbe: '#fb7185' });
+    M.push({ t: t.tEin, text: 'Einstieg', farbe: '#e5e7eb' });
+    if (t.tAus) M.push({ t: t.tAus, text: 'Ausstieg', farbe: t.r >= 0 ? '#22c55e' : '#ef4444' });
+    return M;
+  }, [t, info, neu]);
+
+  const B = 900, H = 400, rand = { l: 8, r: 170, o: 22, u: 26 };
   const geo = useMemo(() => {
     if (!d?.kerzen.length) return null;
     const k = d.kerzen;
@@ -67,11 +90,13 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
     lo -= pad; hi += pad;
     const t0 = k[0].t, t1 = k[k.length - 1].t, dt = k.length > 1 ? k[1].t - k[0].t : 900;
     const w = B - rand.l - rand.r, h = H - rand.o - rand.u;
-    const x = (s: number) => rand.l + ((s - t0) / (t1 - t0 + dt)) * w;
+    const x = (s: number) => rand.l + Math.max(0, Math.min(1, (s - t0) / (t1 - t0 + dt))) * w;
     const y = (p: number) => rand.o + (1 - (p - lo) / (hi - lo)) * h;
-    return { k, lo, hi, x, y, bw: Math.max(1, (w / k.length) * 0.7), dt };
+    return { k, lo, hi, x, y, bw: Math.max(1, (w / k.length) * 0.7), dt, t0, t1 };
   }, [d, linien, t]);
 
+  const conf = Array.isArray(info.conf) ? (info.conf as { art: string; preis: number }[]) : null;
+  const box = Array.isArray(info.box) ? (info.box as number[]) : null;
   const farbeR = t.r >= 0 ? 'var(--gruen)' : 'var(--fehler)';
   const de = dez(t.pair);
   return (
@@ -80,7 +105,7 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
         {TFS.map((x) => <button key={x} className="knopf-klein press" style={x === tf ? { fontWeight: 700, outline: '1px solid var(--akzent, #888)' } : undefined} onClick={() => setTf(x)}>{x}</button>)}
         <span className="leise" style={{ margin: '0 4px' }}>Vorlauf</span>
         {VORLAUF.map((x) => <button key={x.h} className="knopf-klein press" style={x.h === vor ? { fontWeight: 700, outline: '1px solid var(--akzent, #888)' } : undefined} onClick={() => setVor(x.h)}>{x.text}</button>)}
-        <span style={{ marginLeft: 'auto', color: farbeR, fontWeight: 600 }}>{t.pair} {t.seite > 0 ? 'Long' : 'Short'} · {t.r >= 0 ? '+' : ''}{t.r.toFixed(2).replace('.', ',')} R · {t.grund === 'tp' ? 'TP' : t.grund === 'sl' ? 'SL' : t.grund === 'zeit' ? 'Zeit' : 'offen'}</span>
+        <span style={{ marginLeft: 'auto', color: farbeR, fontWeight: 600 }}>{t.pair} {t.seite > 0 ? 'Long' : 'Short'} · {t.r >= 0 ? '+' : ''}{t.r.toFixed(2).replace('.', ',')} R · {grundText(t)}</span>
       </div>
       {fehler && <div className="leise">{fehler}</div>}
       {!d && !fehler && <div className="leise">Lade Kerzen…</div>}
@@ -95,10 +120,25 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
               const k = geo.k[Math.min(geo.k.length - 1, Math.floor((geo.k.length * i) / 6))];
               return <text key={i} x={geo.x(k.t)} y={H - 8} fontSize={10} fill="var(--muted)">{zeit(k.t)}</text>;
             })}
-            {linien.length > 0 && (() => {
-              const f = linien.filter((l) => l.text.startsWith('Fib 0,')).map((l) => l.preis);
-              return f.length === 2 ? <rect x={rand.l} width={B - rand.l - rand.r} y={geo.y(Math.max(...f))} height={Math.abs(geo.y(f[0]) - geo.y(f[1]))} fill="#60a5fa" opacity={0.12} /> : null;
+            {/* Box 0,618–0,786 (Fib-Zone) */}
+            {(() => {
+              const f0 = num(info.fib0), f100 = num(info.fib100);
+              const b = box ?? (f0 !== null && f100 !== null ? [f0 + 0.618 * (f100 - f0), f0 + 0.786 * (f100 - f0)] : null);
+              if (!b) return null;
+              const xa = neu ? geo.x(num(info.tBos) ?? t.tSignal) : rand.l;
+              return <rect x={xa} width={Math.max(0, B - rand.r - xa)} y={geo.y(Math.max(...b))} height={Math.abs(geo.y(b[0]) - geo.y(b[1]))} fill="#60a5fa" opacity={0.12} />;
             })()}
+            {/* Daily Opens: je Handelstag (ab 17:00 New York) eine Linie */}
+            {(d.dailyOpens || []).map((x, i, a) => {
+              const xa = geo.x(Math.max(x.t, geo.t0)), xb = geo.x(a[i + 1]?.t ?? geo.t1 + geo.dt);
+              if (geo.y(x.o) < rand.o || geo.y(x.o) > H - rand.u || xb <= xa) return null;
+              return (
+                <g key={x.t}>
+                  <line x1={xa} x2={xb} y1={geo.y(x.o)} y2={geo.y(x.o)} stroke="#4ade80" strokeWidth={1} strokeDasharray="5 3" opacity={0.75} />
+                  <text x={xa + 2} y={geo.y(x.o) - 3} fontSize={9} fill="#4ade80">DO {x.o.toFixed(de)}</text>
+                </g>
+              );
+            })}
             {geo.k.map((c) => {
               const hoch = c.c >= c.o, f = hoch ? '#22c55e' : '#ef4444', x = geo.x(c.t) + (geo.bw * 0.2);
               return (
@@ -110,14 +150,14 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
             })}
             {linien.map((l, i) => geo.y(l.preis) >= 0 && geo.y(l.preis) <= H - rand.u && (
               <g key={i}>
-                <line x1={rand.l} x2={B - rand.r} y1={geo.y(l.preis)} y2={geo.y(l.preis)} stroke={l.farbe} strokeWidth={1} strokeDasharray={l.strich} opacity={0.9} />
+                <line x1={l.ab ? geo.x(l.ab) : rand.l} x2={B - rand.r} y1={geo.y(l.preis)} y2={geo.y(l.preis)} stroke={l.farbe} strokeWidth={l.ab ? 1.5 : 1} strokeDasharray={l.strich} opacity={0.9} />
                 <text x={B - rand.r + 4} y={geo.y(l.preis) + 3} fontSize={10} fill={l.farbe} fontWeight={600}>{l.text} {l.preis.toFixed(de)}</text>
               </g>
             ))}
-            {([[t.tSignal, 'Signal', '#a78bfa'], [t.tEin, 'Einstieg', '#e5e7eb'], [t.tAus, 'Ausstieg', t.r >= 0 ? '#22c55e' : '#ef4444']] as [number, string, string][]).map(([s, n, f]) => s > 0 && s >= geo.k[0].t && (
-              <g key={n}>
-                <line x1={geo.x(s)} x2={geo.x(s)} y1={rand.o} y2={H - rand.u} stroke={f} strokeWidth={1} strokeDasharray="3 3" />
-                <text x={geo.x(s) + 3} y={rand.o + 10} fontSize={10} fill={f} fontWeight={600}>{n}</text>
+            {marken.map((m, i) => m.t > 0 && m.t >= geo.t0 && m.t <= geo.t1 + geo.dt && (
+              <g key={`${m.text}-${i}`}>
+                <line x1={geo.x(m.t)} x2={geo.x(m.t)} y1={rand.o} y2={H - rand.u} stroke={m.farbe} strokeWidth={1} strokeDasharray="3 3" />
+                <text x={geo.x(m.t) + 3} y={rand.o - 8 + (i % 2) * 12} fontSize={10} fill={m.farbe} fontWeight={600}>{m.text}</text>
               </g>
             ))}
           </svg>
@@ -125,6 +165,15 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
             {hover ? `${zeit(hover.t)} · O ${hover.o.toFixed(de)} H ${hover.h.toFixed(de)} L ${hover.l.toFixed(de)} C ${hover.c.toFixed(de)}` : `Signal ${zeit(t.tSignal)} · Einstieg ${zeit(t.tEin)} · Ausstieg ${t.tAus ? zeit(t.tAus) : 'offen'} · Risiko ${t.risikoPips} Pips · Quelle ${d.quelle}`}
             {d.zuGrob && ' · Daten gröber als gewählter Zeitrahmen'}
           </div>
+          {neu && (
+            <div className="tr-hilfe" style={{ marginTop: 4 }}>
+              Ablauf: GVA-Hit {zeit(num(info.tTreffer) as number)} · letztes Hoch {num(info.swing)?.toFixed(de)} ({zeit(num(info.tSwing) as number)})
+              {' '}· BOS {zeit(num(info.tBos) as number)}{num(info.dailyOpen) !== null ? ` über Daily Open ${num(info.dailyOpen)?.toFixed(de)}` : ' (ohne Daily-Open-Bedingung)'}
+              {' '}· Low {num(info.fib100)?.toFixed(de)} · Hoch {num(info.fib0)?.toFixed(de)}
+              {' '}· Confluences in der Box: {conf && conf.length ? conf.map((c) => `${CONF_TEXT[c.art] || c.art} ${c.preis.toFixed(de)}`).join(', ') : 'keine'}
+              {num(info.gegenBos) !== null ? ` · Gegen-BOS ${zeit(num(info.gegenBos) as number)}` : ' · kein Gegen-BOS'}
+            </div>
+          )}
         </>
       )}
     </div>

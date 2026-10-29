@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import { config } from '../config.mjs';
 import { db, save } from '../store.mjs';
-import { PAARE, tradingEinstellungen, tradingDaten } from '../trading.mjs';
+import { PAARE, tradingEinstellungen, tradingDaten, _intern as tradingIntern } from '../trading.mjs';
 import { EREIGNISSE, FILTER, EREIGNIS, FILTER_ID } from './bausteine.mjs';
 import { STRATEGIEN, STRATEGIE } from './strategien/index.mjs';
 import { TF_LISTE, TF_TEXT } from './daten.mjs';
@@ -38,8 +38,8 @@ function lab() {
 const meta = (x) => ({ id: x.id, name: x.name, beschreibung: x.beschreibung, parameter: x.parameter, gerichtet: x.gerichtet, mitEreignissen: !!x.mitEreignissen });
 const ERFOLG_STD = 'Ø R nach Kosten > 0, besser als Zufall (p unter der Bonferroni-Grenze), beide Hälften positiv, Forward hält.';
 export const VORLAGEN = [
-  { id: 'gva', name: 'Kerims GVA + BOS + Fib', karte: { typ: 'strategie', name: 'GVA + BOS + Fib', modell: 'gva-bos-fib', parameter: {}, filter: [],
-    mechanismus: 'Am ersten Treffer einer frischen GVA-Linie liegen unbearbeitete Orders; ein BOS auf 15/30 Min mit Schluss über Swing und Daily Open zeigt, dass sie greifen.',
+  { id: 'gva', name: 'Kerims GVA → BOS → Fib (Regelwerk)', karte: { typ: 'strategie', name: 'GVA → BOS → Fib', modell: 'gva-kerim', parameter: {}, filter: [],
+    mechanismus: 'Am ersten Treffer einer frischen GVA-Linie liegen unbearbeitete Orders; ein BOS über dem letzten Hoch vor dem Hit und über dem Daily Open zeigt, dass sie greifen.',
     erwartung: 'Long nach Long-Linie, Short nach Short-Linie', erfolgskriterium: ERFOLG_STD } },
   { id: 'gva-h', name: 'Hypothese: GVA-Treffer kehrt', karte: { typ: 'hypothese', name: 'GVA-Treffer → Preis läuft von der Linie weg', tf: '1H', richtung: 'beide', nurNeu: true, ereignisse: [{ id: 'gva_treffer', p: { tfs: ['3D', 'W'] } }], filter: [], horizonte: [1, 2, 5, 10], hauptHorizont: 2,
     mechanismus: 'Offene Orders an der Linie drehen den Preis.', erwartung: 'Nach dem Treffer einer Long-Linie steigt der Preis, nach einer Short-Linie fällt er.', erfolgskriterium: 'Mehrwert über Saison und Zufall nach 2 Handelstagen, p < 0,05 nach Bonferroni, beide Hälften, Forward hält.' } },
@@ -600,16 +600,33 @@ export function laborTradeChart({ pair, von, bis, tf = '15m' }) {
   if (!sek || !(von > 0) || !(bis > von)) return { fehler: 'Ungültiger Zeitraum' };
   if ((bis - von) / sek > 2500) return { fehler: 'Zeitraum zu lang für diesen Zeitrahmen – gröberen Zeitrahmen wählen' };
   const mt = (x) => { const d = new Date(x * 1000); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
-  let t = [], o = [], h = [], l = [], c = [], res = 300, quelle = 'Dukascopy 5 Min';
-  const m5 = dukascopyFuenfMinuten(pair, mt(von), mt(bis));
-  if (m5 && m5.n) { for (let i = 0; i < m5.n; i++) if (m5.t[i] >= von && m5.t[i] <= bis) { t.push(m5.t[i]); o.push(m5.o[i]); h.push(m5.h[i]); l.push(m5.l[i]); c.push(m5.c[i]); } }
+  let t = [], o = [], h = [], l = [], c = [], res = 300, quelle = 'Kursdaten 5 Min';
+  // Daily Opens (Handelstag ab 17:00 New York): erste Kerze jedes Handelstags, ab einem Tag vor dem Chart-Beginn
+  const e = tradingEinstellungen();
+  const opens = [];
+  let altTag = null;
+  const tagOpen = (s, op) => { const tag = tradingIntern.sessionTag(s * 1000, e); if (tag !== altTag) { altTag = tag; opens.push({ t: s, o: op }); } };
+  const m5 = dukascopyFuenfMinuten(pair, mt(von - 86_400), mt(bis));
+  if (m5 && m5.n) {
+    for (let i = 0; i < m5.n; i++) {
+      if (m5.t[i] >= von - 86_400 && m5.t[i] <= bis) tagOpen(m5.t[i], m5.o[i]);
+      if (m5.t[i] >= von && m5.t[i] <= bis) { t.push(m5.t[i]); o.push(m5.o[i]); h.push(m5.h[i]); l.push(m5.l[i]); c.push(m5.c[i]); }
+    }
+  }
   if (!t.length) {
     const h1 = dukascopyStunden(pair);
     if (!h1) return { fehler: 'Keine Kursdaten für dieses Paar' };
-    res = 3600; quelle = 'Dukascopy 1 Std';
-    for (let i = 0; i < h1.t.length; i++) { const s = h1.t[i] / 1000; if (s >= von && s <= bis) { t.push(s); o.push(h1.o[i]); h.push(h1.h[i]); l.push(h1.l[i]); c.push(h1.c[i]); } }
+    res = 3600; quelle = 'Kursdaten 1 Std';
+    opens.length = 0; altTag = null;
+    for (let i = 0; i < h1.t.length; i++) {
+      const s = h1.t[i] / 1000;
+      if (s >= von - 86_400 && s <= bis) tagOpen(s, h1.o[i]);
+      if (s >= von && s <= bis) { t.push(s); o.push(h1.o[i]); h.push(h1.h[i]); l.push(h1.l[i]); c.push(h1.c[i]); }
+    }
   }
   if (!t.length) return { fehler: 'Keine Kerzen in diesem Zeitraum' };
+  // nur Tage, die im Chart sichtbar sind (der Tag, der vor dem Chart begann, gilt ab Chart-Beginn)
+  const dailyOpens = opens.filter((x, i) => (opens[i + 1]?.t ?? Infinity) > von);
   const k = Math.max(sek, res);
   const kerzen = [];
   let letzter = null;
@@ -618,5 +635,5 @@ export function laborTradeChart({ pair, von, bis, tf = '15m' }) {
     if (letzter && letzter.t === key) { if (h[i] > letzter.h) letzter.h = h[i]; if (l[i] < letzter.l) letzter.l = l[i]; letzter.c = c[i]; }
     else { letzter = { t: key, o: o[i], h: h[i], l: l[i], c: c[i] }; kerzen.push(letzter); }
   }
-  return { pair, tf: k === sek ? tf : (k === 3600 ? '1H' : tf), zuGrob: k > sek, quelle, kerzen };
+  return { pair, tf: k === sek ? tf : (k === 3600 ? '1H' : tf), zuGrob: k > sek, quelle, kerzen, dailyOpens };
 }

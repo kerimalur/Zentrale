@@ -35,6 +35,47 @@ export function ausstieg(b, iF, F, seite, sl, tp, zeitEnde) {
   return { i: b.n - 1, preis: b.c[b.n - 1], grund: 'offen', mfe, mae };
 }
 
+// Ausstieg mit Management (Teilgewinn und/oder Break-Even), gleiche Vorsicht wie oben:
+//   - In der Einstiegs-Kerze zählt nur der Stop-Loss.
+//   - Berührt eine Kerze den Stop und ein Ziel (Teil/TP), zählt zuerst der Stop.
+//   - Break-Even gilt erst ab der Kerze NACH dem Erreichen der BE-Marke.
+//   - Öffnet eine Kerze jenseits einer Marke, gilt dieses Open.
+// m = { teil: { preis, anteil } | undefined, be: { preis } | undefined }
+// Ergebnis: preis = gewichteter Durchschnitt aller Teil-Ausstiege (damit rechnet simulieren() wie gewohnt das R),
+// grund = 'tp' | 'sl' | 'be' | 'zeit' | 'offen' für den Rest der Position, teil = true, wenn der Teilgewinn genommen wurde.
+export function ausstiegMitManagement(b, iF, F, seite, sl, tp, zeitEnde, m) {
+  const lang = seite > 0;
+  const risiko = Math.abs(F - sl);
+  const ueber = (a, x) => (lang ? a >= x : a <= x);
+  const unter = (a, x) => (lang ? a <= x : a >= x);
+  let stop = sl, beAktiv = false, beBald = false, rest = 1, erloes = 0, teil = false, mfe = 0, mae = 0;
+  const grenze = b.t[iF] + MAX_HALTEN_SEK;
+  const fertig = (i, preis, grund) => ({ i, preis: erloes + rest * preis, grund, mfe, mae, teil });
+  for (let i = iF; i < b.n; i++) {
+    if (beBald) { beAktiv = true; beBald = false; stop = lang ? Math.max(stop, F) : Math.min(stop, F); }
+    if (i > iF) {
+      if (unter(b.o[i], stop)) { mae = Math.max(mae, Math.max(0, (lang ? F - b.o[i] : b.o[i] - F) / risiko)); return fertig(i, b.o[i], beAktiv ? 'be' : 'sl'); }
+      if (m.teil && !teil && ueber(b.o[i], m.teil.preis)) { teil = true; erloes += m.teil.anteil * b.o[i]; rest -= m.teil.anteil; }
+      if (tp !== null && ueber(b.o[i], tp)) { mfe = Math.max(mfe, Math.abs(b.o[i] - F) / risiko); return fertig(i, b.o[i], 'tp'); }
+    }
+    const fav = lang ? b.h[i] - F : F - b.l[i], adv = lang ? F - b.l[i] : b.h[i] - F;
+    if (lang ? b.l[i] <= stop : b.h[i] >= stop) {
+      if (i > iF) mfe = Math.max(mfe, fav / risiko);
+      mae = Math.max(mae, beAktiv ? Math.max(0, adv) / risiko : 1);
+      return fertig(i, stop, beAktiv ? 'be' : 'sl');
+    }
+    if (i > iF) {
+      if (m.teil && !teil && (lang ? b.h[i] >= m.teil.preis : b.l[i] <= m.teil.preis)) { teil = true; erloes += m.teil.anteil * m.teil.preis; rest -= m.teil.anteil; }
+      if (tp !== null && (lang ? b.h[i] >= tp : b.l[i] <= tp)) { mfe = Math.max(mfe, Math.abs(tp - F) / risiko); mae = Math.max(mae, adv / risiko); return fertig(i, tp, 'tp'); }
+      if (m.be && !beAktiv && (lang ? b.h[i] >= m.be.preis : b.l[i] <= m.be.preis)) beBald = true;
+      mfe = Math.max(mfe, fav / risiko);
+    }
+    mae = Math.max(mae, adv / risiko);
+    if ((zeitEnde !== null && zeitEnde !== undefined && i >= zeitEnde) || b.t[i] >= grenze) return fertig(i, b.c[i], 'zeit');
+  }
+  return fertig(b.n - 1, b.c[b.n - 1], 'offen');
+}
+
 // Einstieg eines Setups: { iF, F } oder null
 function einstieg(b, s) {
   const e = s.einstieg || { art: 'markt' };
@@ -87,14 +128,18 @@ export function simulieren(b, pair, pip, setups, bereich, rnd) {
     if (!(risiko > 0) || (s.seite > 0 ? sl >= F : sl <= F)) continue;
     const tp = s.tp ?? (s.rZiel ? F + s.seite * risiko * s.rZiel : null);
     const zeitEnde = s.zeitEnde ?? null;
-    const a = ausstieg(b, iF, F, s.seite, sl, tp, zeitEnde);
+    const a = s.management ? ausstiegMitManagement(b, iF, F, s.seite, sl, tp, zeitEnde, s.management) : ausstieg(b, iF, F, s.seite, sl, tp, zeitEnde);
     frei = a.i;
     const risikoPips = risiko / pip;
     const rRoh = (s.seite * (a.preis - F)) / risiko;
     const rr = tp !== null ? Math.abs(tp - F) / risiko : null;
+    // Management in R (Abstand zum Einstieg), damit Spiegel und Zufall gleich behandelt werden
+    const mR = s.management ? { teil: s.management.teil ? { r: Math.abs(s.management.teil.preis - F) / risiko, anteil: s.management.teil.anteil } : null, be: s.management.be ? { r: Math.abs(s.management.be.preis - F) / risiko } : null } : null;
+    const mVon = (FF, seite) => (mR ? { teil: mR.teil ? { preis: FF + seite * risiko * mR.teil.r, anteil: mR.teil.anteil } : undefined, be: mR.be ? { preis: FF + seite * risiko * mR.be.r } : undefined } : null);
+    const raus = (iX, FX, seite, slX, tpX, zeitX) => { const mm = mVon(FX, seite); return mm ? ausstiegMitManagement(b, iX, FX, seite, slX, tpX, zeitX, mm) : ausstieg(b, iX, FX, seite, slX, tpX, zeitX); };
     const dauer = zeitEnde !== null ? zeitEnde - iF : null;
     // Spiegel
-    const sp = ausstieg(b, iF, F, -s.seite, F + s.seite * risiko, rr !== null ? F - s.seite * risiko * rr : null, zeitEnde);
+    const sp = raus(iF, F, -s.seite, F + s.seite * risiko, rr !== null ? F - s.seite * risiko * rr : null, zeitEnde);
     const spiegel = (-s.seite * (sp.preis - F)) / risiko;
     // Zufall
     const zuf = [];
@@ -103,12 +148,12 @@ export function simulieren(b, pair, pip, setups, bereich, rnd) {
       const iZ = jr[0] + Math.floor(rnd() * (jr[1] - jr[0] - 1)) + 1;
       const FZ = b.o[iZ];
       const slZ = FZ - s.seite * risiko, tpZ = rr !== null ? FZ + s.seite * risiko * rr : null;
-      const az = ausstieg(b, iZ, FZ, s.seite, slZ, tpZ, dauer !== null ? Math.min(b.n - 1, iZ + dauer) : null);
+      const az = raus(iZ, FZ, s.seite, slZ, tpZ, dauer !== null ? Math.min(b.n - 1, iZ + dauer) : null);
       zuf.push(Number(((s.seite * (az.preis - FZ)) / risiko - spread / risikoPips).toFixed(4)));
     }
     trades.push({
       pair, seite: s.seite, tSignal: b.t[s.iSignal], tEin: b.t[iF], tAus: b.t[a.i], sd: b.sd[iF],
-      ein: F, sl, tp, aus: a.preis, grund: a.grund, risikoPips: Number(risikoPips.toFixed(1)),
+      ein: F, sl, tp, aus: a.preis, grund: a.grund, teil: !!a.teil, risikoPips: Number(risikoPips.toFixed(1)),
       rRoh: Number(rRoh.toFixed(4)), r: Number((rRoh - spread / risikoPips).toFixed(4)), spreadR: Number((spread / risikoPips).toFixed(4)),
       mfe: Number(a.mfe.toFixed(3)), mae: Number(a.mae.toFixed(3)), spiegel: Number((spiegel - spread / risikoPips).toFixed(4)), zufall: zuf,
       info: s.info || {},

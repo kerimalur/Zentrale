@@ -209,8 +209,10 @@ export async function dukascopyLauf() {
 // ---------- HistData.com (Hauptquelle seit 28.10.2026) ----------
 // Dukascopy sperrt bei vielen Abfragen die Adresse (429/503, Verbindungsabbruch). HistData liefert dieselben Minutenkerzen
 // (Bid, geprüft: identisch mit Dukascopy) als EIN ZIP pro Paar und Jahr (laufendes Jahr: pro Monat) → rund 700 Downloads statt 200'000.
-// Zeit in den Dateien: EST ohne Sommerzeit (UTC−5). Daraus werden Stunden- und 5-Min-Kerzen im selben Format wie oben gespeichert
-// (bestehende Dukascopy-Monate bleiben unangetastet).
+// Zeit in den Dateien: laut HistData «EST ohne Sommerzeit». Geprüft am 29.10.2026 (Wochenschluss und US-Arbeitsmarktdaten um
+// 8:30 New York): Im Winter stimmt UTC−5, während der EUROPÄISCHEN Sommerzeit laufen die Dateien aber eine Stunde vor
+// (UTC−4, wie Osteuropa-Zeit − 7 Std). Darum: UTC = Dateizeit + 5 Std, in der EU-Sommerzeit + 4 Std.
+// Daraus werden Stunden- und 5-Min-Kerzen im selben Format wie oben gespeichert (bestehende Dukascopy-Monate bleiben unangetastet).
 const HD = 'https://www.histdata.com';
 const HD_UA = { 'User-Agent': 'Mozilla/5.0 (X11; Linux aarch64) Zentrale' };
 
@@ -236,13 +238,56 @@ export function zipCsv(buf) {
   throw new Error('ZIP: keine CSV');
 }
 
+// EU-Sommerzeit (UTC-Sekunde): letzter Sonntag im März 01:00 UTC bis letzter Sonntag im Oktober 01:00 UTC
+const euCache = new Map();
+export function euSommerzeit(sek) {
+  const j = new Date(sek * 1000).getUTCFullYear();
+  let v = euCache.get(j);
+  if (!v) {
+    const letzterSonntag = (monat) => { const ende = Date.UTC(j, monat + 1, 0) / 1000; return ende - new Date(ende * 1000).getUTCDay() * 86_400; };
+    v = [letzterSonntag(2) + 3600, letzterSonntag(9) + 3600];
+    euCache.set(j, v);
+  }
+  return sek >= v[0] && sek < v[1];
+}
+
+// Einmalige Bereinigung (29.10.2026): Monate, die vor der Korrektur aus HistData gespeichert wurden, liegen in der EU-Sommerzeit
+// eine Stunde zu spät. Erkennung am Wochenschluss: Freitag 17:00 New York = 21:00 UTC im Sommer → letzte Kerze 20:xx UTC.
+// Endet eine Woche in der EU-Sommerzeit erst um 21:xx UTC, ist der Monat verschoben → Datei (h1 und m5) löschen, HistData lädt neu.
+export function histdataZeitBereinigen() {
+  const marke = path.join(config.dataDir, 'dukascopy', '.zeit-29-10-2026');
+  if (fs.existsSync(marke)) return 0;
+  let geloescht = 0;
+  for (const pair of DUKA_PAARE) {
+    for (const i of vorhanden(pair, 'm5')) {
+      let buf;
+      try { buf = fs.readFileSync(datei(pair, i, 'm5')); } catch { continue; }
+      let spaet = 0, richtig = 0;
+      for (let p = 0; p + 2 * REC <= buf.length; p += REC) {
+        const a = buf.readInt32LE(p), b = buf.readInt32LE(p + REC);
+        if (b - a < 24 * 3600 || !euSommerzeit(a)) continue; // nur Wochenenden in der EU-Sommerzeit
+        const stunde = new Date(a * 1000).getUTCHours();
+        if (stunde === 21) spaet++; else if (stunde === 20) richtig++;
+      }
+      if (spaet > richtig) {
+        for (const art of ['m5', 'h1']) { try { fs.unlinkSync(datei(pair, i, art)); geloescht++; } catch {} }
+      }
+    }
+  }
+  fs.mkdirSync(path.dirname(marke), { recursive: true });
+  fs.writeFileSync(marke, `${new Date().toISOString()} · ${geloescht} Dateien gelöscht\n`);
+  if (geloescht) { console.log(`[histdata] Zeitkorrektur: ${geloescht} Monatsdateien mit Sommerzeit-Versatz gelöscht, werden neu geladen`); zustand.letzterLauf = 0; zCache.wert = null; }
+  return geloescht;
+}
+
 // CSV «20210103 170000;1.223960;1.223960;1.223730;1.223950;0» → Minuten [UTC-Sek, o, h, l, c] in Punkten
 export function histdataMinuten(text, pair) {
   const f = faktor(pair);
   const out = [];
   for (const zeile of text.split('\n')) {
     if (zeile.length < 20) continue;
-    const t = Date.UTC(+zeile.slice(0, 4), +zeile.slice(4, 6) - 1, +zeile.slice(6, 8), +zeile.slice(9, 11), +zeile.slice(11, 13), +zeile.slice(13, 15)) / 1000 + 5 * 3600;
+    const dz = Date.UTC(+zeile.slice(0, 4), +zeile.slice(4, 6) - 1, +zeile.slice(6, 8), +zeile.slice(9, 11), +zeile.slice(11, 13), +zeile.slice(13, 15)) / 1000;
+    const t = euSommerzeit(dz + 4 * 3600) ? dz + 4 * 3600 : dz + 5 * 3600;
     const w = zeile.slice(16).split(';');
     const o = Math.round(+w[0] * f), h = Math.round(+w[1] * f), l = Math.round(+w[2] * f), c = Math.round(+w[3] * f);
     if (!(o > 0 && h > 0 && l > 0 && c > 0) || !Number.isFinite(t)) continue;
@@ -395,6 +440,7 @@ export async function histdataLauf() {
 // Alle 5 Minuten aufrufen: läuft, solange etwas fehlt, danach einmal am Tag (neuer Monat). Quelle: HistData.
 export function dukascopyTakt() {
   if (zustand.laeuft) return;
+  try { histdataZeitBereinigen(); } catch (err) { console.error('[histdata] Zeitkorrektur:', err.message); }
   if (zustand.letzterLauf && Date.now() - zustand.letzterLauf < 24 * 3_600_000) return;
   histdataLauf().catch((e) => console.error('[histdata]', e.message));
 }

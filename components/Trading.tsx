@@ -381,7 +381,7 @@ function EinstellungenSeite({ d, onZurueck }: { d: TradingZustand; onZurueck: ()
             <input type="date" value={e.anker3d} onChange={(x) => setz('anker3d', x.target.value)} />
             <small className="tr-hilfe">Gezählt wird in Handelstagen (Mo–Fr), ein Handelstag endet um 17:00 New York (meist 23:00 Schweizer Zeit). Passt zu TradingView: 06.10., 09.10., 14.10., 19.10., 22.10., 27.10.</small>
           </label>
-          <Schalter an={e.feiertageAus} onClick={() => setz('feiertageAus', !e.feiertageAus)} titel="25.12. und 1.1. sind keine Handelstage" unter="zählen dann nicht für die 3D-Kerzen" />
+          <Schalter an={e.feiertageAus} onClick={() => setz('feiertageAus', !e.feiertageAus)} titel="25.12. und 1.1. sind keine Handelstage" unter="zählen dann nicht für die 3D-Kerzen – TradingView zählt sie mit, darum aus lassen" />
         </section>
 
         <section className="karte in" aria-label="Meldungen und Daten">

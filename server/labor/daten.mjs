@@ -26,9 +26,9 @@ export function basisLaden(pair, { bisSek, e, yahoo = null, nurStunden = false }
   let b = null, quelle = null, res = 3600;
   if (!nurStunden) {
     const m5 = dukascopyFuenfMinuten(pair, null, mText(bisSek - 1));
-    if (m5 && m5.n && (!h1 || m5.t[0] * 1000 <= h1.t[0] + 31 * 86_400_000)) { b = m5; quelle = 'Dukascopy 5 Min'; res = 300; }
+    if (m5 && m5.n && (!h1 || m5.t[0] * 1000 <= h1.t[0] + 31 * 86_400_000)) { b = m5; quelle = 'HistData/Dukascopy 5 Min'; res = 300; }
   }
-  if (!b && h1) { b = ausListen(h1.t.map((x) => x / 1000), h1.o, h1.h, h1.l, h1.c); quelle = 'Dukascopy 1 Std'; }
+  if (!b && h1) { b = ausListen(h1.t.map((x) => x / 1000), h1.o, h1.h, h1.l, h1.c); quelle = 'HistData/Dukascopy 1 Std'; }
   if (!b && yahoo && yahoo.t.length) { b = ausListen(Array.from(yahoo.t, (x) => Math.floor(x / 1000)), yahoo.o, yahoo.h, yahoo.l, yahoo.c); quelle = 'Yahoo 1 Std (nur ~2 Jahre)'; }
   if (!b) return null;
   // am Ende des Zeitraums abschneiden

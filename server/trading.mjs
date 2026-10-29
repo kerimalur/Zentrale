@@ -7,7 +7,7 @@
 //   - Nachbar-Filter: Liegt zwischen B und der Treffer-Kerze nicht mindestens 1 ganze HTF-Kerze, wird die GVA verworfen.
 //   - Nach dem ersten Treffer ist die Linie verbraucht.
 // Kerzen werden wie bei TradingView-Forex gebaut: Handelstag endet um 17:00 New York, Woche So 17:00 – Fr 17:00,
-// 3D = 3 Handelstage am Stück (Wochenende und 25.12./1.1. zählen nicht), Startpunkt über ein Ankerdatum einstellbar.
+// 3D = 3 Handelstage am Stück (Wochenende zählt nicht; 25.12./1.1. zählen wie TradingView mit, abschaltbar), Startpunkt über ein Ankerdatum einstellbar.
 // Daten: Stundenkerzen von Dukascopy ab 2003 (abgeschlossene Monate, siehe dukascopy.mjs), der Rest von Yahoo Finance
 // (Stundenkerzen der letzten ~2 Jahre; Tageskerzen nur, solange Dukascopy noch nicht geladen ist).
 import { db, save } from './store.mjs';
@@ -33,7 +33,10 @@ const STANDARD = {
   filterAn: true, // Nachbar-Filter
   filterAbstand: 1, // mindestens X HTF-Kerzen komplett dazwischen
   anker3d: '2026-10-01', // ein Handelstag, an dem eine 3D-Kerze beginnt
-  feiertageAus: true, // 25.12. und 1.1. sind keine Handelstage (zählen nicht für 3D)
+  // 25.12. und 1.1. als Handelstage ausnehmen? Aus (= wie TradingView): Geprüft am 29.10.2026 an EURJPY – die TV-Linie 176.694
+  // (3D, entstanden 07.11.2025, Hit 02.10.2026) gibt es nur, wenn die Feiertage mitzählen. Mit «aus» verschiebt sich das
+  // 3D-Raster vor jedem Jahreswechsel um 2 Tage, und alle älteren Linien sind falsch.
+  feiertageAus: false,
 };
 
 const TAG = 86_400_000;
@@ -55,6 +58,15 @@ export function tradingEinstellungen() {
   const d = db();
   d.trading ||= {};
   d.trading.einstellungen = { ...STANDARD, ...(d.trading.einstellungen || {}), tfs: { ...STANDARD.tfs, ...(d.trading.einstellungen?.tfs || {}) } };
+  // Einmalig (29.10.2026): Feiertage zählen für das 3D-Raster mit, wie bei TradingView. Danach gilt wieder, was eingestellt ist.
+  if (!d.trading.migration3dFeiertage) {
+    d.trading.migration3dFeiertage = '2026-10-29';
+    if (d.trading.einstellungen.feiertageAus) {
+      d.trading.einstellungen.feiertageAus = false;
+      d.trading.bekannt = {}; d.trading.init = {}; // neue Linien beim ersten Rechnen nicht als neue Treffer melden
+    }
+    save();
+  }
   d.trading.bekannt ||= {}; // lineId -> Trefferzeit (bereits gemeldet bzw. beim Start schon vorhanden)
   d.trading.init ||= {}; // pair -> true, sobald einmal gerechnet (erste Rechnung meldet nichts)
   return d.trading.einstellungen;
