@@ -280,7 +280,7 @@ const runden = (pair, x) => Number(x.toFixed(pair.endsWith('JPY') ? 3 : 5));
 
 // Alle GVA-Linien eines Paars mit ihrem Schicksal (offen / getroffen / verworfen). Wird vom Live-Tab und von der Statistik benutzt.
 // tfs: welche Zeitrahmen (Standard: wie in den Einstellungen).
-export function linienFinden(pair, d, e, tfs = TFS.filter((tf) => e.tfs[tf])) {
+export function linienFinden(pair, d, e, tfs = TFS.filter((tf) => e.tfs[tf]), luecken = null) {
   const n = d.t.length;
   if (n < 50) throw new Error('zu wenige Kurse');
   const tiefe = new Float64Array(n), hoehe = new Float64Array(n);
@@ -296,6 +296,8 @@ export function linienFinden(pair, d, e, tfs = TFS.filter((tf) => e.tfs[tf])) {
     // C = i (existiert → B = i-1 ist abgeschlossen), A = i-2.
     for (let i = 2; i < kerzen.length; i++) {
       const A = kerzen[i - 2], B = kerzen[i - 1];
+      // Sicherung: A und B müssen im Raster direkt aufeinanderfolgen (keine fehlende Kerze dazwischen, z. B. durch eine Datenlücke).
+      if (B.k !== A.k + 1) { if (luecken) luecken.push({ pair, tf, a: tagIso(A.tag), b: tagIso(B.tag) }); continue; }
       const bodyA = Math.abs(A.c - A.o);
       if (!(bodyA > 0)) continue;
       const bodyB = Math.abs(B.c - B.o);
