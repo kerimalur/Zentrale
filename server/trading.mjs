@@ -24,8 +24,8 @@ export const TFS = ['3D', 'W', 'M'];
 const STANDARD = {
   meldungen: true, // ntfy-Meldung beim ersten Treffer einer Linie
   tfs: { '3D': true, W: true, M: true },
-  tolPct: 5, // Boden/Top-Toleranz (%)
-  k2Pct: 40, // 2. Kerze mindestens X % grösser
+  tolPct: 40, // Boden/Top-Toleranz (%) – wie im Pine-Indikator «GVA Linien — Pur» (40)
+  k2Pct: 25, // 2. Kerze mindestens X % grösser – wie im Pine-Indikator (25)
   tolBasis: 'body', // 'body' = Body 1. Kerze, 'atr' = ATR (HTF)
   atrLen: 14,
   docht: true, // Docht zählt als Berührung
@@ -65,6 +65,14 @@ export function tradingEinstellungen() {
       d.trading.einstellungen.feiertageAus = false;
       d.trading.bekannt = {}; d.trading.init = {}; // neue Linien beim ersten Rechnen nicht als neue Treffer melden
     }
+    save();
+  }
+  // Einmalig (29.10.2026): Toleranz 40 % und 2. Kerze mind. 25 % grösser, wie im Pine-Indikator (vorher 5 / 40).
+  if (!d.trading.migrationPine4025) {
+    d.trading.migrationPine4025 = '2026-10-29';
+    d.trading.einstellungen.tolPct = 40;
+    d.trading.einstellungen.k2Pct = 25;
+    d.trading.bekannt = {}; d.trading.init = {}; // neue Linien beim ersten Rechnen nicht als neue Treffer melden
     save();
   }
   d.trading.bekannt ||= {}; // lineId -> Trefferzeit (bereits gemeldet bzw. beim Start schon vorhanden)
