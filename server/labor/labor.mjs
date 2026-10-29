@@ -41,6 +41,12 @@ export const VORLAGEN = [
   { id: 'gva', name: 'Kerims GVA → BOS → Fib (Regelwerk)', karte: { typ: 'strategie', name: 'GVA → BOS → Fib', modell: 'gva-kerim', parameter: {}, filter: [],
     mechanismus: 'Am ersten Treffer einer frischen GVA-Linie liegen unbearbeitete Orders; ein BOS über dem letzten Hoch vor dem Hit und über dem Daily Open zeigt, dass sie greifen.',
     erwartung: 'Long nach Long-Linie, Short nach Short-Linie', erfolgskriterium: ERFOLG_STD } },
+  // Zum Auswerten, welche Confluence funktioniert: alle Confluences erfassen und KEINEN Trade wegen fehlender Confluence auslassen.
+  // Gefiltert wird danach auf der Ergebnis-Seite (Block «Confluences»), ohne neu zu rechnen.
+  { id: 'gva-conf', name: 'Kerims GVA → BOS → Fib – Confluence-Auswertung (alle Trades, alle Confluences)', karte: { typ: 'strategie', name: 'GVA → BOS → Fib (Confluence-Auswertung)', modell: 'gva-kerim',
+    parameter: { conf: ['gva', 'd', 'w', 'm', 'poc', 'va'], minConf: 0 }, filter: [],
+    mechanismus: 'Wie das Regelwerk, aber ohne Confluence-Pflicht: jeder Trade wird mit allen Confluences in der Fib-Box erfasst (GVA, Daily/Weekly/Monthly Open, Volumen-POC, Value Area). So zeigt die Auswertung, welche Confluence etwas bringt.',
+    erwartung: 'Trades mit mehr/bestimmten Confluences schneiden besser ab als Trades ohne', erfolgskriterium: ERFOLG_STD } },
   { id: 'gva-h', name: 'Hypothese: GVA-Treffer kehrt', karte: { typ: 'hypothese', name: 'GVA-Treffer → Preis läuft von der Linie weg', tf: '1H', richtung: 'beide', nurNeu: true, ereignisse: [{ id: 'gva_treffer', p: { tfs: ['3D', 'W'] } }], filter: [], horizonte: [1, 2, 5, 10], hauptHorizont: 2,
     mechanismus: 'Offene Orders an der Linie drehen den Preis.', erwartung: 'Nach dem Treffer einer Long-Linie steigt der Preis, nach einer Short-Linie fällt er.', erfolgskriterium: 'Mehrwert über Saison und Zufall nach 2 Handelstagen, p < 0,05 nach Bonferroni, beide Hälften, Forward hält.' } },
   { id: 'serie', name: 'Hypothese: 3 rote Tage → Erholung', karte: { typ: 'hypothese', name: '3 Tage gleiche Farbe → Gegenbewegung', tf: 'D', richtung: 'beide', nurNeu: true, ereignisse: [{ id: 'serie', p: { n: 3, modus: 'umkehr' } }], filter: [], horizonte: [1, 3, 5], hauptHorizont: 3,
@@ -649,6 +655,53 @@ export function laborTradeChart({ pair, von, bis, tf = '15m' }) {
     else { letzter = { t: key, o: o[i], h: h[i], l: l[i], c: c[i] }; kerzen.push(letzter); }
   }
   return { pair, tf: k === sek ? tf : (k === 3600 ? '1H' : tf), zuGrob: k > sek, quelle, kerzen, dailyOpens, weeklyOpens, monthlyOpens };
+}
+
+// ---------- GVA-Muster: die 3D-Kerzen rund um eine Linie ----------
+// Zum Nachprüfen, woher eine Linie kommt: `vor` Kerzen vor dem Muster, Kerze A, Kerze B (das Muster, die Linie ist ihr Open),
+// dann `nach` Kerzen danach – bei 5/5 also 12 Kerzen. Linie = id aus dem Trade (info.linie): «PAAR|3D|Datum von B|long/short».
+// Rechnet mit den Live-Kursdaten der Zentrale (HistData-Stunden bis zum letzten Monat, danach Yahoo) – dieselben Kerzen wie der GVA-Tab.
+export function laborGvaMuster({ linie, vor = 5, nach = 5 }) {
+  const m = /^([A-Z]{6})\|(3D|W|M)\|(\d{4}-\d{2}-\d{2})\|(long|short)$/.exec(String(linie || ''));
+  if (!m) return { fehler: 'Ungültige Linie' };
+  const [, pair, tf, tag, seite] = m;
+  if (!PAARE.includes(pair)) return { fehler: 'Unbekanntes Paar' };
+  const d = tradingDaten(pair);
+  if (!d) return { fehler: 'Kurse für dieses Paar sind noch nicht geladen' };
+  const e = tradingEinstellungen();
+  const { kerzen } = tradingIntern.kerzenBauen(d, tf, e);
+  const iB = kerzen.findIndex((k) => tradingIntern.tagIso(k.tag) === tag);
+  if (iB < 1) return { fehler: 'Kerze B dieser Linie nicht gefunden' };
+  const nv = Math.min(10, Math.max(0, Math.round(Number(vor)) || 0)), nn = Math.min(10, Math.max(0, Math.round(Number(nach)) || 0));
+  const lang = seite === 'long';
+  const pip = pair.endsWith('JPY') ? 0.01 : 0.0001;
+  const r = (x) => Number(x.toFixed(pair.endsWith('JPY') ? 3 : 5));
+  const A = kerzen[iB - 1], B = kerzen[iB];
+  const atr = tradingIntern.atrReihe(kerzen, e.atrLen);
+  const atrB = atr[iB] ?? 0;
+  const bodyA = Math.abs(A.c - A.o), bodyB = Math.abs(B.c - B.o);
+  const tol = e.tolBasis === 'atr' ? atrB * (e.tolPct / 100) : bodyA * (e.tolPct / 100);
+  const lvl = lang ? Math.min(B.o, B.c) : Math.max(B.o, B.c);
+  const aKante = lang ? Math.min(A.o, A.c) : Math.max(A.o, A.c);
+  const von = Math.max(0, iB - 1 - nv), bis = Math.min(kerzen.length - 1, iB + nn);
+  return {
+    pair, tf, seite, tag, lvl: r(lvl), pip,
+    ziel: r(lang ? lvl + atrB * e.touchTol : lvl - atrB * e.touchTol), // ab hier gilt die Linie als berührt
+    muster: {
+      aTag: tradingIntern.tagIso(A.tag), bTag: tag,
+      aOpen: r(A.o), aClose: r(A.c), bOpen: r(B.o), bClose: r(B.c),
+      aFarbe: A.c < A.o ? 'rot' : A.c > A.o ? 'grün' : 'neutral', bFarbe: B.c > B.o ? 'grün' : B.c < B.o ? 'rot' : 'neutral',
+      koerperAPips: Number((bodyA / pip).toFixed(1)), koerperBPips: Number((bodyB / pip).toFixed(1)),
+      verhaeltnis: bodyA > 0 ? Number((bodyB / bodyA).toFixed(2)) : null, noetig: Number((1 + e.k2Pct / 100).toFixed(2)),
+      aKante: r(aKante), abstandPips: Number((Math.abs(aKante - lvl) / pip).toFixed(1)), tolPips: Number((tol / pip).toFixed(1)),
+      messung: lvl === B.o ? 'Open von Kerze B' : lang ? 'Körper-Boden von Kerze B' : 'Körper-Top von Kerze B',
+      alt: !!(A.alt || B.alt),
+    },
+    kerzen: kerzen.slice(von, bis + 1).map((k, j) => ({
+      start: tradingIntern.tagIso(k.tag), t: d.t[k.s] / 1000, tEnde: d.t[k.e] / 1000 + 3600,
+      o: r(k.o), h: r(k.h), l: r(k.l), c: r(k.c), rolle: von + j === iB - 1 ? 'A' : von + j === iB ? 'B' : null, fertig: von + j < kerzen.length - 1,
+    })),
+  };
 }
 
 // ---------- Läufe vergleichen ----------

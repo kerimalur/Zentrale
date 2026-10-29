@@ -56,6 +56,7 @@ async function strategie() {
   const alle = [], fw = [], gegen = [], nachbarTrades = nachbarP.map(() => []), abdeckung = [];
   const trichter = {};
   let uebersprungen = 0;
+  const extra = { filter: 0, ausserBias: 0, ohneEinstieg: 0 }; // weitere Gründe, warum ein Setup nicht zum Trade wurde
   for (let x = 0; x < paare.length; x++) {
     const pair = paare[x];
     melde({ paar: pair, fertig: x, gesamt: paare.length });
@@ -67,14 +68,17 @@ async function strategie() {
     abdeckung.push({ pair, quelle: basis.quelle, ab: basis.t[0], bis: basis.t[basis.n - 1], zuGrob: basis.res > noetig });
     const lauf = (pp) => {
       const r = mod.setups(ctx, pp);
+      const vorher = r.setups.filter((q) => ctx.imBereich(q.iSignal)).length;
       const setups = filterAnwenden(ctx, r.setups, karte.filter);
-      return { setups, trichter: r.trichter };
+      return { setups, trichter: r.trichter, gefiltert: vorher - setups.filter((q) => ctx.imBereich(q.iSignal)).length };
     };
     const haupt = lauf(p);
     for (const [k, v] of Object.entries(haupt.trichter || {})) trichter[k] = (trichter[k] || 0) + v;
+    extra.filter += haupt.gefiltert;
     const { innen, aussen } = biasTeilen(ctx, haupt.setups, karte.bias);
+    if (aussen) extra.ausserBias += aussen.filter((q) => ctx.imBereich(q.iSignal)).length;
     const bt = simulieren(basis, pair, ctx.pip, innen, backtest, rnd);
-    alle.push(...bt.trades); uebersprungen += bt.uebersprungen;
+    alle.push(...bt.trades); uebersprungen += bt.uebersprungen; extra.ohneEinstieg += bt.verworfen;
     if (aussen) gegen.push(...simulieren(basis, pair, ctx.pip, aussen, backtest, rnd).trades);
     if (forward) fw.push(...simulieren(basis, pair, ctx.pip, innen, forward, rnd).trades);
     nachbarP.forEach((np, i) => {
@@ -94,6 +98,7 @@ async function strategie() {
     erg.raster.push({ id: 'bias', name: 'Bias-Fenster hilft', status: g === null || erg.kennzahlen.avgR === null ? 'offen' : erg.kennzahlen.avgR > g ? 'ja' : 'nein', text: `im Fenster Ø ${erg.kennzahlen.avgR ?? '—'} R (${alle.length}) · ausserhalb Ø ${g === null ? '—' : g.toFixed(2)} R (${gegen.length})` });
   }
   erg.uebersprungen = uebersprungen;
+  erg.trichter = { ...(erg.trichter || {}), filter: extra.filter, ausserBias: extra.ausserBias, ohneEinstieg: extra.ohneEinstieg, positionOffen: uebersprungen };
   erg.parameter = p;
   return { ...erg, trades: alle, forwardTrades: forward ? fw : null, abdeckung };
 }

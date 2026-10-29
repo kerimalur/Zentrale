@@ -2,6 +2,7 @@
 // GVA-Prüfer: Für ein Paar und einen Zeitraum alle 3D-/Wochen-/Monatskerzen mit der Musterprüfung gegen die Vorkerze
 // (Linie oder Grund, warum keine) und alle Linien mit Kerze A/B, Status und Treffer. Dazu Abgleich mit einem TradingView-Wert.
 import { useEffect, useMemo, useState } from 'react';
+import { GvaMuster } from './GvaMuster';
 import { holen } from '@/lib/api';
 import { PAARE_LISTE, TF_TEXT, datumCh, type TEinstellungen, type TTf } from '@/lib/trading';
 
@@ -82,6 +83,15 @@ export function GvaPruefer() {
         )}
       </section>
 
+      {d && (() => {
+        const l = markiert ? d.linien.find((x) => x.B.start === markiert) : undefined;
+        return l ? (
+          <section className="karte in">
+            <h2 className="karte-titel">3D-Muster <small>5 Kerzen davor, A + B, 5 Kerzen danach</small></h2>
+            <GvaMuster linie={l.id} hit={l.treffer ? l.treffer / 1000 : null} />
+          </section>
+        ) : null;
+      })()}
       {d && <PrueferChart d={d} markiert={markiert} />}
 
       {d && (
@@ -106,7 +116,7 @@ export function GvaPruefer() {
               </tbody>
             </table>
           </div>
-          <p className="tr-hilfe" style={{ marginTop: 6 }}>Level = Open von Kerze B (Long: Körper-Boden, Short: Körper-Top). ≈ = aus Tageskerzen (älter), auf wenige Pips genau. Zeile anklicken markiert A/B im Chart.</p>
+          <p className="tr-hilfe" style={{ marginTop: 6 }}>Level = Open von Kerze B (Long: Körper-Boden, Short: Körper-Top). ≈ = aus Tageskerzen (älter), auf wenige Pips genau. Zeile anklicken markiert A/B im Chart und zeigt das 3D-Muster (12 Kerzen) darüber.</p>
         </section>
       )}
 

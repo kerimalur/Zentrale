@@ -11,6 +11,9 @@ import {
 } from '@/lib/labor';
 import { Schalter } from './ui';
 import { TradeChart, grundText } from './LaborTradeChart';
+import { Aussortiert } from './LaborAussortiert';
+import { ConfluencePanel, ConfChips } from './LaborConfluence';
+import { CONF_ARTEN, confFilter, hatConf } from '@/lib/confluence';
 import { UrteilChip, TypChip, Raster, Gruppenbalken, Kachel, Rueckfrage, FazitKarte, Erweitert } from './LaborTeile';
 import { Popup } from './NetzBausteine';
 import { FremdEditor, FremdVorabKarte, ErgebnisFremd, reiheNameKlient } from './LaborFremd';
@@ -700,6 +703,12 @@ function ErgebnisStrategie({ e }: { e: LErgebnis }) {
   const [mehr, setMehr] = useState(60);
   const [chartOffen, setChartOffen] = useState<number | null>(null);
   const trades = useMemo(() => [...(e.trades || []), ...(e.forwardTrades || []).map((t) => ({ ...t, fw: true }))].sort((a, b) => b.tEin - a.tEin), [e]);
+  // Confluences: Auswahl und Mindestanzahl gelten für die Auswertung; optional auch für die Trade-Liste
+  const [confWahl, setConfWahl] = useState<string[]>([...CONF_ARTEN]);
+  const [confMin, setConfMin] = useState(0);
+  const [nurConf, setNurConf] = useState(false);
+  const mitConf = useMemo(() => hatConf(trades), [trades]);
+  const sichtbar = useMemo(() => (nurConf ? confFilter(trades, confWahl, confMin) : trades), [trades, nurConf, confWahl, confMin]);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Kopf e={e} />
@@ -714,17 +723,12 @@ function ErgebnisStrategie({ e }: { e: LErgebnis }) {
         </div>
         {e.trichter && Object.keys(e.trichter).length > 0 && (
           <div className="leise" style={{ fontSize: 12.5, marginTop: 10 }}>
-            {Object.entries(e.trichter).filter(([a]) => ['linien', 'bos', 'einstieg'].includes(a)).map(([a, w]) => `${a === 'linien' ? 'GVA-Treffer' : a === 'bos' ? 'mit BOS' : 'Einstieg erreicht'} ${w}`).join(' → ')}
-            {(() => {
-              const T = e.trichter as Record<string, number>;
-              const GRUND: [string, string][] = [['keinHoch', 'kein letztes Hoch vor dem Hit'], ['keinBos', 'kein BOS im Zeitfenster'], ['bosNurUnterOpen', 'BOS nur unter dem Daily Open'], ['ungueltig', 'ungültig (Kurs schon weggelaufen)'], ['gebrochen', 'Low vor dem Einstieg gebrochen'], ['verfallen', 'verfallen (kein Einstieg)'], ['zuWenigConf', 'zu wenig Confluences in der Box'], ['gegenBos', 'wegen Gegen-BOS-Regel']];
-              const teile = GRUND.filter(([k]) => T[k]).map(([k, txt]) => `${T[k]} ${txt}`);
-              return teile.length ? ` · ausgeschieden: ${teile.join(', ')}` : '';
-            })()}
-            {e.uebersprungen ? ` · ${e.uebersprungen} übersprungen (Position offen)` : ''} · Ø MFE {e.mfeMedian ?? '—'} R, MAE {e.maeMedian ?? '—'} R (Median)
+            {e.uebersprungen ? `${e.uebersprungen} übersprungen (Position offen) · ` : ''}Ø MFE {e.mfeMedian ?? '—'} R, MAE {e.maeMedian ?? '—'} R (Median)
           </div>
         )}
       </section>
+      {e.trichter && <Aussortiert trichter={e.trichter} trades={k.n} />}
+      {mitConf && <ConfluencePanel trades={trades} wahl={confWahl} setWahl={setConfWahl} min={confMin} setMin={setConfMin} nurAuswahl={nurConf} setNurAuswahl={setNurConf} ausgeschieden={e.trichter?.zuWenigConf ?? 0} />}
       <section className="karte in">
         <h2 className="karte-titel">Kumulierte R <small>blau Backtest{e.forward ? ', gelb Forward' : ''}</small></h2>
         <Kurve punkte={e.kurve || []} forward={e.forward?.kurve} />
@@ -751,27 +755,28 @@ function ErgebnisStrategie({ e }: { e: LErgebnis }) {
         </section>
       )}
       <section className="karte in">
-        <h2 className="karte-titel">Trades <small>neueste zuerst</small></h2>
+        <h2 className="karte-titel">Trades <small>neueste zuerst{nurConf ? ` · gefiltert: ${sichtbar.length} von ${trades.length}` : ''}</small></h2>
         <div style={{ overflowX: 'auto' }}>
           <table className="lb-tabelle">
-            <thead><tr><th>Einstieg</th><th>Paar</th><th>Seite</th><th>Risiko</th><th>Ausstieg</th><th>R</th><th></th></tr></thead>
+            <thead><tr><th>Einstieg</th><th>Paar</th><th>Seite</th><th>Risiko</th>{mitConf && <th>Confluence</th>}<th>Ausstieg</th><th>R</th><th></th></tr></thead>
             <tbody>
-              {trades.slice(0, mehr).map((t: LTrade & { fw?: boolean }, x) => (
+              {sichtbar.slice(0, mehr).map((t: LTrade & { fw?: boolean }, x) => (
                 <Fragment key={x}>
                   <tr style={t.fw ? { background: 'rgba(214,162,58,.08)' } : undefined}>
                     <td>{new Date(t.tEin * 1000).toLocaleString('de-CH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}{t.fw ? ' · F' : ''}</td>
                     <td>{t.pair}</td><td>{t.seite > 0 ? 'Long' : 'Short'}</td><td>{t.risikoPips} Pips</td>
+                    {mitConf && <td style={{ whiteSpace: 'normal' }}><ConfChips t={t} /></td>}
                     <td>{grundText(t)}</td>
                     <td style={{ color: t.r >= 0 ? 'var(--gruen)' : 'var(--fehler)', fontWeight: 600 }}>{rText(t.r)}</td>
                     <td><button className="knopf-klein press" onClick={() => setChartOffen(chartOffen === x ? null : x)}>{chartOffen === x ? 'Zu' : 'Chart'}</button></td>
                   </tr>
-                  {chartOffen === x && <tr><td colSpan={7} style={{ whiteSpace: 'normal' }}><TradeChart t={t} parameter={e.parameter} /></td></tr>}
+                  {chartOffen === x && <tr><td colSpan={mitConf ? 8 : 7} style={{ whiteSpace: 'normal' }}><TradeChart t={t} parameter={e.parameter} /></td></tr>}
                 </Fragment>
               ))}
             </tbody>
           </table>
         </div>
-        {trades.length > mehr && <button className="knopf-klein press" style={{ marginTop: 10 }} onClick={() => setMehr((m) => m + 200)}>Mehr laden ({trades.length - mehr} weitere)</button>}
+        {sichtbar.length > mehr && <button className="knopf-klein press" style={{ marginTop: 10 }} onClick={() => setMehr((m) => m + 200)}>Mehr laden ({sichtbar.length - mehr} weitere)</button>}
       </section>
     </div>
   );

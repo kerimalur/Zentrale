@@ -103,7 +103,7 @@ export function simulieren(b, pair, pip, setups, bereich, rnd) {
   const spread = SPREAD[pair] ?? 2;
   const sortiert = setups.filter((s) => b.t[s.iSignal] >= bereich[0] && b.t[s.iSignal] < bereich[1]).sort((a, c) => a.iSignal - c.iSignal);
   const trades = [];
-  let frei = -1, uebersprungen = 0;
+  let frei = -1, uebersprungen = 0, verworfen = 0;
   // Indexbereich je Jahr für die Zufalls-Einstiege
   const jahrBereich = new Map();
   const jahrIdx = (j) => {
@@ -120,12 +120,12 @@ export function simulieren(b, pair, pip, setups, bereich, rnd) {
 
   for (const s of sortiert) {
     const ein = einstieg(b, s);
-    if (!ein) continue;
+    if (!ein) { verworfen++; continue; }
     const { iF, F } = ein;
     if (iF <= frei) { uebersprungen++; continue; }
     const sl = s.sl ?? F - s.seite * s.risiko;
     const risiko = Math.abs(F - sl);
-    if (!(risiko > 0) || (s.seite > 0 ? sl >= F : sl <= F)) continue;
+    if (!(risiko > 0) || (s.seite > 0 ? sl >= F : sl <= F)) { verworfen++; continue; }
     const tp = s.tp ?? (s.rZiel ? F + s.seite * risiko * s.rZiel : null);
     const zeitEnde = s.zeitEnde ?? null;
     const a = s.management ? ausstiegMitManagement(b, iF, F, s.seite, sl, tp, zeitEnde, s.management) : ausstieg(b, iF, F, s.seite, sl, tp, zeitEnde);
@@ -159,5 +159,5 @@ export function simulieren(b, pair, pip, setups, bereich, rnd) {
       info: s.info || {},
     });
   }
-  return { trades, uebersprungen };
+  return { trades, uebersprungen, verworfen };
 }

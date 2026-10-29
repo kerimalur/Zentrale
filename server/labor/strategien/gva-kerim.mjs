@@ -17,8 +17,13 @@
 import { param } from '../bausteine.mjs';
 import { swings } from '../indikatoren.mjs';
 import { handelstagNr } from '../daten.mjs';
+import { profil, profilKurz } from '../volumen.mjs';
 
 const { zahl, auswahl, mehrfach, schalter } = param;
+
+// Alle Confluence-Arten, die pro Trade erfasst werden (auch die, die nicht als Bedingung zählen) – daraus wertet die Labor-Seite aus,
+// welche Confluence wie oft vorkam und wie sie abgeschnitten hat.
+export const CONF_ARTEN = ['gva', 'd', 'w', 'm', 'poc', 'va'];
 
 // Letzter Eintrag einer nach «bekannt» sortierten Swing-Liste mit bekannt < k (binäre Suche); Index oder -1
 function letzterBekannt(liste, k) {
@@ -48,8 +53,11 @@ export default {
     zahl('boxBis', 'Box bis Fib', 0.786, 0.4, 1, 0.001),
     mehrfach('conf', 'Confluences, die in der Box zählen', ['gva', 'd', 'w', 'm'], [
       { wert: 'gva', text: 'GVA-Linie' }, { wert: 'd', text: 'Daily Open' }, { wert: 'w', text: 'Weekly Open' }, { wert: 'm', text: 'Monthly Open' },
-    ]),
-    zahl('minConf', 'Mindestens so viele Confluences in der Box', 1, 0, 4, 1, '0 = egal'),
+      { wert: 'poc', text: 'Volumen-POC (GVA-Hit bis Hoch/Tief)' }, { wert: 'va', text: 'Value Area Low (Long) / High (Short) (GVA-Hit bis Hoch/Tief)' },
+    ], 'Welche Confluence der Trade hatte, steht in der Trade-Liste und im Chart – unabhängig davon, was hier als Bedingung angehakt ist. Für die Auswertung «welche Confluence funktioniert?» alle ankreuzen und «Mindestens» auf 0 setzen; ausgewertet und gefiltert wird dann auf der Ergebnis-Seite.'),
+    zahl('minConf', 'Mindestens so viele Confluences in der Box', 1, 0, 6, 1, '0 = egal (dann entstehen auch Trades ohne Confluence)'),
+    zahl('volZeilen', 'Volumenprofil: Anzahl Zeilen', 24, 8, 100, 1, 'Wie bei TradingView «Volume Profile» (24 Zeilen). Das Profil läuft vom GVA-Hit bis zum Hoch (Long) bzw. Tief (Short) = Fib 0 %. Datenbasis: Zeit auf Preis, da die Kursdaten kein Volumen enthalten.'),
+    zahl('volVa', 'Volumenprofil: Value Area (%)', 70, 50, 95, 1),
     zahl('sl', 'Stop-Loss bei Fib', 1, 1, 1.5, 0.05, '1 = 100 % (das Low)'),
     zahl('tp', 'Take-Profit bei Fib', -1, -3, 0, 0.01, '−1 = −100 %'),
     schalter('teilAn', 'Teilgewinn nehmen', true),
@@ -156,7 +164,13 @@ export default {
           const oben = hi - boxA * spanne, unten = hi - boxB * spanne;
           const inBox = (x) => x <= Math.max(oben, unten) && x >= Math.min(oben, unten);
           const kandidaten = { gva: L.lvl, d: D.o[dIdx[i]], w: W.o[wIdx[i]], m: M.o[mIdx[i]] };
-          const conf = p.conf.filter((c) => inBox(kandidaten[c])).map((c) => ({ art: c, preis: kandidaten[c] }));
+          // Volumenprofil vom GVA-Hit bis zum Hoch (Short: Tief) – nur Kerzen bis zur Hoch-Kerze, also nichts aus der Zukunft.
+          // Long: POC oder Value Area LOW, Short: POC oder Value Area HIGH.
+          const vol = iHi >= iT && iHi < i ? profil(basis, iT, iHi, p.volZeilen, p.volVa) : null;
+          if (vol) { kandidaten.poc = vol.poc; kandidaten.va = lang ? vol.val : vol.vah; }
+          // confAlle: alles, was in der Box liegt (für die Auswertung); conf: nur die Arten, die als Bedingung angehakt sind
+          const confAlle = CONF_ARTEN.filter((c) => kandidaten[c] !== undefined && inBox(kandidaten[c])).map((c) => ({ art: c, preis: kandidaten[c] }));
+          const conf = confAlle.filter((c) => p.conf.includes(c.art));
           if (conf.length < p.minConf) { ende = 'zuWenigConf'; break; }
           if (p.gegenBos === 'ungueltig' && gegen) { ende = 'gegenBos'; break; }
           if (p.gegenBos === 'nur' && !gegen) { ende = 'gegenBos'; break; }
@@ -173,7 +187,7 @@ export default {
               linie: L.id, tf: L.tf, lvl: L.lvl, tTreffer: basis.t[iT],
               swing: level, tSwing: z.t[swing.k], tBos: z.t[bos.k], dailyOpen: bos.open, openHit,
               fib0: hi, fib100: lo, tFib0: basis.t[iHi], tFib100: basis.t[iLo],
-              box: [Math.min(oben, unten), Math.max(oben, unten)], conf, gegenBos: gegen ? gegen.t : null,
+              box: [Math.min(oben, unten), Math.max(oben, unten)], conf, confAlle, vol: profilKurz(vol), tHoch: basis.t[iHi], gegenBos: gegen ? gegen.t : null,
               teil: management.teil ? management.teil.preis : null, be: management.be ? management.be.preis : null,
               ungueltig: ungueltigPreis,
             },
@@ -182,7 +196,7 @@ export default {
           break;
         }
         if (lang ? basis.l[i] < lo : basis.h[i] > lo) { ende = 'gebrochen'; break; }
-        if (lang ? basis.h[i] > hi : basis.l[i] < hi) { hi = lang ? basis.h[i] : basis.l[i]; iHi = i; } // zählt ab der nächsten Kerze
+        if (lang ? basis.h[i] > hi : basis.l[i] < hi) { hi = lang ? basis.h[i] : basis.l[i]; iHi = i; } // zählt ab der nächsten Kerze (iHi = Kerze mit dem Hoch, Ende des Volumenprofils)
         // Am Schluss einer Kerze des tiefen Zeitrahmens: Gegen-BOS prüfen (nur Swings, die nach dem BOS entstanden und schon bestätigt sind)
         const kk = zIdx[i];
         if (!gegen && z.en[kk] === i) {

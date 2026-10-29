@@ -4,6 +4,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { holen } from '@/lib/api';
 import type { LTrade } from '@/lib/labor';
+import { CONF_FARBE, confName, confVon, type VolProfil } from '@/lib/confluence';
+import { ConfChips } from './LaborConfluence';
+import { GvaMuster } from './GvaMuster';
 
 interface Kerze { t: number; o: number; h: number; l: number; c: number }
 interface POpen { t: number; o: number }
@@ -16,7 +19,6 @@ const TFS = ['5m', '15m', '30m', '1H'] as const;
 const VORLAUF = [{ h: 6, text: '6 Std' }, { h: 24, text: '1 Tag' }, { h: 72, text: '3 Tage' }, { h: 168, text: '1 Woche' }] as const;
 const zeit = (s: number) => new Date(s * 1000).toLocaleString('de-CH', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 const dez = (pair: string) => (pair.endsWith('JPY') ? 3 : 5);
-const CONF_TEXT: Record<string, string> = { gva: 'GVA-Linie', d: 'Daily Open', w: 'Weekly Open', m: 'Monthly Open' };
 export const grundText = (t: Pick<LTrade, 'grund' | 'teil'>) =>
   `${t.grund === 'tp' ? 'TP' : t.grund === 'sl' ? 'SL' : t.grund === 'be' ? 'Break-Even' : t.grund === 'zeit' ? 'Zeit' : 'offen'}${t.teil ? ' + Teil' : ''}`;
 
@@ -26,6 +28,7 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
   const [d, setD] = useState<Antwort | null>(null);
   const [fehler, setFehler] = useState<string | null>(null);
   const [hover, setHover] = useState<Kerze | null>(null);
+  const [ansicht, setAnsicht] = useState<'trade' | 'muster'>('trade');
 
   const info = t.info as Record<string, unknown>;
   const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) ? x : null);
@@ -61,6 +64,11 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
     const teil = num(info.teil), be = num(info.be);
     if (teil !== null) L.push({ preis: teil, text: 'Teilgewinn', farbe: '#86efac', strich: '3 3' });
     if (be !== null) L.push({ preis: be, text: 'Break-Even ab', farbe: '#cbd5e1', strich: '1 2' });
+    const vol = info.vol as VolProfil | undefined;
+    if (vol) {
+      L.push({ preis: vol.poc, text: 'Vol-POC', farbe: CONF_FARBE.poc, strich: '6 3', ab: vol.tVon });
+      L.push({ preis: t.seite > 0 ? vol.val : vol.vah, text: t.seite > 0 ? 'VA Low' : 'VA High', farbe: CONF_FARBE.va, strich: '6 3', ab: vol.tVon });
+    }
     L.push({ preis: t.ein, text: 'Einstieg', farbe: '#e5e7eb' });
     L.push({ preis: t.sl, text: 'SL', farbe: '#ef4444' });
     if (t.tp != null) L.push({ preis: t.tp, text: 'TP', farbe: '#22c55e' });
@@ -104,14 +112,28 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
   return (
     <div style={{ padding: '10px 4px 14px' }}>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
-        {TFS.map((x) => <button key={x} className="knopf-klein press" style={x === tf ? { fontWeight: 700, outline: '1px solid var(--akzent, #888)' } : undefined} onClick={() => setTf(x)}>{x}</button>)}
-        <span className="leise" style={{ margin: '0 4px' }}>Vorlauf</span>
-        {VORLAUF.map((x) => <button key={x.h} className="knopf-klein press" style={x.h === vor ? { fontWeight: 700, outline: '1px solid var(--akzent, #888)' } : undefined} onClick={() => setVor(x.h)}>{x.text}</button>)}
+        {typeof info.linie === 'string' && (
+          <>
+            <button className="knopf-klein press" style={ansicht === 'trade' ? { fontWeight: 700, outline: '1px solid var(--akzent, #888)' } : undefined} onClick={() => setAnsicht('trade')}>Trade</button>
+            <button className="knopf-klein press" style={ansicht === 'muster' ? { fontWeight: 700, outline: '1px solid var(--akzent, #888)' } : undefined} onClick={() => setAnsicht('muster')}>3D-Muster</button>
+            <span style={{ width: 8 }} />
+          </>
+        )}
+        {ansicht === 'trade' && TFS.map((x) => <button key={x} className="knopf-klein press" style={x === tf ? { fontWeight: 700, outline: '1px solid var(--akzent, #888)' } : undefined} onClick={() => setTf(x)}>{x}</button>)}
+        {ansicht === 'trade' && <span className="leise" style={{ margin: '0 4px' }}>Vorlauf</span>}
+        {ansicht === 'trade' && VORLAUF.map((x) => <button key={x.h} className="knopf-klein press" style={x.h === vor ? { fontWeight: 700, outline: '1px solid var(--akzent, #888)' } : undefined} onClick={() => setVor(x.h)}>{x.text}</button>)}
         <span style={{ marginLeft: 'auto', color: farbeR, fontWeight: 600 }}>{t.pair} {t.seite > 0 ? 'Long' : 'Short'} · {t.r >= 0 ? '+' : ''}{t.r.toFixed(2).replace('.', ',')} R · {grundText(t)}</span>
       </div>
-      {fehler && <div className="leise">{fehler}</div>}
-      {!d && !fehler && <div className="leise">Lade Kerzen…</div>}
-      {geo && d && (
+      {confVon(t) && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '0 0 8px', fontSize: 13 }}>
+          <strong>Confluence:</strong> <ConfChips t={t} />
+          <span className="leise">{confVon(t)?.liste.length ? confVon(t)?.liste.map((c) => `${confName(c.art, t.seite)} ${c.preis.toFixed(de)}`).join(' · ') : 'keine Confluence in der Box'}</span>
+        </div>
+      )}
+      {ansicht === 'muster' && typeof info.linie === 'string' && <GvaMuster linie={info.linie} hit={num(info.tTreffer)} ein={t.tEin} aus={t.tAus || null} />}
+      {ansicht === 'trade' && fehler && <div className="leise">{fehler}</div>}
+      {ansicht === 'trade' && !d && !fehler && <div className="leise">Lade Kerzen…</div>}
+      {ansicht === 'trade' && geo && d && (
         <>
           <svg viewBox={`0 0 ${B} ${H}`} style={{ width: '100%', height: 'auto', background: 'var(--bg)', borderRadius: 8 }} onMouseLeave={() => setHover(null)}>
             {[0, 1, 2, 3, 4].map((i) => {
@@ -141,6 +163,17 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
                 </g>
               );
             }))}
+            {/* Volumenprofil vom GVA-Hit bis zum Hoch (Short: Tief): POC gelb, Value Area blau */}
+            {(() => {
+              const vol = info.vol as VolProfil | undefined;
+              if (!vol) return null;
+              const x0 = geo.x(Math.max(vol.tVon, geo.t0)), maxB = (B - rand.l - rand.r) * 0.2;
+              return vol.v.map((v, z) => {
+                const pLo = vol.lo + z * vol.hoehe, pHi = pLo + vol.hoehe;
+                const inVa = z >= vol.zeileVa[0] && z <= vol.zeileVa[1];
+                return <rect key={`v${z}`} x={x0} width={Math.max(1, v * maxB)} y={geo.y(pHi)} height={Math.max(1, geo.y(pLo) - geo.y(pHi) - 1)} fill={z === vol.zeilePoc ? CONF_FARBE.poc : inVa ? CONF_FARBE.va : '#94a3b8'} opacity={z === vol.zeilePoc ? 0.5 : 0.25} />;
+              });
+            })()}
             {geo.k.map((c) => {
               const hoch = c.c >= c.o, f = hoch ? '#22c55e' : '#ef4444', x = geo.x(c.t) + (geo.bw * 0.2);
               return (
@@ -154,6 +187,12 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
               <g key={i}>
                 <line x1={l.ab ? geo.x(l.ab) : rand.l} x2={B - rand.r} y1={geo.y(l.preis)} y2={geo.y(l.preis)} stroke={l.farbe} strokeWidth={l.ab ? 1.5 : 1} strokeDasharray={l.strich} opacity={0.9} />
                 <text x={B - rand.r + 4} y={geo.y(l.preis) + 3} fontSize={10} fill={l.farbe} fontWeight={600}>{l.text} {l.preis.toFixed(de)}</text>
+              </g>
+            ))}
+            {confVon(t)?.liste.map((c) => geo.y(c.preis) >= 0 && geo.y(c.preis) <= H - rand.u && (
+              <g key={`c${c.art}`}>
+                <title>{`${confName(c.art, t.seite)} ${c.preis.toFixed(de)}`}</title>
+                <rect x={geo.x(t.tEin) - 4} y={geo.y(c.preis) - 4} width={8} height={8} transform={`rotate(45 ${geo.x(t.tEin)} ${geo.y(c.preis)})`} fill={CONF_FARBE[c.art]} stroke="var(--bg)" strokeWidth={1} />
               </g>
             ))}
             {marken.map((m, i) => m.t > 0 && m.t >= geo.t0 && m.t <= geo.t1 + geo.dt && (
@@ -172,7 +211,8 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
               Ablauf: GVA-Hit {zeit(num(info.tTreffer) as number)} · letztes Hoch {num(info.swing)?.toFixed(de)} ({zeit(num(info.tSwing) as number)})
               {' '}· BOS {zeit(num(info.tBos) as number)}{num(info.dailyOpen) !== null ? ` über Daily Open ${num(info.dailyOpen)?.toFixed(de)}` : ' (ohne Daily-Open-Bedingung)'}
               {' '}· Low {num(info.fib100)?.toFixed(de)} · Hoch {num(info.fib0)?.toFixed(de)}
-              {' '}· Confluences in der Box: {conf && conf.length ? conf.map((c) => `${CONF_TEXT[c.art] || c.art} ${c.preis.toFixed(de)}`).join(', ') : 'keine'}
+              {' '}· Confluences in der Box: {conf && conf.length ? conf.map((c) => `${confName(c.art, t.seite)} ${c.preis.toFixed(de)}`).join(', ') : 'keine'}
+              {(() => { const vol = info.vol as VolProfil | undefined; return vol ? ` · Volumenprofil ${zeit(vol.tVon)}–${zeit(vol.tBis)}: POC ${vol.poc.toFixed(de)}, Value Area ${vol.val.toFixed(de)}–${vol.vah.toFixed(de)} (Zeit auf Preis)` : ''; })()}
               {num(info.gegenBos) !== null ? ` · Gegen-BOS ${zeit(num(info.gegenBos) as number)}` : ' · kein Gegen-BOS'}
             </div>
           )}
