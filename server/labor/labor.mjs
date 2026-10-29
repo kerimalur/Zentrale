@@ -601,21 +601,27 @@ export function laborTradeChart({ pair, von, bis, tf = '15m' }) {
   if ((bis - von) / sek > 2500) return { fehler: 'Zeitraum zu lang für diesen Zeitrahmen – gröberen Zeitrahmen wählen' };
   const mt = (x) => { const d = new Date(x * 1000); return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
   let t = [], o = [], h = [], l = [], c = [], res = 300, quelle = 'Kursdaten 5 Min';
-  // Daily Opens (Handelstag ab 17:00 New York): erste Kerze jedes Handelstags, ab einem Tag vor dem Chart-Beginn
+  // Daily/Weekly/Monthly Opens (Handelstag ab 17:00 New York, Woche ab Sonntag 17:00, Monat nach Handelstag),
+  // ab 35 Tagen vor dem Chart-Beginn, damit auch die laufende Woche und der laufende Monat ihr Open haben.
+  // Open an Werktagen = Schluss der Kerze davor (Rollover-Sprung der Bid-Kurse), nach dem Wochenende das echte Open.
   const e = tradingEinstellungen();
-  const opens = [];
-  let altTag = null;
-  // Open an Werktagen = Schluss der Kerze davor (Rollover-Sprung der Bid-Kurse), nach dem Wochenende das echte Open
+  const VOR = 35 * 86_400;
+  const art = { D: tradingIntern.keyFn('D', e), W: tradingIntern.keyFn('W', e), M: tradingIntern.keyFn('M', e) };
+  const opens = { D: [], W: [], M: [] }, altK = { D: null, W: null, M: null };
   let altS = null, altC = null;
-  const tagOpen = (s, op, cl) => {
+  const periodenOpen = (s, op, cl) => {
     const tag = tradingIntern.sessionTag(s * 1000, e);
-    if (tag !== altTag) { altTag = tag; opens.push({ t: s, o: altS !== null && s - altS < 86_400 ? altC : op }); }
+    for (const x of ['D', 'W', 'M']) {
+      const key = art[x](tag);
+      if (key !== altK[x]) { altK[x] = key; opens[x].push({ t: s, o: altS !== null && s - altS < 86_400 ? altC : op }); }
+    }
     altS = s; altC = cl;
   };
-  const m5 = dukascopyFuenfMinuten(pair, mt(von - 86_400), mt(bis));
+  const zuruecksetzen = () => { for (const x of ['D', 'W', 'M']) { opens[x].length = 0; altK[x] = null; } altS = null; altC = null; };
+  const m5 = dukascopyFuenfMinuten(pair, mt(von - VOR), mt(bis));
   if (m5 && m5.n) {
     for (let i = 0; i < m5.n; i++) {
-      if (m5.t[i] >= von - 86_400 && m5.t[i] <= bis) tagOpen(m5.t[i], m5.o[i], m5.c[i]);
+      if (m5.t[i] >= von - VOR && m5.t[i] <= bis) periodenOpen(m5.t[i], m5.o[i], m5.c[i]);
       if (m5.t[i] >= von && m5.t[i] <= bis) { t.push(m5.t[i]); o.push(m5.o[i]); h.push(m5.h[i]); l.push(m5.l[i]); c.push(m5.c[i]); }
     }
   }
@@ -623,16 +629,17 @@ export function laborTradeChart({ pair, von, bis, tf = '15m' }) {
     const h1 = dukascopyStunden(pair);
     if (!h1) return { fehler: 'Keine Kursdaten für dieses Paar' };
     res = 3600; quelle = 'Kursdaten 1 Std';
-    opens.length = 0; altTag = null; altS = null; altC = null;
+    zuruecksetzen();
     for (let i = 0; i < h1.t.length; i++) {
       const s = h1.t[i] / 1000;
-      if (s >= von - 86_400 && s <= bis) tagOpen(s, h1.o[i], h1.c[i]);
+      if (s >= von - VOR && s <= bis) periodenOpen(s, h1.o[i], h1.c[i]);
       if (s >= von && s <= bis) { t.push(s); o.push(h1.o[i]); h.push(h1.h[i]); l.push(h1.l[i]); c.push(h1.c[i]); }
     }
   }
   if (!t.length) return { fehler: 'Keine Kerzen in diesem Zeitraum' };
-  // nur Tage, die im Chart sichtbar sind (der Tag, der vor dem Chart begann, gilt ab Chart-Beginn)
-  const dailyOpens = opens.filter((x, i) => (opens[i + 1]?.t ?? Infinity) > von);
+  // nur Perioden, die im Chart sichtbar sind (die Periode, die vor dem Chart begann, gilt ab Chart-Beginn)
+  const sichtbar = (liste) => liste.filter((x, i) => (liste[i + 1]?.t ?? Infinity) > von);
+  const dailyOpens = sichtbar(opens.D), weeklyOpens = sichtbar(opens.W), monthlyOpens = sichtbar(opens.M);
   const k = Math.max(sek, res);
   const kerzen = [];
   let letzter = null;
@@ -641,5 +648,5 @@ export function laborTradeChart({ pair, von, bis, tf = '15m' }) {
     if (letzter && letzter.t === key) { if (h[i] > letzter.h) letzter.h = h[i]; if (l[i] < letzter.l) letzter.l = l[i]; letzter.c = c[i]; }
     else { letzter = { t: key, o: o[i], h: h[i], l: l[i], c: c[i] }; kerzen.push(letzter); }
   }
-  return { pair, tf: k === sek ? tf : (k === 3600 ? '1H' : tf), zuGrob: k > sek, quelle, kerzen, dailyOpens };
+  return { pair, tf: k === sek ? tf : (k === 3600 ? '1H' : tf), zuGrob: k > sek, quelle, kerzen, dailyOpens, weeklyOpens, monthlyOpens };
 }

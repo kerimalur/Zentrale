@@ -1,12 +1,14 @@
 'use client';
 // Chart eines einzelnen Labor-Trades zum Nachprüfen: Kerzen + alle Linien und Zeitpunkte, die das Programm für diesen Trade benutzt hat
-// (GVA-Hit, letztes Hoch = BOS-Level, BOS, Daily Opens, Low/Hoch der Fib, Box mit Confluences, Teilgewinn, Break-Even, Ungültig).
+// (GVA-Hit, letztes Hoch = BOS-Level, BOS, Daily/Weekly/Monthly Opens, Low/Hoch der Fib, Box mit Confluences, Teilgewinn, Break-Even, Ungültig).
 import { useEffect, useMemo, useState } from 'react';
 import { holen } from '@/lib/api';
 import type { LTrade } from '@/lib/labor';
 
 interface Kerze { t: number; o: number; h: number; l: number; c: number }
-interface Antwort { pair: string; tf: string; zuGrob: boolean; quelle: string; kerzen: Kerze[]; dailyOpens?: { t: number; o: number }[] }
+interface POpen { t: number; o: number }
+interface Antwort { pair: string; tf: string; zuGrob: boolean; quelle: string; kerzen: Kerze[]; dailyOpens?: POpen[]; weeklyOpens?: POpen[]; monthlyOpens?: POpen[] }
+const OPEN_ARTEN = [['dailyOpens', 'DO', '#4ade80'], ['weeklyOpens', 'WO', '#fb923c'], ['monthlyOpens', 'MO', '#f43f5e']] as const;
 interface Linie { preis: number; text: string; farbe: string; strich?: string; ab?: number }
 interface Marke { t: number; text: string; farbe: string }
 
@@ -128,17 +130,17 @@ export function TradeChart({ t, parameter }: { t: LTrade; parameter?: Record<str
               const xa = neu ? geo.x(num(info.tBos) ?? t.tSignal) : rand.l;
               return <rect x={xa} width={Math.max(0, B - rand.r - xa)} y={geo.y(Math.max(...b))} height={Math.abs(geo.y(b[0]) - geo.y(b[1]))} fill="#60a5fa" opacity={0.12} />;
             })()}
-            {/* Daily Opens: je Handelstag (ab 17:00 New York) eine Linie */}
-            {(d.dailyOpens || []).map((x, i, a) => {
+            {/* Daily/Weekly/Monthly Opens: je Periode (ab 17:00 New York) eine Linie */}
+            {OPEN_ARTEN.map(([feld, kurz, farbe]) => (d[feld] || []).map((x, i, a) => {
               const xa = geo.x(Math.max(x.t, geo.t0)), xb = geo.x(a[i + 1]?.t ?? geo.t1 + geo.dt);
               if (geo.y(x.o) < rand.o || geo.y(x.o) > H - rand.u || xb <= xa) return null;
               return (
-                <g key={x.t}>
-                  <line x1={xa} x2={xb} y1={geo.y(x.o)} y2={geo.y(x.o)} stroke="#4ade80" strokeWidth={1} strokeDasharray="5 3" opacity={0.75} />
-                  <text x={xa + 2} y={geo.y(x.o) - 3} fontSize={9} fill="#4ade80">DO {x.o.toFixed(de)}</text>
+                <g key={`${kurz}-${x.t}`}>
+                  <line x1={xa} x2={xb} y1={geo.y(x.o)} y2={geo.y(x.o)} stroke={farbe} strokeWidth={1} strokeDasharray="5 3" opacity={0.75} />
+                  <text x={xa + 2} y={geo.y(x.o) - 3} fontSize={9} fill={farbe}>{kurz} {x.o.toFixed(de)}</text>
                 </g>
               );
-            })}
+            }))}
             {geo.k.map((c) => {
               const hoch = c.c >= c.o, f = hoch ? '#22c55e' : '#ef4444', x = geo.x(c.t) + (geo.bw * 0.2);
               return (
