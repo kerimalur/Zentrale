@@ -542,6 +542,7 @@ function IdeeAnsicht({ b, id, onZurueck, onBearbeiten, onOeffnen, onVergleich }:
             </div>
           )}
           {fertigeLaeufe.length > 1 && <button className="knopf-klein press" onClick={() => onVergleich(fertigeLaeufe.slice(0, Math.min(4, fertigeLaeufe.length)).map((l) => l.id))}>Läufe vergleichen</button>}
+          {zielLauf && <a className="knopf-klein press" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }} href={`/api/labor/pdf?lauf=${zielLauf}`} download>Als PDF</a>}
           {zielLauf && <button className="knopf-klein press" onClick={() => setFrage('lauf')}>Dieses Ergebnis löschen …</button>}
         </div>
       )}

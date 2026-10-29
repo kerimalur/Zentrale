@@ -101,6 +101,9 @@ export function LaborVergleich({ startIds }: { startIds?: string[] }) {
         </div>
         {fehler && <div className="fehlerbox" style={{ marginTop: 10 }}>{fehler}</div>}
       </section>
+      {erg && (
+        <div><a className="knopf-klein press" style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }} href={`/api/labor/pdf?vergleich=${erg.spalten.map((s) => s.id).join(',')}`} download>Vergleich als PDF</a></div>
+      )}
       {erg && <VergleichErgebnis erg={erg} alleZeilen={alleZeilen} setAlleZeilen={setAlleZeilen} />}
     </div>
   );

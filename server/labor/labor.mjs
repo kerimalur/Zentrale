@@ -667,7 +667,7 @@ export function laborLaeufeFertig() {
 }
 
 // Spezifikation einer Karte als flache Zeilen { schluessel, name, wert } – Parameter mit ihren Namen aus dem Schema
-function spezifikation(k, parameter) {
+export function spezifikation(k, parameter) {
   const zeilen = [];
   const add = (schluessel, name, wert) => zeilen.push({ schluessel, name, wert: wert === undefined || wert === null || wert === '' ? '—' : String(wert) });
   const teile = (liste, katalog) => (liste || []).map((t) => `${katalog[t.id]?.name || t.id}${Object.keys(t.p || {}).length ? ` (${Object.entries(t.p).map(([a, w]) => `${a} ${Array.isArray(w) ? w.join('/') : w}`).join(', ')})` : ''}`).join(' + ') || '—';

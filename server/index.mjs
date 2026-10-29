@@ -28,6 +28,7 @@ import { tradingZustand, tradingPaar, tradingLauf, tradingNeuLaden, tradingEinst
 import { heuteZustand, anmeldeUrl, rueckkehr, trennen as googleTrennen, mailAktion, scanStarten, scanZustand, absenderAktion, werbefilterSetzen, terminNeu, aufgabeNeu, aufgabeErledigt } from './google.mjs';
 import { statistik as gvaStatistik, statistikStandardSetzen, beispiel as gvaBeispiel } from './tradingStatistik.mjs';
 import { laborListe, laborIdee, laborIdeeSpeichern, laborIdeeLoeschen, laborStarten, laborForwardOeffnen, laborLauf, laborErgebnis, laborAbbrechen, laborBausteine, laborStart, laborIdeeMeta, laborIdeeKopieren, laborZettel, laborZettelSpeichern, laborZettelLoeschen, laborReiheSpeichern, laborReiheLoeschen, laborReiheVorschau, laborExport, laborImport, laborVersionVerwerfen, laborLaufLoeschen, laborTradeChart, laborLaeufeFertig, laborVergleich } from './labor/labor.mjs';
+import { laborPdfLauf, laborPdfVergleich } from './labor/pdf.mjs';
 import { journalZustand, tradeSpeichern, tradeLoeschen, journalEinstellungenSetzen, bildSpeichern, bildPfad, importieren } from './journal.mjs';
 import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
@@ -260,6 +261,13 @@ async function api(req, res, url) {
   }
 
   if (p === '/api/labor/laeufe-fertig' && m === 'GET') return json(res, 200, laborLaeufeFertig());
+  if (p === '/api/labor/pdf' && m === 'GET') {
+    const vg = url.searchParams.get('vergleich');
+    const r = vg ? await laborPdfVergleich(vg.split(',')) : await laborPdfLauf(url.searchParams.get('lauf'));
+    if (r.fehler) return json(res, 400, r);
+    res.writeHead(200, { 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="${r.datei}"`, 'Cache-Control': 'no-store', 'Content-Length': r.pdf.length });
+    return res.end(r.pdf);
+  }
   if (p === '/api/labor/vergleich' && m === 'POST') {
     const r = laborVergleich((await body(req)).ids);
     return r.fehler ? json(res, 400, r) : json(res, 200, r);

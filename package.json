@@ -11,6 +11,7 @@
     "check": "tsc --noEmit && node --check server/index.mjs"
   },
   "dependencies": {
+    "pdfkit": "^0.17.2",
     "ssh2": "^1.17.0",
     "ws": "^8.18.0"
   },
