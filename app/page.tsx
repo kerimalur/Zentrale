@@ -5,12 +5,8 @@ import { senden } from '@/lib/api';
 import { datumLang, komma } from '@/lib/format';
 import { Icon } from '@/components/ui';
 import { Uebersicht, SZENE_STIL } from '@/components/Uebersicht';
-import { System } from '@/components/System';
-import { Netz } from '@/components/Netz';
-import { Speicher } from '@/components/Speicher';
-import { Cloud } from '@/components/Cloud';
-import { Gaeste } from '@/components/Gaeste';
-import { Konsole } from '@/components/Konsole';
+import { SystemNetz } from '@/components/SystemNetz';
+import { SpeicherCloud } from '@/components/SpeicherCloud';
 import { Medien, vpnStatus } from '@/components/Medien';
 import { Einstellungen } from '@/components/Einstellungen';
 import { Gesundheit } from '@/components/Gesundheit';
@@ -19,15 +15,21 @@ import { KursdatenLeiste } from '@/components/KursdatenLeiste';
 import { Heute } from '@/components/Heute';
 import { Fokus } from '@/components/Fokus';
 
-const TABS = ['Übersicht', 'Heute', 'Gesundheit', 'Fokus', 'Trading', 'System', 'Netz', 'Speicher', 'Cloud', 'Medien', 'Gäste', 'Konsole', 'Einstellungen'] as const;
+const TABS = ['Übersicht', 'Heute', 'Gesundheit', 'Fokus', 'Trading', 'System', 'Speicher', 'Medien', 'Einstellungen'] as const;
 type Tab = (typeof TABS)[number];
+
+// Frühere Tabs, die jetzt woanders liegen – alte Lesezeichen und gespeicherte Stände landen am richtigen Ort.
+const FRUEHER: Record<string, Tab> = { Netz: 'System', Cloud: 'Speicher', 'Gäste': 'Einstellungen', Konsole: 'Einstellungen' };
+
+function alsTab(name: string | null): Tab | null {
+  if (!name) return null;
+  if ((TABS as readonly string[]).includes(name)) return name as Tab;
+  return FRUEHER[name] || null;
+}
 
 function gespeicherterTab(): Tab {
   try {
-    const h = decodeURIComponent(location.hash.slice(1));
-    if ((TABS as readonly string[]).includes(h)) return h as Tab;
-    const s = localStorage.getItem('zentrale-tab');
-    if (s && (TABS as readonly string[]).includes(s)) return s as Tab;
+    return alsTab(decodeURIComponent(location.hash.slice(1))) || alsTab(localStorage.getItem('zentrale-tab')) || 'Übersicht';
   } catch {}
   return 'Übersicht';
 }
@@ -131,13 +133,9 @@ export default function Seite() {
       {tab === 'Gesundheit' && <Gesundheit />}
       {tab === 'Fokus' && <Fokus />}
       {tab === 'Trading' && <Trading />}
-      {tab === 'System' && <System z={z} aktualisieren={laden} />}
-      {tab === 'Netz' && <Netz z={z} />}
-      {tab === 'Speicher' && <Speicher z={z} />}
-      {tab === 'Cloud' && <Cloud z={z} aktualisieren={laden} />}
+      {tab === 'System' && <SystemNetz z={z} aktualisieren={laden} />}
+      {tab === 'Speicher' && <SpeicherCloud z={z} aktualisieren={laden} />}
       {tab === 'Medien' && <Medien z={z} />}
-      {tab === 'Gäste' && <Gaeste z={z} aktualisieren={laden} />}
-      {tab === 'Konsole' && <Konsole z={z} />}
       {tab === 'Einstellungen' && <Einstellungen z={z} aktualisieren={laden} />}
     </main>
   );

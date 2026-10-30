@@ -14,7 +14,7 @@ function Qr({ text }: { text: string }) {
   return <div className="sh-qr" role="img" aria-label="QR-Code für die Authenticator-App" dangerouslySetInnerHTML={{ __html: q.createSvgTag({ cellSize: 4, margin: 2, scalable: true }) }} />;
 }
 
-export function SicherheitKarte() {
+export function SicherheitKarte({ onStand }: { onStand?: (text: string) => void }) {
   const [d, setD] = useState<SicherheitZustand | null>(null);
   const [neu, setNeu] = useState<{ secret: string; uri: string } | null>(null);
   const [code, setCode] = useState('');
@@ -25,6 +25,7 @@ export function SicherheitKarte() {
 
   const laden = useCallback(async () => { try { setD(await holen<SicherheitZustand>('/api/sicherheit')); } catch {} }, []);
   useEffect(() => { laden(); }, [laden]);
+  useEffect(() => { if (d) onStand?.(d.zweifaktor.aktiv ? 'Zwei-Faktor aktiv' : 'nur Passwort'); }, [d, onStand]);
 
   async function los<T>(fn: () => Promise<T>, danach?: (r: T) => void) {
     setLaeuft(true); setInfo(null);

@@ -6,7 +6,7 @@ import { relativ } from '@/lib/format';
 
 interface TvGeraet { id: string; name: string; seit: number; zuletzt: number | null }
 
-export function TvKoppelnKarte() {
+export function TvKoppelnKarte({ onStand }: { onStand?: (text: string) => void }) {
   const [liste, setListe] = useState<TvGeraet[] | null>(null);
   const [code, setCode] = useState('');
   const [name, setName] = useState('Wohnzimmer');
@@ -21,6 +21,7 @@ export function TvKoppelnKarte() {
     }
   }, []);
   useEffect(() => { void laden(); }, [laden]);
+  useEffect(() => { if (liste) onStand?.(liste.length === 1 ? '1 Fernseher gekoppelt' : `${liste.length} Fernseher gekoppelt`); }, [liste, onStand]);
 
   async function koppeln() {
     setLaeuft(true);

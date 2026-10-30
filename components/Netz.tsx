@@ -25,7 +25,7 @@ export function Netz({ z }: { z: Zustand }) {
   const { d, fehler, neuLaden } = useNetzwerk();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="segment nw-reiter" role="tablist" aria-label="Netz-Bereiche" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+      <div className="segment nw-reiter" role="tablist" aria-label="Netz-Bereiche" style={{ gridTemplateColumns: 'repeat(4, minmax(0, max-content))' }}>
         {REITER.map((r) => <button key={r.id} role="tab" aria-selected={reiter === r.id} aria-pressed={reiter === r.id} onClick={() => waehlen(r.id)}>{r.text}</button>)}
       </div>
       {reiter === 'uebersicht' && <NetzUebersicht z={z} />}

@@ -52,6 +52,7 @@ export const ICONS = {
   lauf: 'M14 4a1.5 1.5 0 1 0 0-.01M7 21l3-6 3 2v4M9 10l3-3 3 3 3 1M10 15l-4 1',
   schwimmen: 'M2 18c2 0 2-1.5 4-1.5S8 18 10 18s2-1.5 4-1.5 2 1.5 4 1.5 2-1.5 4-1.5M8 13l4-4 3 3M16 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   wandern: 'M13 4a1.5 1.5 0 1 0 0-.01M10 21l2-7 3 3v4M8 11l2-3 4 1 2 3M18 9v12',
+  musik: 'M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM19 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',
   ziel: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
 } as const;
 
@@ -103,5 +104,16 @@ export function Schalter({ an, onClick, titel, unter, deaktiviert, children }: {
         <span className="knopf" style={{ transform: `translateX(${an ? 20 : 0}px)` }} />
       </span>
     </button>
+  );
+}
+
+// Reiter innerhalb eines Tabs (z. B. «Pi & Dienste» / «Netz»).
+export function Unterreiter<T extends string>({ label, aktiv, waehlen, punkte }: { label: string; aktiv: T; waehlen: (t: T) => void; punkte: { id: T; text: string }[] }) {
+  return (
+    <div className="unterreiter" role="tablist" aria-label={label}>
+      {punkte.map((p) => (
+        <button key={p.id} role="tab" aria-selected={p.id === aktiv} aria-pressed={p.id === aktiv} className="press" onClick={() => waehlen(p.id)}>{p.text}</button>
+      ))}
+    </div>
   );
 }

@@ -5,7 +5,7 @@ import { holen, senden, kopieren } from '@/lib/api';
 
 interface SpotifyZustand { eingerichtet: boolean; verbunden: boolean; rueckUrl: string }
 
-export function SpotifyKarte() {
+export function SpotifyKarte({ onStand }: { onStand?: (text: string) => void }) {
   const [z, setZ] = useState<SpotifyZustand | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
@@ -13,6 +13,7 @@ export function SpotifyKarte() {
     try { setZ(await holen<SpotifyZustand>('/api/spotify/status')); } catch (e) { setInfo((e as Error).message); }
   }, []);
   useEffect(() => { void laden(); }, [laden]);
+  useEffect(() => { if (z) onStand?.(z.verbunden ? 'verbunden' : z.eingerichtet ? 'nicht verbunden' : 'noch nicht eingerichtet'); }, [z, onStand]);
 
   return (
     <section className="karte in" aria-label="Spotify" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
