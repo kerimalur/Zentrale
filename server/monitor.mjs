@@ -21,6 +21,7 @@ import { abgleichen, ausgeschaltet, steuerungSnapshot } from './steuerung.mjs';
 import { qbDaten, qbAllesStoppen, vpnPruefen, arrDaten, seerrDaten } from './collect/medien.mjs';
 import { pcStatus } from './pc.mjs';
 import { tvSnapshot } from './tv.mjs';
+import { tvboxSnapshot } from './tvbox.mjs';
 import { scrutinyDaten } from './collect/scrutiny.mjs';
 import { wudDaten } from './collect/wud.mjs';
 import { tagescheckSenden, checkZeiten, neuesAbgleichen, KERN_UPDATES } from './tagescheck.mjs';
@@ -712,6 +713,7 @@ export function snapshot() {
     steuerung: steuerungSnapshot(z.container, z.ts ? true : z.fehler.tailscale ? false : null),
     pc: pcStatus(z.ts?.peers),
     tv: tvSnapshot(),
+    tvbox: tvboxSnapshot(),
     hostName: config.hostName,
     hinweise,
   };

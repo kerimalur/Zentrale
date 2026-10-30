@@ -24,6 +24,7 @@ import { moebelLuefterModus } from './moebelLuefter.mjs';
 import { statusBerichtSchreiben } from './statusbericht.mjs';
 import { pcWecken, pcAusschalten, pcSchluesselZeile } from './pc.mjs';
 import { tvAbfragen, tvTaste, tvLautstaerke, tvEinschalten } from './tv.mjs';
+import { tvboxAbfragen, tvboxSnapshot, tvboxEinschalten, tvboxAusschalten, tvboxTaste, tvboxAppStarten } from './tvbox.mjs';
 import { garminDaten, garminHistorie } from './collect/garmin.mjs';
 import { tagescheckSenden } from './tagescheck.mjs';
 import { fokusZustand, fokusLauf, koppelcodeErzeugen, koppeln, geraetVonToken, geraetEntfernen, geraetSetzen as fokusGeraetSetzen, bericht as fokusBericht, diagnoseSpeichern, sperreSetzen, sperreLoeschen, kategorieSetzen, piholeSync, parkKonfigSetzen } from './fokus.mjs';
@@ -540,6 +541,19 @@ async function api(req, res, url) {
     return json(res, 200, { ok: true });
   }
   if (p === '/api/tv/an' && m === 'POST') return json(res, 200, await tvEinschalten());
+
+  // ---------- Xiaomi TV Box (ADB) ----------
+  if (p === '/api/tvbox/status' && m === 'GET') return json(res, 200, tvboxSnapshot());
+  if (p === '/api/tvbox/an' && m === 'POST') return json(res, 200, await tvboxEinschalten());
+  if (p === '/api/tvbox/aus' && m === 'POST') return json(res, 200, await tvboxAusschalten());
+  if (p === '/api/tvbox/taste' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await tvboxTaste(String(b.taste || '')));
+  }
+  if (p === '/api/tvbox/app' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await tvboxAppStarten(String(b.paket || '')));
+  }
   if (p === '/api/pi/neustart' && m === 'POST') {
     const b = await body(req);
     if (b.bestaetigt !== true) return json(res, 400, { fehler: 'Bitte bestätigen' });
@@ -635,6 +649,7 @@ alle(6 * 3600_000, sehrLangsam);
 alle(30 * 60_000, speicherLauf);
 alle(20_000, zeitplan, false);
 alle(15_000, tvAbfragen);
+alle(20_000, tvboxAbfragen);
 // Netz-Wache: neue Geräte im Heimnetz und Port-Scans gegen den Pi (liest nur, schickt nichts los).
 setTimeout(() => alle(30_000, netzwache, false), 20_000);
 setTimeout(() => alle(60_000, fokusLauf, false), 25_000);

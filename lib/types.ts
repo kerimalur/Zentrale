@@ -229,6 +229,7 @@ export interface Zustand {
   steuerung: Steuerung;
   pc: PcStatus;
   tv: TvStatus;
+  tvbox: TvBoxStatus;
   hostName: string;
   hinweise: string[];
 }
@@ -273,6 +274,13 @@ export interface TvStatus {
   stumm: boolean | null;
   schaltetEin: boolean;
   kannWecken: boolean;
+}
+
+export interface TvBoxStatus {
+  eingerichtet: boolean;
+  name: string;
+  an: boolean | null;
+  fehler: string | null;
 }
 
 export interface Steuerung {

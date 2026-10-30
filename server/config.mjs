@@ -157,6 +157,10 @@ export const config = {
     name: str('TV_NAME', 'Fernseher'),
     broadcast: str('TV_BROADCAST', ''),
   },
+  tvbox: {
+    ip: str('TVBOX_IP', ''),
+    name: str('TVBOX_NAME', 'Xiaomi TV Box'),
+  },
 
   // Leer = keine Lüftersteuerung. "auto" = ersten PWM-Kanal nehmen (nach dtoverlay=pwm).
   luefter: { pwmPfad: str('LUEFTER_PWM', '') },
