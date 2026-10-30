@@ -85,7 +85,7 @@
 
 .tv-musik { display: flex; gap: 40px; flex: 1; min-height: 0; }
 .tv-spieler { width: 1100px; display: flex; gap: 48px; align-items: flex-start; }
-.tv-cover { flex: none; width: 420px; height: 420px; border-radius: 28px; background: #1b2330 center / cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 160px; color: #3a4458; }
+.tv-cover { flex: none; width: 380px; height: 380px; border-radius: 28px; background: #1b2330 center / cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 160px; color: #3a4458; }
 .tv-lied { flex: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .tv-lied .tv-held-titel { font-size: 52px; }
 .tv-seite { width: 620px; display: flex; flex-direction: column; gap: 20px; }
@@ -101,3 +101,9 @@
 .tv-detail-text { width: 900px; padding: 56px; display: flex; flex-direction: column; gap: 16px; }
 .tv-beschreibung { margin: 0; font-size: 28px; line-height: 1.4; color: #c4cdda; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 .tv-detail-bild { height: 100%; width: auto; max-width: 480px; object-fit: cover; flex: none; }
+
+/* Musik: links Spieler + Spotify-Reihe */
+.tv-musik-links { width: 1100px; display: flex; flex-direction: column; gap: 24px; min-height: 0; }
+.tv-karte.quadrat { width: 190px; height: 190px; }
+.tv-karte.likes { background: linear-gradient(135deg, #5b3df5, #f5a524); }
+.tv-karte.likes .tv-karte-name { background: none; top: 0; display: flex; align-items: flex-end; font-size: 26px; }

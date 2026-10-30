@@ -12,6 +12,7 @@ import { ordnerLesen, ordnerGroessen } from './explorer.mjs';
 import { szeneSetzen, standardGovernorMerken, hddTimerSetzen } from './szenen.mjs';
 import { kopplungStarten, kopplungStatus, kopplungBestaetigen, tvAngemeldet, tvGeraeteListe, tvGeraetEntfernen } from './tvgeraet.mjs';
 import { filmeUebersicht, filmDetail, bildHolen, startUebersicht, tvSzenen } from './tvdaten.mjs';
+import { spotifyZustand, spotifyAnmeldeUrl, spotifyRueckkehr, spotifyTrennen, spotifyListe, spotifySpielen } from './spotify.mjs';
 import { sonosStatus, sonosRaumWaehlen, sonosFavoriten, sonosFavoritSpielen, sonosAktion, sonosLauter } from './sonos.mjs';
 import { neustarten } from './collect/docker.mjs';
 import { backupStarten, backupEingerichtet } from './backup.mjs';
@@ -112,6 +113,19 @@ async function api(req, res, url) {
     return json(res, 200, fokusBericht(g, await body(req), req));
   }
 
+  // ---------- Spotify-Anmeldung: Rückkehr von Spotify (ohne Cookie; geschützt über «state») ----------
+  if (p === '/api/spotify/zurueck' && m === 'GET') {
+    try {
+      await spotifyRueckkehr(url);
+      res.writeHead(302, { Location: '/' });
+      return res.end();
+    } catch (e) {
+      const text = String(e.message).replace(/[<>&"]/g, '');
+      res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><body style="font-family:system-ui;padding:24px"><h2>Spotify-Verbindung fehlgeschlagen</h2><p>${text}</p><p><a href="/">Zurück zur Zentrale</a></p>`);
+    }
+  }
+
   // ---------- Google-Anmeldung: Rückkehr von Google (ohne Cookie, weil die Weiterleitung von accounts.google.com kommt; geschützt über «state») ----------
   if (p === '/api/google/zurueck' && m === 'GET') {
     try {
@@ -135,7 +149,7 @@ async function api(req, res, url) {
     const { cookie, ...rest } = r;
     return json(res, 200, rest, cookie ? { 'Set-Cookie': cookie } : {});
   }
-  const tvRoute = /^\/api\/tv\/(start|filme|film|bild|szenen|szene|sonos\/[a-z]+)$/.test(p);
+  const tvRoute = /^\/api\/tv\/(start|filme|film|bild|szenen|szene|sonos\/[a-z]+|spotify\/[a-z]+)$/.test(p);
   if (tvRoute) {
     if (!tvAngemeldet(req) && !istAngemeldet(req)) return json(res, 401, { fehler: 'Nicht gekoppelt' });
     if (m !== 'GET' && req.headers['x-zentrale'] !== '1') return json(res, 403, { fehler: 'Verboten' });
@@ -155,6 +169,11 @@ async function api(req, res, url) {
       await schnell().catch(() => {});
       return json(res, 200, r);
     }
+    if (p === '/api/tv/spotify/liste' && m === 'GET') return json(res, 200, await spotifyListe());
+    if (p === '/api/tv/spotify/spielen' && m === 'POST') {
+      const b = await body(req);
+      return json(res, 200, await spotifySpielen({ uri: b.uri, art: b.art }));
+    }
     if (p === '/api/tv/sonos/status' && m === 'GET') return json(res, 200, await sonosStatus());
     if (p === '/api/tv/sonos/favoriten' && m === 'GET') return json(res, 200, await sonosFavoriten());
     if (p === '/api/tv/sonos/raum' && m === 'POST') return json(res, 200, await sonosRaumWaehlen(String((await body(req)).id || '')));
@@ -170,6 +189,14 @@ async function api(req, res, url) {
   if (!istAngemeldet(req)) return json(res, 401, { fehler: 'Nicht angemeldet' });
   // Schutz gegen fremde Seiten: Änderungen nur mit eigenem Header.
   if (m !== 'GET' && req.headers['x-zentrale'] !== '1') return json(res, 403, { fehler: 'Verboten' });
+
+  // ---------- Spotify verbinden (nur mit Anmeldung) ----------
+  if (p === '/api/spotify/status' && m === 'GET') return json(res, 200, spotifyZustand());
+  if (p === '/api/spotify/start' && m === 'GET') {
+    try { res.writeHead(302, { Location: spotifyAnmeldeUrl() }); return res.end(); }
+    catch (e) { return json(res, 400, { fehler: e.message }); }
+  }
+  if (p === '/api/spotify/trennen' && m === 'POST') { spotifyTrennen(); return json(res, 200, { ok: true }); }
 
   // ---------- Fernseher koppeln (nur mit Anmeldung + 2FA) ----------
   if (p === '/api/tv/geraete' && m === 'GET') return json(res, 200, { geraete: tvGeraeteListe() });

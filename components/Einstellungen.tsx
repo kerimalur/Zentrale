@@ -10,6 +10,7 @@ import { Steuerung } from './Steuerung';
 import { EinstellungenKarte } from './Konsole';
 import { SicherheitKarte } from './Sicherheit';
 import { TvKoppelnKarte } from './TvKoppeln';
+import { SpotifyKarte } from './SpotifyKarte';
 
 export function Einstellungen({ z, aktualisieren }: { z: Zustand; aktualisieren: () => void }) {
   return (
@@ -19,6 +20,7 @@ export function Einstellungen({ z, aktualisieren }: { z: Zustand; aktualisieren:
       <EinstellungenKarte z={z} aktualisieren={aktualisieren} />
       <SicherheitKarte />
       <TvKoppelnKarte />
+      <SpotifyKarte />
       <Steuerung z={z} aktualisieren={aktualisieren} />
     </div>
   );

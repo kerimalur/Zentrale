@@ -26,6 +26,8 @@ type Sonos = {
   lied?: { titel: string; kuenstler: string; album: string; position: number; dauer: number } | null;
   cover?: string | null; lautstaerke?: number | null; stumm?: boolean; warteschlange?: { titel: string; kuenstler: string }[];
 };
+type SpotifyEintrag = { uri: string; name: string; bild: string | null };
+type Spotify = { eingerichtet: boolean; verbunden: boolean; playlists: SpotifyEintrag[]; zuletzt: SpotifyEintrag[] };
 type Szenen = { aktiv: string | null; liste: { id: string; name: string }[] };
 type Bildschirm = 'laden' | 'koppeln' | 'start' | 'filme' | 'musik' | 'steuerung' | 'apps';
 type AppEintrag = { name: string; pkg: string };
@@ -104,6 +106,7 @@ export default function TvSeite() {
   const [detail, setDetail] = useState<Karte | null>(null);
   const [sonos, setSonos] = useState<Sonos | null>(null);
   const [favoriten, setFavoriten] = useState<{ index: number; titel: string }[]>([]);
+  const [spotify, setSpotify] = useState<Spotify | null>(null);
   const [szenen, setSzenen] = useState<Szenen | null>(null);
   const [apps, setApps] = useState<AppEintrag[]>(FESTE_APPS);
   const [bruecke, setBruecke] = useState(false);
@@ -277,6 +280,7 @@ export default function TvSeite() {
     if (schirm !== 'musik') return;
     void sonosLaden();
     void sicher(() => api<{ index: number; titel: string }[]>('/api/tv/sonos/favoriten')).then((f) => f && setFavoriten(f));
+    void sicher(() => api<Spotify>('/api/tv/spotify/liste')).then((sp) => sp && setSpotify(sp));
     const t = window.setInterval(() => void sonosLaden(), 4000);
     return () => window.clearInterval(t);
   }, [schirm, sonosLaden, sicher]);
@@ -285,6 +289,14 @@ export default function TvSeite() {
     const r = await sicher(() => api(pfad, daten));
     if (r && text) zeigeMeldung(text);
     void sonosLaden();
+  };
+
+  const spotifySpielen = async (daten: { uri?: string; art?: string }, name: string) => {
+    const r = await sicher(() => api('/api/tv/spotify/spielen', daten));
+    if (r) {
+      zeigeMeldung(`Spotify: ${name}`);
+      window.setTimeout(() => void sonosLaden(), 2500);
+    }
   };
 
   const szeneWaehlen = async (id: string, name: string) => {
@@ -481,6 +493,7 @@ export default function TvSeite() {
         )}
         {sonos?.gefunden && (
           <div className="tv-musik">
+            <div className="tv-musik-links">
             <div className="tv-spieler">
               <div className="tv-cover" style={sonos.cover ? { backgroundImage: `url(${sonos.cover})` } : undefined}>{!sonos.cover && '♪'}</div>
               <div className="tv-lied">
@@ -500,6 +513,23 @@ export default function TvSeite() {
                 </div>
                 <div className="tv-fortschritt"><span>Lautstärke</span><span className="tv-balken lang"><span style={{ width: `${sonos.lautstaerke ?? 0}%` }} /></span><span>{sonos.lautstaerke ?? '–'}</span></div>
               </div>
+            </div>
+            <section className="tv-reihe">
+              <h2>Spotify</h2>
+              {!spotify && <div className="tv-klein">Lade …</div>}
+              {spotify && !spotify.verbunden && <div className="tv-klein">Noch nicht verbunden: Zentrale → Einstellungen → Spotify</div>}
+              {spotify?.verbunden && (
+                <div className="tv-band">
+                  <button data-fok="sp-likes" className="tv-karte quadrat likes" onFocus={() => merken('sp-likes')} onClick={() => void spotifySpielen({ art: 'likes' }, 'Lieblingssongs')}><span className="tv-karte-name">♥ Lieblingssongs</span></button>
+                  {[...spotify.playlists, ...spotify.zuletzt].map((p) => (
+                    <button key={p.uri} data-fok={`sp-${p.uri}`} className="tv-karte quadrat" onFocus={() => merken(`sp-${p.uri}`)} onClick={() => void spotifySpielen({ uri: p.uri }, p.name)}>
+                      {p.bild && <img src={p.bild} alt="" loading="lazy" />}
+                      <span className="tv-karte-name">{p.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
             </div>
             <div className="tv-seite">
               <div className="tv-glas">
