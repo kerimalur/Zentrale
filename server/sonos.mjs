@@ -12,7 +12,9 @@ let suche = null;
 const fehler = (text, status = 409) => Object.assign(new Error(text), { status });
 
 async function gruppenLaden() {
-  const einstieg = await new AsyncDeviceDiscovery().discoverMultiple({ timeout: 3000 }).catch(() => []);
+  // SONOS_IP in .env: feste Adresse einer Box, falls die automatische Suche im Netz nichts findet.
+  const feste = String(process.env.SONOS_IP || '').trim();
+  const einstieg = feste ? [new Sonos(feste)] : await new AsyncDeviceDiscovery().discoverMultiple({ timeout: 3000 }).catch(() => []);
   for (const d of einstieg) {
     try {
       const gruppen = await d.getAllGroups();

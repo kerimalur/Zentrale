@@ -473,7 +473,12 @@ export default function TvSeite() {
       <>
         {kopf('Musik')}
         {!sonos && <div className="tv-klein">{fehler || 'Suche Sonos …'}</div>}
-        {sonos && !sonos.gefunden && <div className="tv-klein">Keine Sonos-Box im Netz gefunden. Läuft die Zentrale im Heimnetz und ist die Box an?</div>}
+        {sonos && !sonos.gefunden && (
+          <div className="tv-mitte">
+            <div className="tv-klein">Keine Sonos-Box im Netz gefunden. Läuft die Zentrale im Heimnetz und ist die Box an?</div>
+            <button data-fok="m-neu" className="tv-knopf primaer" onClick={() => void sonosLaden()}>Erneut suchen</button>
+          </div>
+        )}
         {sonos?.gefunden && (
           <div className="tv-musik">
             <div className="tv-spieler">
