@@ -9,6 +9,7 @@ import { SzenenKarte } from './Uebersicht';
 import { Steuerung } from './Steuerung';
 import { EinstellungenKarte } from './Konsole';
 import { SicherheitKarte } from './Sicherheit';
+import { TvKoppelnKarte } from './TvKoppeln';
 
 export function Einstellungen({ z, aktualisieren }: { z: Zustand; aktualisieren: () => void }) {
   return (
@@ -17,6 +18,7 @@ export function Einstellungen({ z, aktualisieren }: { z: Zustand; aktualisieren:
       <BackupKarte z={z} aktualisieren={aktualisieren} />
       <EinstellungenKarte z={z} aktualisieren={aktualisieren} />
       <SicherheitKarte />
+      <TvKoppelnKarte />
       <Steuerung z={z} aktualisieren={aktualisieren} />
     </div>
   );

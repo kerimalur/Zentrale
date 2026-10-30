@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+html,body{margin:0;height:100%;background:#0b0e14;color:#f2f4f8;font-family:system-ui,sans-serif}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;text-align:center}
+h1{font-size:72px;margin:0}p{font-size:32px;color:#9aa6b8;margin:0;max-width:1200px;line-height:1.5}
+button{font-size:32px;font-weight:700;padding:18px 48px;border-radius:14px;border:0;background:#f5a524;color:#1a1204}
+button:focus{outline:4px solid #fff;outline-offset:4px}
+</style></head>
+<body>
+<h1>Zentrale nicht erreichbar</h1>
+<p>Läuft Tailscale auf der Box und ist der Pi an? Ich versuche es alle 5 Sekunden neu.</p>
+<button id="b" autofocus>Jetzt neu versuchen</button>
+<script>
+function neu(){ try { AndroidTV.retry(); } catch(e) { location.reload(); } }
+document.getElementById('b').addEventListener('click', neu);
+setTimeout(function loop(){ neu(); setTimeout(loop, 5000); }, 5000);
+</script>
+</body></html>

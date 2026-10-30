@@ -10,6 +10,9 @@ import { terminalUpgrade } from './terminal.mjs';
 import { schnell, mittel, langsam, sehrLangsam, speicherLauf, zeitplan, snapshot, sshNurSchluesselSetzen, manuelleSzene, laufwerkeListe, cloudJetzt, tsPeers } from './monitor.mjs';
 import { ordnerLesen, ordnerGroessen } from './explorer.mjs';
 import { szeneSetzen, standardGovernorMerken, hddTimerSetzen } from './szenen.mjs';
+import { kopplungStarten, kopplungStatus, kopplungBestaetigen, tvAngemeldet, tvGeraeteListe, tvGeraetEntfernen } from './tvgeraet.mjs';
+import { filmeUebersicht, filmDetail, bildHolen, startUebersicht, tvSzenen } from './tvdaten.mjs';
+import { sonosStatus, sonosRaumWaehlen, sonosFavoriten, sonosFavoritSpielen, sonosAktion, sonosLauter } from './sonos.mjs';
 import { neustarten } from './collect/docker.mjs';
 import { backupStarten, backupEingerichtet } from './backup.mjs';
 import { gastAnlegen, gastEntfernen, gaesteStatus } from './gaeste.mjs';
@@ -41,7 +44,7 @@ const MIME = {
   '.webmanifest': 'application/manifest+json',
 };
 
-const OEFFENTLICH = [/^\/login\/?$/, /^\/_next\//, /^\/manifest\.webmanifest$/, /^\/icon\.svg$/, /^\/favicon\.ico$/];
+const OEFFENTLICH = [/^\/login\/?$/, /^\/tv(\/|$)/, /^\/_next\//, /^\/manifest\.webmanifest$/, /^\/icon\.svg$/, /^\/favicon\.ico$/];
 
 function json(res, status, daten, extraHeaders = {}) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...extraHeaders });
@@ -122,9 +125,62 @@ async function api(req, res, url) {
     }
   }
 
+  // ---------- Fernseher-Box (TV-Tab): Koppeln ohne Anmeldung, danach eigenes Cookie nur für diese Routen ----------
+  if (p === '/api/tv/koppeln/start' && m === 'POST') {
+    if (req.headers['x-zentrale'] !== '1') return json(res, 403, { fehler: 'Verboten' });
+    return json(res, 200, kopplungStarten());
+  }
+  if (p === '/api/tv/koppeln/status' && m === 'GET') {
+    const r = kopplungStatus(url.searchParams.get('id'));
+    const { cookie, ...rest } = r;
+    return json(res, 200, rest, cookie ? { 'Set-Cookie': cookie } : {});
+  }
+  const tvRoute = /^\/api\/tv\/(start|filme|film|bild|szenen|szene|sonos\/[a-z]+)$/.test(p);
+  if (tvRoute) {
+    if (!tvAngemeldet(req) && !istAngemeldet(req)) return json(res, 401, { fehler: 'Nicht gekoppelt' });
+    if (m !== 'GET' && req.headers['x-zentrale'] !== '1') return json(res, 403, { fehler: 'Verboten' });
+    if (p === '/api/tv/start' && m === 'GET') return json(res, 200, await startUebersicht());
+    if (p === '/api/tv/filme' && m === 'GET') return json(res, 200, await filmeUebersicht());
+    if (p === '/api/tv/film' && m === 'GET') return json(res, 200, await filmDetail(url.searchParams.get('id')));
+    if (p === '/api/tv/bild' && m === 'GET') {
+      const b = await bildHolen(url.searchParams.get('id'), url.searchParams.get('art'));
+      res.writeHead(200, { 'Content-Type': b.typ, 'Cache-Control': 'private, max-age=86400' });
+      return res.end(b.daten);
+    }
+    if (p === '/api/tv/szenen' && m === 'GET') return json(res, 200, tvSzenen());
+    if (p === '/api/tv/szene' && m === 'POST') {
+      const b = await body(req);
+      const r = await szeneSetzen(String(b.id), { auto: false });
+      manuelleSzene();
+      await schnell().catch(() => {});
+      return json(res, 200, r);
+    }
+    if (p === '/api/tv/sonos/status' && m === 'GET') return json(res, 200, await sonosStatus());
+    if (p === '/api/tv/sonos/favoriten' && m === 'GET') return json(res, 200, await sonosFavoriten());
+    if (p === '/api/tv/sonos/raum' && m === 'POST') return json(res, 200, await sonosRaumWaehlen(String((await body(req)).id || '')));
+    if (p === '/api/tv/sonos/favorit' && m === 'POST') return json(res, 200, await sonosFavoritSpielen((await body(req)).index));
+    if (p === '/api/tv/sonos/aktion' && m === 'POST') {
+      const b = await body(req);
+      return json(res, 200, await sonosAktion(String(b.aktion || ''), b.wert));
+    }
+    if (p === '/api/tv/sonos/lauter' && m === 'POST') return json(res, 200, await sonosLauter((await body(req)).delta));
+    return json(res, 404, { fehler: 'Unbekannt' });
+  }
+
   if (!istAngemeldet(req)) return json(res, 401, { fehler: 'Nicht angemeldet' });
   // Schutz gegen fremde Seiten: Änderungen nur mit eigenem Header.
   if (m !== 'GET' && req.headers['x-zentrale'] !== '1') return json(res, 403, { fehler: 'Verboten' });
+
+  // ---------- Fernseher koppeln (nur mit Anmeldung + 2FA) ----------
+  if (p === '/api/tv/geraete' && m === 'GET') return json(res, 200, { geraete: tvGeraeteListe() });
+  if (p === '/api/tv/koppeln/bestaetigen' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, kopplungBestaetigen(b.code, b.name));
+  }
+  if (p === '/api/tv/geraet/entfernen' && m === 'POST') {
+    const b = await body(req);
+    return tvGeraetEntfernen(String(b.id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Gerät unbekannt' });
+  }
 
   if (p === '/api/logout' && m === 'POST') return json(res, 200, { ok: true }, { 'Set-Cookie': logout(req) });
   if (p === '/api/state' && m === 'GET') return json(res, 200, snapshot());

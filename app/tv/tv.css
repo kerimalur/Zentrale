@@ -1,0 +1,103 @@
+/* TV-Tab: fest 1920 x 1080, wird in page.tsx auf den Bildschirm skaliert. */
+.tv-huelle { position: fixed; inset: 0; background: #0b0e14; overflow: hidden; cursor: none; }
+.tv {
+  position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; transform-origin: center center;
+  box-sizing: border-box; color: #f2f4f8; overflow: hidden;
+  font-family: 'Bricolage Grotesque Variable', system-ui, sans-serif;
+  background: linear-gradient(rgba(11, 14, 20, 0.8), rgba(11, 14, 20, 0.9)), url(/tv/hintergrund.jpg) center / cover no-repeat #0b0e14;
+}
+.tv * { box-sizing: border-box; }
+.tv button { font-family: inherit; color: inherit; border: 0; cursor: none; }
+.tv [data-fok]:focus { outline: 4px solid #fff; outline-offset: 4px; }
+.tv [data-fok]:focus-visible { outline: 4px solid #fff; outline-offset: 4px; }
+.tv-inhalt { position: absolute; inset: 0; padding: 56px 80px; display: flex; flex-direction: column; gap: 32px; }
+
+.tv-mitte { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 36px; text-align: center; }
+.tv-gross { font-size: 96px; font-weight: 800; }
+.tv-klein { font-size: 26px; color: #9aa6b8; }
+.tv-code { font-size: 190px; font-weight: 800; letter-spacing: 16px; color: #f5a524; font-variant-numeric: tabular-nums; }
+.tv-schritte { font-size: 32px; line-height: 1.7; color: #c4cdda; text-align: left; margin: 0; padding-left: 40px; }
+
+.tv-oben { display: flex; justify-content: space-between; align-items: center; height: 90px; flex: none; }
+.tv-zeit { display: flex; align-items: baseline; gap: 28px; }
+.tv-uhr { font-size: 72px; font-weight: 800; letter-spacing: -1px; }
+.tv-datum { font-size: 28px; color: #9aa6b8; }
+.tv-chips { display: flex; gap: 16px; }
+.tv-chip { display: flex; align-items: center; gap: 10px; padding: 12px 22px; border-radius: 40px; font-size: 24px; color: #9aa6b8; background: rgba(20, 26, 36, 0.72); }
+.tv-chip.ok { color: #5eead4; }
+.tv-chip.ok i { width: 12px; height: 12px; border-radius: 6px; background: #5eead4; display: inline-block; }
+.tv-chip.warn { color: #f5a524; }
+.tv-chip.hell { color: #f2f4f8; }
+
+.tv-spalten { display: flex; gap: 40px; flex: 1; min-height: 0; }
+.tv-links { width: 1160px; display: flex; flex-direction: column; gap: 28px; min-height: 0; }
+.tv-rechts { width: 520px; display: flex; flex-direction: column; gap: 20px; }
+
+.tv-held {
+  height: 360px; flex: none; border-radius: 28px; padding: 48px; display: flex; flex-direction: column; justify-content: flex-end; gap: 14px;
+  background: linear-gradient(120deg, #1e2a44 0%, #2b1d3a 55%, #3a2414 100%) center / cover no-repeat;
+}
+.tv-label { font-size: 24px; color: #f5a524; font-weight: 600; letter-spacing: 2px; }
+.tv-held-titel { font-size: 64px; font-weight: 800; line-height: 1.05; }
+.tv-held-info { font-size: 26px; color: #c4cdda; }
+.tv-held-zeile { display: flex; align-items: center; gap: 24px; margin-top: 6px; flex-wrap: wrap; }
+.tv-knopf { font-size: 28px; font-weight: 700; padding: 16px 40px; border-radius: 14px; background: #2a3344; }
+.tv-knopf.primaer { background: #f5a524; color: #1a1204; font-weight: 800; }
+
+.tv-balken { display: block; height: 8px; border-radius: 4px; background: #3a4458; overflow: hidden; }
+.tv-balken.lang { flex: 1; min-width: 200px; }
+.tv-balken > span { display: block; height: 100%; background: #f5a524; border-radius: 4px; }
+.tv-fortschritt { display: flex; align-items: center; gap: 20px; font-size: 24px; color: #c4cdda; margin-top: 10px; }
+
+.tv-reihe { display: flex; flex-direction: column; gap: 14px; flex: none; }
+.tv-reihe h2 { margin: 0; font-size: 28px; font-weight: 600; }
+.tv-band { display: flex; gap: 20px; overflow-x: auto; overflow-y: hidden; padding: 10px 6px 14px; margin: -10px -6px -14px; scrollbar-width: none; }
+.tv-band::-webkit-scrollbar { display: none; }
+.tv-karte { position: relative; flex: none; width: 220px; height: 330px; border-radius: 16px; overflow: hidden; padding: 0; background: #1b2330; display: block; text-align: left; }
+.tv-karte.breit { width: 270px; height: 152px; }
+.tv-karte img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.tv-karte-name { position: absolute; left: 0; right: 0; bottom: 0; padding: 36px 16px 14px; font-size: 22px; font-weight: 600; line-height: 1.15; background: linear-gradient(transparent, rgba(0, 0, 0, 0.85)); }
+.tv-karte .tv-balken { position: absolute; left: 12px; right: 12px; bottom: 8px; height: 6px; }
+
+.tv-kacheln { display: flex; gap: 20px; flex: none; }
+.tv-kachel { width: 200px; height: 120px; border-radius: 20px; background: rgba(20, 26, 36, 0.72); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; font-size: 24px; font-weight: 600; }
+
+.tv-glas { border-radius: 24px; background: rgba(20, 26, 36, 0.78); padding: 28px; display: flex; flex-direction: column; gap: 10px; }
+.tv-glas-titel { font-size: 24px; color: #9aa6b8; }
+.tv-zeile-text { display: flex; gap: 18px; font-size: 28px; align-items: baseline; }
+.tv-zeile-text b { color: #f5a524; font-weight: 800; min-width: 84px; }
+.tv-zeile-text.mut { color: #9aa6b8; font-size: 24px; }
+.tv-zahlen { display: flex; gap: 40px; font-size: 28px; }
+.tv-zahlen span { display: flex; flex-direction: column; gap: 2px; color: #c4cdda; }
+.tv-zahlen big { font-size: 40px; font-weight: 800; color: #f2f4f8; }
+
+.tv-kopf { display: flex; justify-content: space-between; align-items: center; height: 70px; flex: none; }
+.tv-kopf h1 { margin: 0; font-size: 56px; font-weight: 800; }
+.tv-uhr-klein { font-size: 36px; color: #9aa6b8; }
+.tv-scroll { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 28px; }
+.tv-fuss { display: flex; gap: 40px; font-size: 24px; color: #9aa6b8; height: 40px; align-items: center; flex: none; white-space: pre; }
+
+.tv-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; }
+.tv-grid.apps { grid-template-columns: repeat(5, 1fr); }
+.tv-gross-knopf { height: 150px; border-radius: 24px; background: rgba(20, 26, 36, 0.78); font-size: 34px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.tv-gross-knopf.aktiv { background: #f5a524; color: #1a1204; }
+.tv-gross-knopf small { font-size: 22px; font-weight: 600; }
+
+.tv-musik { display: flex; gap: 40px; flex: 1; min-height: 0; }
+.tv-spieler { width: 1100px; display: flex; gap: 48px; align-items: flex-start; }
+.tv-cover { flex: none; width: 420px; height: 420px; border-radius: 28px; background: #1b2330 center / cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 160px; color: #3a4458; }
+.tv-lied { flex: 1; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.tv-lied .tv-held-titel { font-size: 52px; }
+.tv-seite { width: 620px; display: flex; flex-direction: column; gap: 20px; }
+.tv-liste { display: flex; flex-direction: column; gap: 8px; }
+.tv-eintrag { text-align: left; font-size: 28px; padding: 14px 20px; border-radius: 14px; background: rgba(42, 51, 68, 0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-eintrag.aktiv { background: #f5a524; color: #1a1204; font-weight: 700; }
+
+.tv-meldung { position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); font-size: 30px; padding: 16px 36px; border-radius: 40px; background: #f2f4f8; color: #0b0e14; font-weight: 600; z-index: 30; }
+.tv-fehler { position: absolute; left: 80px; right: 80px; bottom: 16px; font-size: 22px; color: #fca5a5; text-align: center; z-index: 20; }
+
+.tv-detail { position: absolute; inset: 0; background: rgba(5, 7, 11, 0.8); z-index: 10; display: flex; align-items: center; justify-content: center; }
+.tv-detail-karte { position: relative; width: 1560px; height: 720px; border-radius: 32px; background: #141a24 center / cover no-repeat; overflow: hidden; display: flex; justify-content: space-between; }
+.tv-detail-text { width: 900px; padding: 56px; display: flex; flex-direction: column; gap: 16px; }
+.tv-beschreibung { margin: 0; font-size: 28px; line-height: 1.4; color: #c4cdda; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.tv-detail-bild { height: 100%; width: auto; max-width: 480px; object-fit: cover; flex: none; }
