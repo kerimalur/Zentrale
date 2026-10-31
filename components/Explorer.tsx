@@ -31,14 +31,17 @@ export function Explorer({ laufwerke, start, schliessen }: { laufwerke: Laufwerk
   const lw = laufwerke.find((l) => l.mount === wurzel);
 
   // Escape schliesst, Seite dahinter scrollt nicht.
+  // schliessen über Ref lesen, sonst läuft der Effekt bei jedem Rendern neu und holt den Fokus zurück auf den Schliessen-Knopf.
+  const schliessenRef = useRef(schliessen);
+  schliessenRef.current = schliessen;
   useEffect(() => {
     const vorher = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     zu.current?.focus();
-    const taste = (e: KeyboardEvent) => { if (e.key === 'Escape') schliessen(); };
+    const taste = (e: KeyboardEvent) => { if (e.key === 'Escape') schliessenRef.current(); };
     window.addEventListener('keydown', taste);
     return () => { document.body.style.overflow = vorher; window.removeEventListener('keydown', taste); };
-  }, [schliessen]);
+  }, []);
 
   useEffect(() => {
     const ctrl = new AbortController();

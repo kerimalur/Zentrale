@@ -29,7 +29,7 @@ import { heuteZustand, anmeldeUrl, rueckkehr, trennen as googleTrennen, mailAkti
 import { statistik as gvaStatistik, statistikStandardSetzen, beispiel as gvaBeispiel } from './tradingStatistik.mjs';
 import { laborListe, laborIdee, laborIdeeSpeichern, laborIdeeLoeschen, laborStarten, laborForwardOeffnen, laborLauf, laborErgebnis, laborAbbrechen, laborBausteine, laborStart, laborIdeeMeta, laborVarianteVorbereiten, laborZettel, laborZettelSpeichern, laborZettelLoeschen, laborReiheSpeichern, laborReiheLoeschen, laborReiheVorschau, laborExport, laborImport, laborLaufLoeschen, laborTradeChart, laborGvaMuster, laborLaeufeFertig, laborVergleich } from './labor/labor.mjs';
 import { laborPdfLauf, laborPdfVergleich } from './labor/pdf.mjs';
-import { journalZustand, tradeSpeichern, tradeLoeschen, journalEinstellungenSetzen, bildSpeichern, bildPfad, importieren } from './journal.mjs';
+import { journalZustand, tradeSpeichern, tradeLoeschen, tradesLoeschen, journalEinstellungenSetzen, bildSpeichern, bildPfad, importieren } from './journal.mjs';
 import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
 ensureDataDir();
@@ -296,6 +296,7 @@ async function api(req, res, url) {
   }
   if (p === '/api/journal/trade' && m === 'DELETE') {
     const b = await body(req);
+    if (Array.isArray(b.ids)) return json(res, 200, { ok: true, geloescht: tradesLoeschen(b.ids.slice(0, 5000)) });
     return tradeLoeschen(String(b.id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
   }
   if (p === '/api/journal/einstellungen' && m === 'POST') return json(res, 200, journalEinstellungenSetzen(await body(req)));
