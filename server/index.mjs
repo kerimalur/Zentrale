@@ -29,7 +29,7 @@ import { heuteZustand, anmeldeUrl, rueckkehr, trennen as googleTrennen, mailAkti
 import { statistik as gvaStatistik, statistikStandardSetzen, beispiel as gvaBeispiel } from './tradingStatistik.mjs';
 import { laborListe, laborIdee, laborIdeeSpeichern, laborIdeeLoeschen, laborStarten, laborForwardOeffnen, laborLauf, laborErgebnis, laborAbbrechen, laborBausteine, laborStart, laborIdeeMeta, laborVarianteVorbereiten, laborZettel, laborZettelSpeichern, laborZettelLoeschen, laborReiheSpeichern, laborReiheLoeschen, laborReiheVorschau, laborExport, laborImport, laborLaufLoeschen, laborTradeChart, laborGvaMuster, laborLaeufeFertig, laborVergleich } from './labor/labor.mjs';
 import { laborPdfLauf, laborPdfVergleich } from './labor/pdf.mjs';
-import { journalZustand, tradeSpeichern, tradeLoeschen, tradesLoeschen, journalEinstellungenSetzen, bildSpeichern, bildPfad, importieren } from './journal.mjs';
+import { journalZustand, tradeSpeichern, tradeLoeschen, tradesLoeschen, kontoSpeichern, kontoLoeschen, cashflowSpeichern, cashflowLoeschen, journalEinstellungenSetzen, bildSpeichern, bildPfad, importieren } from './journal.mjs';
 import { netzwerkZustand, netzwerkSuchen, portsPruefen, geraetSetzen, wacheSetzen, netzwache } from './netzwerk.mjs';
 
 ensureDataDir();
@@ -298,6 +298,21 @@ async function api(req, res, url) {
     const b = await body(req);
     if (Array.isArray(b.ids)) return json(res, 200, { ok: true, geloescht: tradesLoeschen(b.ids.slice(0, 5000)) });
     return tradeLoeschen(String(b.id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
+  }
+  if (p === '/api/journal/konto' && m === 'POST') {
+    try { return json(res, 200, kontoSpeichern(await body(req))); }
+    catch (e) { return json(res, e.status || 400, { fehler: e.message }); }
+  }
+  if (p === '/api/journal/konto' && m === 'DELETE') {
+    try { return kontoLoeschen(String((await body(req)).id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' }); }
+    catch (e) { return json(res, e.status || 400, { fehler: e.message }); }
+  }
+  if (p === '/api/journal/cashflow' && m === 'POST') {
+    try { return json(res, 200, cashflowSpeichern(await body(req))); }
+    catch (e) { return json(res, e.status || 400, { fehler: e.message }); }
+  }
+  if (p === '/api/journal/cashflow' && m === 'DELETE') {
+    return cashflowLoeschen(String((await body(req)).id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
   }
   if (p === '/api/journal/einstellungen' && m === 'POST') return json(res, 200, journalEinstellungenSetzen(await body(req)));
   if (p === '/api/journal/import' && m === 'POST') return json(res, 200, importieren((await body(req, 4 * 1024 * 1024)).trades));

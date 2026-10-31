@@ -1,14 +1,22 @@
-// Trading-Journal: Typen und alle Rechnungen (R, Kennzahlen, Drawdown, Serien, Monte Carlo).
-// Grundsatz: Alles wird in R gerechnet (1 R = Anfangsrisiko des Trades), EUR kommt zusätzlich dazu.
+// Trading-Journal: Typen und alle Rechnungen (Rendite in %, Kennzahlen, Drawdown, Serien, Monte Carlo).
+// Live-Trades zählen in Geld (Ergebnis in EUR) und in % vom Kontostand zum Zeitpunkt des Trades (Ein-/Auszahlungen
+// werden herausgerechnet, siehe geldAuswertung). R (1 R = Anfangsrisiko) gibt es zusätzlich für Backtests und Trades mit Risiko.
 
 export type JArt = 'live' | 'backtest';
 export type JRichtung = 'long' | 'short';
+export type JAusgang = 'tp' | 'sl' | 'be' | 'trail';
+export const AUSGANG_TEXT: Record<JAusgang, string> = { tp: 'Take-Profit', sl: 'Stop-Loss', be: 'Break-Even', trail: 'SL im Profit' };
+
+export interface JKonto { id: string; name: string }
+export interface JCashflow { id: string; konto: string; datum: string; betrag: number; art: 'einzahlung' | 'auszahlung' } // betrag immer positiv
 
 export interface JTrade {
   id: string;
   art: JArt;
+  konto?: string | null; // nur Live-Trades
+  ausgang?: JAusgang | null; // wie der Trade endete (automatisch aus dem Vorzeichen, von Hand änderbar)
   pair: string;
-  richtung: JRichtung;
+  richtung: JRichtung | null; // leer, wenn nicht erfasst
   eroeffnet: string; // JJJJ-MM-TT oder JJJJ-MM-TTTHH:mm
   geschlossen: string | null;
   entry: number | null; // leer nur bei importierten Backtests, die nur R kennen
@@ -43,6 +51,8 @@ export interface JEinstellungen {
 
 export interface JournalZustand {
   trades: JTrade[];
+  konten: JKonto[];
+  cashflows: JCashflow[];
   einstellungen: JEinstellungen;
   umrechnung: Record<string, number | null>; // 1 Einheit Quote-Währung = x EUR
   paare: string[];
@@ -60,7 +70,17 @@ export function rVon(t: JTrade): { r: number | null; quelle: RQuelle } {
   if (t.exit !== null) { const r = rAusKurs(t, t.exit); if (r !== null) return { r, quelle: 'kurs' }; }
   return { r: null, quelle: null };
 }
-export const istGeschlossen = (t: JTrade) => rVon(t).r !== null;
+// Geschlossen = ein Ergebnis ist da: Geld (Ergebnis in EUR) oder R.
+export const istGeschlossen = (t: JTrade) => t.ergebnisEur !== null || rVon(t).r !== null;
+export const ausgangAuto = (eur: number): JAusgang => (eur > 0 ? 'tp' : eur < 0 ? 'sl' : 'be');
+export const ausgangVon = (t: JTrade): JAusgang | null => t.ausgang ?? (t.ergebnisEur !== null ? ausgangAuto(t.ergebnisEur) : null);
+// Gewinner / Verlierer / Break-Even. Break-Even gilt bei Ergebnis genau 0 oder wenn du den Ausgang von Hand auf Break-Even gesetzt hast.
+export type JKlasse = 'g' | 'v' | 'be';
+export function klasseVon(t: JTrade): JKlasse | null {
+  if (t.ergebnisEur === null) return null;
+  if (t.ausgang === 'be') return 'be';
+  return t.ergebnisEur > 0 ? 'g' : t.ergebnisEur < 0 ? 'v' : 'be';
+}
 export function eurVon(t: JTrade): number | null {
   if (t.ergebnisEur !== null) return t.ergebnisEur;
   const { r } = rVon(t);
@@ -207,6 +227,104 @@ export function kennzahlen(g: JGeschlossen[], e: Pick<JEinstellungen, 'beSchwell
   };
 }
 
+// ---------- Geld und Rendite in % (Live-Trades mit Ergebnis in EUR) ----------
+// Die Rendite eines Trades ist Ergebnis ÷ Kontostand direkt davor. Der Kontostand enthält alle Einzahlungen und Auszahlungen bis dahin.
+// Die Gesamtrendite verkettet die Einzelrenditen (zeitgewichtet): Ein- und Auszahlungen verändern sie nicht.
+// Beispiel: 100 € Konto, +10 € = +10 %. Dann 900 € eingezahlt (1010 €), +10 € = +0,99 %. Gesamt: 1,10 × 1,0099 − 1 = +11,09 %.
+// Am selben Tag gilt: Einzahlungen zuerst, dann die Trades, dann Auszahlungen.
+export interface JPosten { t: JTrade; eur: number; datum: string; klasse: JKlasse; vorher: number | null; prozent: number | null }
+export interface JGeld {
+  posten: JPosten[]; // im gewählten Zeitraum
+  alle: JPosten[]; // gesamte Chronologie (für die Prozent je Trade)
+  n: number; gewinner: number; verlierer: number; be: number;
+  trefferquote: number | null;
+  trefferBereich: [number, number] | null;
+  summeEur: number;
+  einzahlungen: number; auszahlungen: number; kontostand: number;
+  rendite: number | null; // als Anteil: 0,1 = +10 %
+  schnittGewinnEur: number | null; schnittVerlustEur: number | null; // Verlust negativ
+  schnittGewinnProzent: number | null; schnittVerlustProzent: number | null;
+  verhaeltnis: number | null; // Ø Gewinn ÷ Ø Verlust (Betrag)
+  erwartungEur: number | null; erwartungProzent: number | null;
+  profitFaktor: number | null;
+  maxDdProzent: number | null;
+  verlustSerie: number; gewinnSerie: number;
+  ohneKapital: number; // Trades, vor denen noch keine Einzahlung eingetragen ist (Prozent nicht berechenbar)
+  kurve: { datum: string; kumProzent: number; kumEur: number }[];
+}
+
+export const datumVon = (t: JTrade) => (t.geschlossen || t.eroeffnet).slice(0, 10);
+
+export function geldAuswertung(trades: JTrade[], cashflows: JCashflow[], ab = ''): JGeld {
+  type Ereignis = { datum: string; rang: number; zeit: string; trade?: JTrade; cf?: JCashflow };
+  const ereignisse: Ereignis[] = [
+    ...cashflows.map((c): Ereignis => ({ datum: c.datum.slice(0, 10), rang: c.art === 'einzahlung' ? 0 : 2, zeit: '', cf: c })),
+    ...trades.filter((t) => t.ergebnisEur !== null).map((t): Ereignis => ({ datum: datumVon(t), rang: 1, zeit: t.geschlossen || t.eroeffnet, trade: t })),
+  ].sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : a.rang - b.rang || (a.zeit < b.zeit ? -1 : a.zeit > b.zeit ? 1 : 0)));
+
+  let stand = 0, einz = 0, ausz = 0;
+  const alle: JPosten[] = [];
+  for (const ev of ereignisse) {
+    if (ev.cf) {
+      if (ev.cf.art === 'einzahlung') { stand += ev.cf.betrag; einz += ev.cf.betrag; }
+      else { stand -= ev.cf.betrag; ausz += ev.cf.betrag; }
+    } else if (ev.trade) {
+      const eur = ev.trade.ergebnisEur as number;
+      const vorher = stand > 0 ? stand : null;
+      alle.push({ t: ev.trade, eur, datum: ev.datum, klasse: klasseVon(ev.trade) as JKlasse, vorher, prozent: vorher === null ? null : eur / vorher });
+      stand += eur;
+    }
+  }
+
+  const posten = alle.filter((p) => p.datum >= ab);
+  const gew = posten.filter((p) => p.klasse === 'g'), ver = posten.filter((p) => p.klasse === 'v');
+  const prozentVon = (a: JPosten[]) => a.map((p) => p.prozent).filter((x): x is number => x !== null);
+  const eurs = posten.map((p) => p.eur);
+
+  let index = 1, spitze = 1, maxDd = 0, kumEur = 0, ohneKapital = 0, serieV = 0, serieG = 0, maxV = 0, maxG = 0;
+  const kurve: JGeld['kurve'] = [];
+  for (const p of posten) {
+    kumEur += p.eur;
+    if (p.prozent === null) ohneKapital++;
+    else { index *= 1 + p.prozent; spitze = Math.max(spitze, index); maxDd = Math.max(maxDd, (spitze - index) / spitze); }
+    kurve.push({ datum: p.datum, kumProzent: index - 1, kumEur });
+    if (p.klasse === 'v') { serieV++; serieG = 0; } else if (p.klasse === 'g') { serieG++; serieV = 0; }
+    maxV = Math.max(maxV, serieV); maxG = Math.max(maxG, serieG);
+  }
+  const hatProzent = posten.some((p) => p.prozent !== null);
+  const summePos = eurs.filter((x) => x > 0).reduce((a, b) => a + b, 0);
+  const summeNeg = -eurs.filter((x) => x < 0).reduce((a, b) => a + b, 0);
+  const sGew = mittel(gew.map((p) => p.eur)), sVer = mittel(ver.map((p) => p.eur));
+  const entschieden = gew.length + ver.length;
+  return {
+    posten, alle,
+    n: posten.length, gewinner: gew.length, verlierer: ver.length, be: posten.length - gew.length - ver.length,
+    trefferquote: entschieden ? gew.length / entschieden : null,
+    trefferBereich: wilson(gew.length, entschieden),
+    summeEur: kumEur, einzahlungen: einz, auszahlungen: ausz, kontostand: stand,
+    rendite: hatProzent ? index - 1 : null,
+    schnittGewinnEur: sGew, schnittVerlustEur: sVer,
+    schnittGewinnProzent: mittel(prozentVon(gew)), schnittVerlustProzent: mittel(prozentVon(ver)),
+    verhaeltnis: sGew !== null && sVer !== null && sVer !== 0 ? sGew / Math.abs(sVer) : null,
+    erwartungEur: mittel(eurs), erwartungProzent: mittel(prozentVon(posten)),
+    profitFaktor: summeNeg > 0 ? summePos / summeNeg : summePos > 0 ? Infinity : null,
+    maxDdProzent: hatProzent ? maxDd : null,
+    verlustSerie: maxV, gewinnSerie: maxG,
+    ohneKapital, kurve,
+  };
+}
+
+export interface JGruppeGeld { schluessel: string; n: number; summeEur: number; schnittEur: number; trefferquote: number | null }
+export function gruppierenGeld(p: JPosten[], fn: (x: JPosten) => string | null): JGruppeGeld[] {
+  const m = new Map<string, JPosten[]>();
+  for (const x of p) { const k = fn(x); if (k === null) continue; const a = m.get(k) || []; a.push(x); m.set(k, a); }
+  return [...m.entries()].map(([schluessel, a]) => {
+    const g = a.filter((x) => x.klasse === 'g').length, v = a.filter((x) => x.klasse === 'v').length;
+    const summe = a.reduce((s, x) => s + x.eur, 0);
+    return { schluessel, n: a.length, summeEur: summe, schnittEur: summe / a.length, trefferquote: g + v ? g / (g + v) : null };
+  }).sort((a, b) => b.summeEur - a.summeEur);
+}
+
 // Aufschlüsselung nach einem Merkmal (Paar, Richtung, Zeitrahmen, Wochentag …)
 export interface JGruppe { schluessel: string; n: number; summeR: number; erwartung: number; trefferquote: number | null }
 export function gruppieren(g: JGeschlossen[], fn: (x: JGeschlossen) => string | null, beSchwelle: number): JGruppe[] {
@@ -221,8 +339,9 @@ export const WOCHENTAGE = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 export const wochentag = (iso: string) => WOCHENTAGE[new Date(iso.slice(0, 10) + 'T12:00:00Z').getUTCDay()];
 
 // Verteilung der R-Werte in Schritten von 0,5 R (Ränder zusammengefasst)
-export function verteilung(rs: number[]): { von: number; bis: number; n: number }[] {
-  const kl = [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5];
+export const GRENZEN_R = [-2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5];
+export const GRENZEN_PROZENT = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
+export function verteilung(rs: number[], kl: number[] = GRENZEN_R): { von: number; bis: number; n: number }[] {
   const out = [{ von: -Infinity, bis: kl[0], n: 0 }];
   for (let i = 0; i < kl.length - 1; i++) out.push({ von: kl[i], bis: kl[i + 1], n: 0 });
   out.push({ von: kl[kl.length - 1], bis: Infinity, n: 0 });
@@ -256,15 +375,22 @@ function zufall(seed: number) { // reproduzierbar, damit sich die Zahlen beim Ne
   return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
 const quantil = (sortiert: number[], q: number) => sortiert[Math.min(sortiert.length - 1, Math.max(0, Math.floor(q * sortiert.length)))];
+// Aus R-Werten: jeder Trade verändert das Konto um R × festes Risiko in %.
 export function monteCarlo(rs: number[], risikoProzent: number, trades = 100, laeufe = 5000, grenzen = [5, 10, 20]): JMonteCarlo | null {
-  if (rs.length < 10) return null;
-  const rnd = zufall(rs.length * 7919 + Math.round(rs.reduce((a, b) => a + b, 0) * 1000));
-  const risiko = risikoProzent / 100;
+  return simuliere(rs.map((r) => r * (risikoProzent / 100)), risikoProzent, trades, laeufe, grenzen);
+}
+// Aus den echten Renditen deiner Trades (Anteil vom Kontostand, z. B. 0,012 = +1,2 %): kein festes Risiko nötig.
+export function monteCarloProzent(renditen: number[], trades = 100, laeufe = 5000, grenzen = [5, 10, 20]): JMonteCarlo | null {
+  return simuliere(renditen, 0, trades, laeufe, grenzen);
+}
+function simuliere(renditen: number[], risikoProzent: number, trades: number, laeufe: number, grenzen: number[]): JMonteCarlo | null {
+  if (renditen.length < 10) return null;
+  const rnd = zufall(renditen.length * 7919 + Math.round(renditen.reduce((a, b) => a + b, 0) * 100_000));
   const dds: number[] = [], endw: number[] = [];
   for (let l = 0; l < laeufe; l++) {
     let k = 1, spitze = 1, dd = 0;
     for (let i = 0; i < trades; i++) {
-      k *= Math.max(0, 1 + rs[Math.floor(rnd() * rs.length)] * risiko);
+      k *= Math.max(0, 1 + renditen[Math.floor(rnd() * renditen.length)]);
       if (k > spitze) spitze = k;
       dd = Math.max(dd, (spitze - k) / spitze);
     }
@@ -274,7 +400,7 @@ export function monteCarlo(rs: number[], risikoProzent: number, trades = 100, la
   dds.sort((a, b) => a - b);
   endw.sort((a, b) => a - b);
   return {
-    laeufe, trades, risiko: risikoProzent,
+    laeufe, trades, risiko: risikoProzent, // 0 = aus echten Renditen
     ddP: { p50: quantil(dds, 0.5), p90: quantil(dds, 0.9), p95: quantil(dds, 0.95), p99: quantil(dds, 0.99) },
     ergebnisP: { p5: quantil(endw, 0.05), p50: quantil(endw, 0.5), p95: quantil(endw, 0.95) },
     chanceDd: grenzen.map((g) => ({ grenze: g, p: dds.filter((x) => x >= g).length / laeufe })),
@@ -285,4 +411,7 @@ export function monteCarlo(rs: number[], risikoProzent: number, trades = 100, la
 // ---------- Formatierung ----------
 export const rText = (r: number | null | undefined, stellen = 2) => (r === null || r === undefined || !Number.isFinite(r) ? '—' : `${r > 0 ? '+' : r < 0 ? '−' : ''}${Math.abs(r).toFixed(stellen).replace('.', ',')} R`);
 export const eurText = (x: number | null | undefined) => (x === null || x === undefined ? '—' : `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x).toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
+export const eurOhneVz = (x: number | null | undefined) => (x === null || x === undefined ? '—' : `${x < 0 ? '−' : ''}${Math.abs(x).toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`);
+// Anteil als Prozent mit Vorzeichen: 0,1109 → «+11,09 %»
+export const pText = (x: number | null | undefined, stellen = 2) => (x === null || x === undefined || !Number.isFinite(x) ? '—' : `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x * 100).toFixed(stellen).replace('.', ',')} %`);
 export const prozent = (x: number | null | undefined, stellen = 0) => (x === null || x === undefined ? '—' : `${(x * 100).toFixed(stellen).replace('.', ',')} %`);

@@ -15,11 +15,20 @@ const STANDARD = {
   checkliste: [], // Regel-Checkliste (kommt später)
 };
 
+// Im Journal darf zusätzlich Gold gehandelt sein (der Screener bleibt bei den 28 Währungspaaren).
+const JPAARE = [...PAARE, 'XAUUSD'];
+const fehler400 = (t, status = 400) => Object.assign(new Error(t), { status });
+
 function jd() {
   const d = db();
   d.journal ||= { trades: [], einstellungen: {} };
-  d.journal.einstellungen = { ...STANDARD, ...d.journal.einstellungen };
-  return d.journal;
+  const j = d.journal;
+  j.einstellungen = { ...STANDARD, ...j.einstellungen };
+  // Konten und Ein-/Auszahlungen (neu): immer mindestens ein Konto, alte Live-Trades gehören dem ersten.
+  if (!Array.isArray(j.konten) || !j.konten.length) j.konten = [{ id: 'haupt', name: 'Hauptkonto' }];
+  if (!Array.isArray(j.cashflows)) j.cashflows = [];
+  for (const t of j.trades) if (t.art !== 'backtest' && !t.konto) t.konto = j.konten[0].id;
+  return j;
 }
 
 // Umrechnung Quote-Währung → EUR (1 Einheit Quote-Währung = x EUR) aus den Live-Kursen des Trading-Tabs.
@@ -34,7 +43,7 @@ function umrechnung() {
 
 export function journalZustand() {
   const j = jd();
-  return { trades: j.trades, einstellungen: j.einstellungen, umrechnung: umrechnung(), paare: PAARE };
+  return { trades: j.trades, konten: j.konten, cashflows: j.cashflows, einstellungen: j.einstellungen, umrechnung: umrechnung(), paare: JPAARE };
 }
 
 export const BILD = /^[0-9a-f-]{36}\.(jpg|png)$/;
@@ -42,31 +51,47 @@ const bildOrdner = () => path.join(config.dataDir, 'journal-bilder');
 const zahl = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
 const DATUM = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/;
 
+const AUSGAENGE = ['tp', 'sl', 'be', 'trail'];
+
+// Pflicht sind nur Paar, Datum und Ergebnis in EUR. Alles andere ist freiwillig.
+// Ein Trade ohne Ergebnis (noch offen) braucht dafür Entry und Stop-Loss.
 function pruefen(b) {
-  const f = (t) => { throw Object.assign(new Error(t), { status: 400 }); };
+  const f = (t) => { throw fehler400(t); };
+  const j = jd();
   const pair = String(b.pair || '').toUpperCase().replace('/', '');
-  if (!PAARE.includes(pair)) f('Unbekanntes Paar');
-  const richtung = b.richtung === 'short' ? 'short' : b.richtung === 'long' ? 'long' : f('Richtung fehlt');
+  if (!JPAARE.includes(pair)) f('Unbekanntes Paar');
   const art = b.art === 'backtest' ? 'backtest' : 'live';
-  if (!DATUM.test(String(b.eroeffnet || ''))) f('Eröffnung: Datum fehlt');
+  if (!DATUM.test(String(b.eroeffnet || ''))) f('Datum fehlt');
   const geschlossen = b.geschlossen ? String(b.geschlossen) : null;
   if (geschlossen && !DATUM.test(geschlossen)) f('Schliessung: Datum ungültig');
   const entry = zahl(b.entry), sl = zahl(b.sl), tp = zahl(b.tp), exit = zahl(b.exit);
-  const nurR = zahl(b.rManuell) !== null && entry === null && sl === null; // z. B. importierte Backtests nur mit R
-  if (!nurR) {
-    if (!(entry > 0)) f('Entry fehlt');
-    if (!(sl > 0)) f('Stop-Loss fehlt');
-    if (richtung === 'long' && !(sl < entry)) f('Long: Stop-Loss muss unter dem Entry liegen');
-    if (richtung === 'short' && !(sl > entry)) f('Short: Stop-Loss muss über dem Entry liegen');
-    if (tp !== null && !(tp > 0)) f('Take-Profit ungültig');
-    if (tp !== null && (richtung === 'long' ? tp <= entry : tp >= entry)) f('Take-Profit liegt auf der falschen Seite');
-  } else if (tp !== null || exit !== null) f('Ohne Entry und Stop-Loss bitte nur R eintragen');
-  if (exit !== null && !(exit > 0)) f('Ausstieg ungültig');
   const lots = zahl(b.lots), risikoEur = zahl(b.risikoEur), ergebnisEur = zahl(b.ergebnisEur), rManuell = zahl(b.rManuell);
   if (lots !== null && !(lots > 0)) f('Lots ungültig');
   if (risikoEur !== null && !(risikoEur > 0)) f('Risiko in EUR muss positiv sein');
   if (ergebnisEur !== null && !Number.isFinite(ergebnisEur)) f('Ergebnis ungültig');
   if (rManuell !== null && !Number.isFinite(rManuell)) f('R ungültig');
+  const hatKurse = entry !== null || sl !== null;
+  if (!hatKurse && ergebnisEur === null && rManuell === null) f('Ergebnis in EUR fehlt (offene Trades brauchen Entry und Stop-Loss)');
+  let richtung = b.richtung === 'short' ? 'short' : b.richtung === 'long' ? 'long' : null;
+  if (hatKurse) {
+    if (!(entry > 0)) f('Entry fehlt');
+    if (!(sl > 0)) f('Stop-Loss fehlt');
+    if (entry === sl) f('Entry und Stop-Loss dürfen nicht gleich sein');
+    const echt = sl < entry ? 'long' : 'short';
+    if (richtung && richtung !== echt) f(richtung === 'long' ? 'Long: Stop-Loss muss unter dem Entry liegen' : 'Short: Stop-Loss muss über dem Entry liegen');
+    richtung = echt; // ohne Angabe ergibt sich die Richtung aus Entry und Stop-Loss
+    if (tp !== null && !(tp > 0)) f('Take-Profit ungültig');
+    if (tp !== null && (richtung === 'long' ? tp <= entry : tp >= entry)) f('Take-Profit liegt auf der falschen Seite');
+  } else if (tp !== null || exit !== null) f('Take-Profit und Ausstieg brauchen Entry und Stop-Loss');
+  if (exit !== null && !(exit > 0)) f('Ausstieg ungültig');
+  // Wie der Trade endete: von Hand gesetzt, sonst automatisch aus dem Vorzeichen (Plus = TP, Minus = SL, 0 = Break-Even).
+  let ausgang = AUSGAENGE.includes(b.ausgang) ? b.ausgang : null;
+  if (ausgang === null && ergebnisEur !== null) ausgang = ergebnisEur > 0 ? 'tp' : ergebnisEur < 0 ? 'sl' : 'be';
+  let konto = null;
+  if (art === 'live') {
+    konto = b.konto ? String(b.konto) : j.konten[0].id;
+    if (!j.konten.some((k) => k.id === konto)) f('Konto unbekannt');
+  }
   const tf = ['3D', 'W', 'M'].includes(b.tf) ? b.tf : null;
   const gefuehl = zahl(b.gefuehl);
   const tags = Array.isArray(b.tags) ? [...new Set(b.tags.map((t) => String(t).trim().slice(0, 40)).filter(Boolean))].slice(0, 12) : [];
@@ -76,7 +101,7 @@ function pruefen(b) {
   const bilder = Array.isArray(b.bilder) ? b.bilder.map(String).filter((x) => BILD.test(x)).slice(0, 12) : [];
   const session = /^[\w-]{1,60}$/.test(String(b.session || '')) ? String(b.session) : null;
   return {
-    pair, richtung, art, eroeffnet: String(b.eroeffnet), geschlossen,
+    pair, richtung, art, konto, ausgang, eroeffnet: String(b.eroeffnet), geschlossen,
     entry, sl, tp, exit, lots, risikoEur, ergebnisEur, rManuell,
     tf, gvaLevel: zahl(b.gvaLevel), gefuehl: gefuehl && gefuehl >= 1 && gefuehl <= 5 ? Math.round(gefuehl) : null,
     tags, fehler, notiz: String(b.notiz || '').slice(0, 4000), bild, bilder, session,
@@ -86,11 +111,12 @@ function pruefen(b) {
 
 export function tradeSpeichern(b) {
   const j = jd();
-  const t = pruefen(b);
+  const alt = b.id ? j.trades.find((x) => x.id === b.id) : null;
+  if (b.id && !alt) throw Object.assign(new Error('Trade nicht gefunden'), { status: 404 });
+  const t = pruefen(alt && !b.konto ? { ...b, konto: alt.konto } : b); // beim Bearbeiten bleibt das Konto, wenn keins mitkommt
   const jetzt = Date.now();
   if (b.id) {
     const i = j.trades.findIndex((x) => x.id === b.id);
-    if (i < 0) throw Object.assign(new Error('Trade nicht gefunden'), { status: 404 });
     j.trades[i] = { ...j.trades[i], ...t, geaendert: jetzt };
     save();
     return j.trades[i];
@@ -116,6 +142,71 @@ export function tradesLoeschen(ids) {
   save();
   for (const t of weg) for (const b of t.bilder || []) { try { fs.unlinkSync(path.join(bildOrdner(), b)); } catch {} }
   return weg.length;
+}
+
+// ---------- Konten und Ein-/Auszahlungen ----------
+export function kontoSpeichern(b) {
+  const j = jd();
+  const name = String(b.name || '').trim().slice(0, 40);
+  if (!name) throw fehler400('Name fehlt');
+  if (j.konten.some((k) => k.id !== b.id && k.name.toLowerCase() === name.toLowerCase())) throw fehler400('Ein Konto mit diesem Namen gibt es schon');
+  if (b.id) {
+    const k = j.konten.find((x) => x.id === b.id);
+    if (!k) throw fehler400('Konto nicht gefunden', 404);
+    k.name = name;
+    save();
+    return k;
+  }
+  if (j.konten.length >= 20) throw fehler400('Höchstens 20 Konten');
+  const neu = { id: crypto.randomUUID(), name };
+  j.konten.push(neu);
+  save();
+  return neu;
+}
+
+export function kontoLoeschen(id) {
+  const j = jd();
+  if (!j.konten.some((k) => k.id === id)) return false;
+  if (j.konten.length <= 1) throw fehler400('Mindestens ein Konto muss bleiben');
+  if (j.trades.some((t) => t.konto === id)) throw fehler400('Das Konto hat noch Trades. Lösche zuerst die Trades.');
+  if (j.cashflows.some((c) => c.konto === id)) throw fehler400('Das Konto hat noch Ein- oder Auszahlungen. Lösche zuerst diese.');
+  j.konten = j.konten.filter((k) => k.id !== id);
+  save();
+  return true;
+}
+
+export function cashflowSpeichern(b) {
+  const j = jd();
+  const konto = String(b.konto || '');
+  if (!j.konten.some((k) => k.id === konto)) throw fehler400('Konto unbekannt');
+  const datum = String(b.datum || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datum) || Number.isNaN(Date.parse(datum))) throw fehler400('Datum fehlt');
+  const betrag = Number(b.betrag);
+  if (!Number.isFinite(betrag) || !(betrag > 0) || betrag > 1e9) throw fehler400('Betrag muss grösser als 0 sein');
+  const art = b.art === 'auszahlung' ? 'auszahlung' : b.art === 'einzahlung' ? 'einzahlung' : null;
+  if (!art) throw fehler400('Einzahlung oder Auszahlung wählen');
+  const wert = { konto, datum, betrag: Math.round(betrag * 100) / 100, art };
+  if (b.id) {
+    const i = j.cashflows.findIndex((c) => c.id === b.id);
+    if (i < 0) throw fehler400('Eintrag nicht gefunden', 404);
+    j.cashflows[i] = { ...j.cashflows[i], ...wert };
+    save();
+    return j.cashflows[i];
+  }
+  if (j.cashflows.length >= 5000) throw fehler400('Zu viele Einträge');
+  const neu = { id: crypto.randomUUID(), ...wert };
+  j.cashflows.push(neu);
+  save();
+  return neu;
+}
+
+export function cashflowLoeschen(id) {
+  const j = jd();
+  const n = j.cashflows.length;
+  j.cashflows = j.cashflows.filter((c) => c.id !== id);
+  if (j.cashflows.length === n) return false;
+  save();
+  return true;
 }
 
 // ---------- Screenshots (Backtest-Session) ----------

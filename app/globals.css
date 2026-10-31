@@ -706,6 +706,16 @@ button.szene-chip { font-family: inherit; line-height: inherit; }
 .jr-kal-tag b { font-size: 11.5px; align-self: flex-end; }
 .jr-richtung { width: 28px; height: 28px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex: none; }
 .jr-richtung.long { background: rgba(21,128,61,.12); color: var(--gruen); } .jr-richtung.short { background: rgba(180,35,24,.1); color: var(--fehler); }
+.jr-richtung.ohne { background: var(--bg); color: var(--muted); }
+.jr-ergebnis { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.25; flex: none; }
+.jr-ergebnis small { font-size: 11.5px; }
+.jr-konto-wahl { background: var(--bg); color: var(--ink); border: 0; border-radius: 10px; padding: 8px 12px; min-height: 36px; font: inherit; font-size: 13px; font-weight: 600; }
+.jr-konto-zeile { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.jr-konto-zeile input { flex: 1; min-width: 160px; font: inherit; font-size: 14px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--track); background: #fff; color: var(--ink); min-height: 40px; }
+.jr-cf-liste { display: flex; flex-direction: column; max-height: 240px; overflow-y: auto; }
+.jr-cf-zeile { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.jr-cf-zeile:last-child { border-bottom: 0; }
+.jr-hinweis { font-size: 13px; line-height: 1.5; background: var(--bg); border-radius: 10px; padding: 8px 12px; }
 /* Mehrfachauswahl in der Trade-Liste */
 .jr-auswahl-leiste { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 0 10px; border-bottom: 1px solid var(--line); }
 .jr-haken { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
