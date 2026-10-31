@@ -4,8 +4,8 @@
 
 export type JArt = 'live' | 'backtest';
 export type JRichtung = 'long' | 'short';
-export type JAusgang = 'tp' | 'sl' | 'be' | 'trail';
-export const AUSGANG_TEXT: Record<JAusgang, string> = { tp: 'Take-Profit', sl: 'Stop-Loss', be: 'Break-Even', trail: 'SL im Profit' };
+export type JAusgang = 'tp' | 'sl' | 'be' | 'trail' | 'teiltp' | 'skip';
+export const AUSGANG_TEXT: Record<JAusgang, string> = { tp: 'Take-Profit', sl: 'Stop-Loss', be: 'Break-Even', trail: 'SL im Profit', teiltp: 'Teil-TP + Break-Even', skip: 'Skip' };
 
 export interface JKonto { id: string; name: string }
 export interface JCashflow { id: string; konto: string; datum: string; betrag: number; art: 'einzahlung' | 'auszahlung' } // betrag immer positiv
@@ -27,6 +27,8 @@ export interface JTrade {
   risikoEur: number | null; // Anfangsrisiko in EUR
   ergebnisEur: number | null; // realisierter Gewinn/Verlust in EUR (inkl. Kosten)
   rManuell: number | null; // R von Hand, falls weder EUR noch Ausstieg passt
+  risikoProzent?: number | null; // fester Einsatz pro Trade in % vom Konto (Backtest-Session)
+  skipGrund?: string; // nur bei Ausgang «Skip»: warum der Trade nicht genommen wurde
   tf: '3D' | 'W' | 'M' | null;
   gvaLevel: number | null;
   gefuehl: number | null; // 1–5

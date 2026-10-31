@@ -1024,3 +1024,18 @@ button.szene-chip { font-family: inherit; line-height: inherit; }
 .fk-park-tage { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; height: 56px; }
 .fk-park-tage button { display: flex; align-items: flex-end; border: 0; background: transparent; padding: 0; cursor: pointer; height: 100%; }
 .fk-park-tage span { display: block; width: 100%; background: var(--gruen); border-radius: 4px; min-height: 2px; }
+
+.bt-schritte { display: flex; gap: 6px; justify-content: center; }
+.bt-punkt { width: 10px; height: 10px; min-height: 0 !important; padding: 0 !important; border-radius: 50%; background: var(--track); }
+.bt-punkt.fertig { background: var(--muted); }
+.bt-punkt.an { background: var(--ink); transform: scale(1.3); }
+.bt-gross { font: inherit; font-size: 26px; font-weight: 700; letter-spacing: .04em; text-align: center; padding: 12px; border-radius: 14px; border: 1px solid var(--track); background: #fff; color: var(--ink); width: 100%; box-sizing: border-box; font-variant-numeric: tabular-nums; }
+.bt-optionen { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.bt-optionen button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px; border-radius: 14px; background: #fff; color: var(--ink); font-weight: 700; font-size: 15px; text-align: left; }
+.bt-optionen button small { color: var(--muted); font-weight: 600; }
+.bt-optionen button span { font-weight: 500; font-size: 12px; }
+.bt-optionen button[aria-pressed='true'] { background: var(--ink); color: #fff; }
+.bt-optionen button[aria-pressed='true'] small, .bt-optionen button[aria-pressed='true'] span { color: #fff; opacity: .8; }
+.bt-ueber { display: flex; flex-direction: column; gap: 4px; }
+.bt-ueber-zeile { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 10px; background: #fff; font-size: 13.5px; text-align: left; min-height: 0 !important; }
+.bt-ueber-zeile > span:last-child { text-align: right; min-width: 0; overflow-wrap: anywhere; }

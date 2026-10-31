@@ -84,7 +84,7 @@ export function Journal() {
     const cashflows = d.cashflows.filter((c) => konto === 'alle' || c.konto === konto);
     return geldAuswertung(trades, cashflows, ab);
   }, [d, filter, konto, ab]);
-  const offen = gefiltert.filter((t) => !istGeschlossen(t));
+  const offen = gefiltert.filter((t) => !istGeschlossen(t) && t.ausgang !== 'skip');
 
   if (fehler && !d) return <div className="karte fehlerbox">Journal nicht ladbar: {fehler}</div>;
   if (!d || !k) return <div className="karte leise">Lade …</div>;
@@ -307,7 +307,7 @@ function TradeListe({ trades, prozentVon, onOpen, onGeaendert }: { trades: JTrad
   const [laeuft, setLaeuft] = useState(false);
   const [fehler, setFehler] = useState<string | null>(null);
   const sortiert = [...trades].sort((a, b) => {
-    const oa = istGeschlossen(a) ? 1 : 0, ob = istGeschlossen(b) ? 1 : 0;
+    const oa = istGeschlossen(a) || a.ausgang === 'skip' ? 1 : 0, ob = istGeschlossen(b) || b.ausgang === 'skip' ? 1 : 0;
     if (oa !== ob) return oa - ob; // offene zuerst
     return (b.geschlossen || b.eroeffnet) < (a.geschlossen || a.eroeffnet) ? -1 : 1;
   });
@@ -370,11 +370,11 @@ function TradeListe({ trades, prozentVon, onOpen, onGeaendert }: { trades: JTrad
             <span className={`jr-richtung ${symbolKlasse}`}>{symbol}</span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <b>{t.pair}</b> <span className="leise" style={{ fontSize: 12 }}>{t.tf ? `${t.tf} · ` : ''}{t.art === 'backtest' ? 'Backtest' : 'Live'}</span>
-              <div className="leise" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{datumKurz(t.eroeffnet)}{ausgang ? ` · ${AUSGANG_TEXT[ausgang]}` : ''}{t.tags.length ? ` · ${t.tags.join(', ')}` : ''}</div>
+              <div className="leise" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{datumKurz(t.eroeffnet)}{ausgang ? ` · ${AUSGANG_TEXT[ausgang]}` : ''}{t.skipGrund ? `: ${t.skipGrund}` : ''}{t.tags.length ? ` · ${t.tags.join(', ')}` : ''}</div>
             </span>
             {eur !== null
               ? <span className="jr-ergebnis"><b className={`tr-zahl ${eur > 0 ? 'jr-plus' : eur < 0 ? 'jr-minus' : ''}`}>{eurText(eur)}</b>{pr !== null && <small className="leise tr-zahl">{pText(pr)}</small>}</span>
-              : r === null ? <span className="pille tr-pille-aus">offen</span> : <b className={`tr-zahl ${r > 0 ? 'jr-plus' : r < 0 ? 'jr-minus' : ''}`}>{rText(r)}</b>}
+              : r === null ? <span className="pille tr-pille-aus">{t.ausgang === 'skip' ? 'Skip' : 'offen'}</span> : <b className={`tr-zahl ${r > 0 ? 'jr-plus' : r < 0 ? 'jr-minus' : ''}`}>{rText(r)}</b>}
           </>
         );
         return bearbeiten ? (
@@ -562,7 +562,7 @@ function TradePopup({ t, d, kontoVorgabe, onNeu, onClose }: { t: JTrade | null; 
     setLaeuft(true); setFehler(null); setHinweis(null);
     try {
       await senden('/api/journal/trade', {
-        id: t?.id, art: f.art, konto: live ? f.konto : null, ausgang: live && f.ausgang !== 'auto' ? f.ausgang : null,
+        id: t?.id, art: f.art, konto: live ? f.konto : null, ausgang: live ? (f.ausgang !== 'auto' ? f.ausgang : null) : t?.ausgang ?? null, risikoProzent: t?.risikoProzent ?? null, skipGrund: t?.skipGrund ?? '',
         pair: f.pair, richtung: f.richtung || null, tf: f.tf || null, gefuehl: f.gefuehl,
         eroeffnet: f.eroeffnet, geschlossen: f.geschlossen || null,
         entry, sl, tp, exit, lots, risikoEur, ergebnisEur, rManuell, gvaLevel: num(f.gvaLevel),

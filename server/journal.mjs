@@ -51,7 +51,7 @@ const bildOrdner = () => path.join(config.dataDir, 'journal-bilder');
 const zahl = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
 const DATUM = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2})?$/;
 
-const AUSGAENGE = ['tp', 'sl', 'be', 'trail'];
+const AUSGAENGE = ['tp', 'sl', 'be', 'trail', 'teiltp', 'skip'];
 
 // Pflicht sind nur Paar, Datum und Ergebnis in EUR. Alles andere ist freiwillig.
 // Ein Trade ohne Ergebnis (noch offen) braucht dafür Entry und Stop-Loss.
@@ -70,8 +70,10 @@ function pruefen(b) {
   if (risikoEur !== null && !(risikoEur > 0)) f('Risiko in EUR muss positiv sein');
   if (ergebnisEur !== null && !Number.isFinite(ergebnisEur)) f('Ergebnis ungültig');
   if (rManuell !== null && !Number.isFinite(rManuell)) f('R ungültig');
+  const risikoProzent = zahl(b.risikoProzent);
+  const istSkip = b.ausgang === 'skip';
   const hatKurse = entry !== null || sl !== null;
-  if (!hatKurse && ergebnisEur === null && rManuell === null) f('Ergebnis in EUR fehlt (offene Trades brauchen Entry und Stop-Loss)');
+  if (!istSkip && !hatKurse && ergebnisEur === null && rManuell === null) f('Ergebnis in EUR fehlt (offene Trades brauchen Entry und Stop-Loss)');
   let richtung = b.richtung === 'short' ? 'short' : b.richtung === 'long' ? 'long' : null;
   if (hatKurse) {
     if (!(entry > 0)) f('Entry fehlt');
@@ -103,6 +105,8 @@ function pruefen(b) {
   return {
     pair, richtung, art, konto, ausgang, eroeffnet: String(b.eroeffnet), geschlossen,
     entry, sl, tp, exit, lots, risikoEur, ergebnisEur, rManuell,
+    risikoProzent: risikoProzent !== null && risikoProzent > 0 && risikoProzent <= 100 ? risikoProzent : null,
+    skipGrund: istSkip ? String(b.skipGrund || '').trim().slice(0, 300) : '',
     tf, gvaLevel: zahl(b.gvaLevel), gefuehl: gefuehl && gefuehl >= 1 && gefuehl <= 5 ? Math.round(gefuehl) : null,
     tags, fehler, notiz: String(b.notiz || '').slice(0, 4000), bild, bilder, session,
     checks: b.checks && typeof b.checks === 'object' ? Object.fromEntries(Object.entries(b.checks).slice(0, 30).map(([k, v]) => [String(k).slice(0, 60), !!v])) : {},
