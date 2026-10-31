@@ -105,7 +105,7 @@ export function Journal() {
           <Kacheln k={k} />
           <div className="jr-zwei">
             <Kalender g={geschl} />
-            <TradeListe trades={gefiltert} onOpen={setTrade} />
+            <TradeListe trades={gefiltert} onOpen={setTrade} onGeaendert={laden} />
           </div>
           <Auswertung g={geschl} alle={geschlosseneTrades(d.trades)} e={d.einstellungen} gruppe={gruppe} setGruppe={setGruppe} filter={filter} />
         </>
@@ -238,32 +238,88 @@ function Kalender({ g }: { g: JGeschlossen[] }) {
 }
 
 // ---------- Trade-Liste ----------
-function TradeListe({ trades, onOpen }: { trades: JTrade[]; onOpen: (t: JTrade) => void }) {
+function TradeListe({ trades, onOpen, onGeaendert }: { trades: JTrade[]; onOpen: (t: JTrade) => void; onGeaendert: () => void }) {
   const [alle, setAlle] = useState(false);
+  const [bearbeiten, setBearbeiten] = useState(false);
+  const [auswahl, setAuswahl] = useState<Set<string>>(() => new Set());
+  const [bestaetigen, setBestaetigen] = useState(false);
+  const [laeuft, setLaeuft] = useState(false);
+  const [fehler, setFehler] = useState<string | null>(null);
   const sortiert = [...trades].sort((a, b) => {
     const oa = istGeschlossen(a) ? 1 : 0, ob = istGeschlossen(b) ? 1 : 0;
     if (oa !== ob) return oa - ob; // offene zuerst
     return (b.geschlossen || b.eroeffnet) < (a.geschlossen || a.eroeffnet) ? -1 : 1;
   });
-  const sicht = alle ? sortiert : sortiert.slice(0, 12);
+  // Im Bearbeiten-Modus immer alle zeigen, damit «Alle auswählen» nichts Unsichtbares erwischt.
+  const sicht = alle || bearbeiten ? sortiert : sortiert.slice(0, 12);
+  // Nur Trades zählen, die im aktuellen Filter noch da sind (Filter kann während der Auswahl wechseln).
+  const gewaehlt = sortiert.filter((t) => auswahl.has(t.id)).map((t) => t.id);
+  const alleGewaehlt = sortiert.length > 0 && gewaehlt.length === sortiert.length;
+
+  const umschalten = (id: string) => {
+    setBestaetigen(false);
+    setAuswahl((a) => { const n = new Set(a); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  };
+  const alleUmschalten = () => { setBestaetigen(false); setAuswahl(alleGewaehlt ? new Set() : new Set(sortiert.map((t) => t.id))); };
+  const beenden = () => { setBearbeiten(false); setAuswahl(new Set()); setBestaetigen(false); setFehler(null); };
+  async function loeschen() {
+    if (!gewaehlt.length) return;
+    setLaeuft(true); setFehler(null);
+    try {
+      await senden('/api/journal/trade', { ids: gewaehlt }, 'DELETE');
+      beenden();
+      onGeaendert();
+    } catch (e) { setFehler((e as Error).message); }
+    setLaeuft(false);
+  }
+
   return (
     <section className="karte in" aria-label="Trades">
-      <h2 className="karte-titel">Trades <small>{trades.length}</small></h2>
+      <h2 className="karte-titel">
+        <span>Trades <small>{trades.length}</small></span>
+        {trades.length > 0 && (bearbeiten
+          ? <button className="knopf-klein press" onClick={beenden}>Fertig</button>
+          : <button className="knopf-klein press" onClick={() => setBearbeiten(true)}>Bearbeiten</button>)}
+      </h2>
+      {bearbeiten && (
+        <div className="jr-auswahl-leiste">
+          <label className="jr-haken">
+            <input type="checkbox" checked={alleGewaehlt} onChange={alleUmschalten} />
+            <span>Alle auswählen</span>
+          </label>
+          <span className="leise" style={{ fontSize: 13 }}>{gewaehlt.length} von {sortiert.length} gewählt</span>
+          <span style={{ flex: 1 }} />
+          {!bestaetigen
+            ? <button className="knopf-klein press" disabled={!gewaehlt.length || laeuft} onClick={() => setBestaetigen(true)}>{gewaehlt.length ? `${gewaehlt.length} löschen` : 'Löschen'}</button>
+            : <button className="knopf-klein press" style={{ background: 'var(--fehler)', color: '#fff' }} disabled={laeuft} onClick={loeschen}>{laeuft ? 'Lösche …' : `Wirklich ${gewaehlt.length} löschen`}</button>}
+        </div>
+      )}
+      {fehler && <div className="fehlerbox" style={{ marginBottom: 8 }}>{fehler}</div>}
       {sicht.length === 0 && <div className="leise" style={{ padding: '8px 0' }}>Keine Trades in diesem Filter.</div>}
       {sicht.map((t) => {
         const { r } = rVon(t);
-        return (
-          <button key={t.id} className="zeile press nw-zeile" onClick={() => onOpen(t)} style={{ width: '100%', background: 'transparent', textAlign: 'left' }}>
+        const inhalt = (
+          <>
             <span className={`jr-richtung ${t.richtung}`}>{t.richtung === 'long' ? '▲' : '▼'}</span>
             <span style={{ flex: 1, minWidth: 0 }}>
               <b>{t.pair}</b> <span className="leise" style={{ fontSize: 12 }}>{t.tf ? `${t.tf} · ` : ''}{t.art === 'backtest' ? 'Backtest' : 'Live'}</span>
               <div className="leise" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{datumKurz(t.eroeffnet)}{t.tags.length ? ` · ${t.tags.join(', ')}` : ''}</div>
             </span>
             {r === null ? <span className="pille tr-pille-aus">offen</span> : <b className={`tr-zahl ${r > 0 ? 'jr-plus' : r < 0 ? 'jr-minus' : ''}`}>{rText(r)}</b>}
+          </>
+        );
+        return bearbeiten ? (
+          <label key={t.id} className={`zeile press nw-zeile jr-wahl${auswahl.has(t.id) ? ' an' : ''}`}>
+            <input type="checkbox" className="jr-haken-feld" checked={auswahl.has(t.id)} onChange={() => umschalten(t.id)} aria-label={`${t.pair} ${datumKurz(t.eroeffnet)} auswählen`} />
+            {inhalt}
+          </label>
+        ) : (
+          <button key={t.id} className="zeile press nw-zeile" onClick={() => onOpen(t)} style={{ width: '100%', background: 'transparent', textAlign: 'left' }}>
+            {inhalt}
           </button>
         );
       })}
-      {sortiert.length > 12 && <button className="knopf-klein press" style={{ marginTop: 8 }} onClick={() => setAlle(!alle)}>{alle ? 'Weniger zeigen' : `Alle ${sortiert.length} zeigen`}</button>}
+      {!bearbeiten && sortiert.length > 12 && <button className="knopf-klein press" style={{ marginTop: 8 }} onClick={() => setAlle(!alle)}>{alle ? 'Weniger zeigen' : `Alle ${sortiert.length} zeigen`}</button>}
     </section>
   );
 }

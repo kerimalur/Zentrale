@@ -102,13 +102,20 @@ export function tradeSpeichern(b) {
 }
 
 export function tradeLoeschen(id) {
+  return tradesLoeschen([id]) > 0;
+}
+
+// Mehrere Trades auf einmal löschen (Mehrfachauswahl im Journal). Gibt die Anzahl der gelöschten Trades zurück.
+export function tradesLoeschen(ids) {
   const j = jd();
-  const weg = j.trades.find((t) => t.id === id);
-  if (!weg) return false;
-  j.trades = j.trades.filter((t) => t.id !== id);
+  const liste = new Set((Array.isArray(ids) ? ids : []).map(String));
+  if (!liste.size) return 0;
+  const weg = j.trades.filter((t) => liste.has(t.id));
+  if (!weg.length) return 0;
+  j.trades = j.trades.filter((t) => !liste.has(t.id));
   save();
-  for (const b of weg.bilder || []) { try { fs.unlinkSync(path.join(bildOrdner(), b)); } catch {} }
-  return true;
+  for (const t of weg) for (const b of t.bilder || []) { try { fs.unlinkSync(path.join(bildOrdner(), b)); } catch {} }
+  return weg.length;
 }
 
 // ---------- Screenshots (Backtest-Session) ----------

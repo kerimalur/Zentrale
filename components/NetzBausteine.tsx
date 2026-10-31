@@ -8,15 +8,19 @@ import { Icon } from './ui';
 
 export function Popup({ titel, unter, onClose, children, breit }: { titel: string; unter?: string; onClose: () => void; children: ReactNode; breit?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  // onClose kommt fast überall als neue Inline-Funktion. Hinge der Effekt daran, würde er bei jeder Eingabe neu laufen,
+  // den Fokus auf den Dialog zurückholen und damit Dropdowns und Zahlenfelder zuklappen. Darum über eine Ref lesen.
+  const schliessen = useRef(onClose);
+  schliessen.current = onClose;
   useEffect(() => {
     const vorher = document.activeElement as HTMLElement | null;
-    ref.current?.focus();
-    const taste = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
+    const taste = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); schliessen.current(); } };
     window.addEventListener('keydown', taste);
     const ov = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => { window.removeEventListener('keydown', taste); document.body.style.overflow = ov; vorher?.focus?.(); };
-  }, [onClose]);
+  }, []);
   return (
     <div className="nw-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={`nw-popup${breit ? ' breit' : ''}`} role="dialog" aria-modal="true" aria-label={titel} tabIndex={-1} ref={ref}>
