@@ -142,6 +142,8 @@ export function Fokus() {
               <span className="fk-punkt" style={{ background: k.farbe }} />
               <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                 <b>{e.name}</b> <span className="leise" style={{ fontSize: 12 }}>{ART_TEXT[e.art]}</span>
+                {e.sperre && <> <SperrPille s={e.sperre} /></>}
+                {e.teil.length > 0 && <> <span className="pille nw-erreich teil" title={e.teil.join(', ')}>{e.teil.length === 1 ? `${e.teil[0]} gesperrt` : `${e.teil.length} Bereiche gesperrt`}</span></>}
                 <div className="fk-zeilbalken"><span style={{ width: `${(e.sek / d.eintraege[0].sek) * 100}%`, background: k.farbe }} /></div>
               </span>
               <b style={{ fontSize: 14 }}>{dauer(e.sek)}</b>
@@ -158,7 +160,7 @@ export function Fokus() {
             <span className={`nw-punkt ${s.an ? (s.aktiv ? 'rot' : 'gelb') : 'grau'}`} aria-hidden />
             <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
               <b>{s.typ === 'bereich' ? d.bereiche[s.wert] : s.wert}</b> <span className="leise" style={{ fontSize: 12 }}>{s.typ === 'domain' ? 'Webseite' : s.typ === 'app' ? 'App' : 'Bereich'}</span>
-              <div className="leise" style={{ fontSize: 12 }}>{beschreibung(s)}</div>
+              <div className="leise" style={{ fontSize: 12 }}>{beschreibung(s)}{s.fest ? ' · fest' : ''}</div>
             </span>
             <span className={`pille nw-erreich ${!s.an ? 'unbekannt' : s.aktiv ? 'offen' : 'teil'}`}>{!s.an ? 'aus' : s.aktiv ? 'gesperrt' : 'wartet'}</span>
           </button>
@@ -180,8 +182,8 @@ export function Fokus() {
       {parkPopup && <ParkPopup p={d.parken} onClose={() => { setParkPopup(false); laden(); }} />}
       {koppeln && <KoppelPopup onClose={() => { setKoppeln(false); laden(); }} />}
       {sperrePopup && <SperrePopup s={sperrePopup === 'neu' ? null : sperrePopup} d={d} onClose={() => { setSperrePopup(null); laden(); }} />}
-      {eintrag && <EintragPopup e={eintrag} d={d} onClose={() => { setEintrag(null); laden(); }} onSperre={(wert, typ) => { setEintrag(null); setSperrePopup({ id: '', typ, wert, modus: 'immer', von: '08:00', bis: '18:00', limitMin: 30, geraete: 'alle', an: true, aktiv: false, nutzungMin: null }); }} />}
-      {geraet && <GeraetPopup g={geraet} onClose={() => { setGeraet(null); laden(); }} />}
+      {eintrag && <EintragPopup e={eintrag} d={d} onClose={() => { setEintrag(null); laden(); }} onSperre={(s) => { setEintrag(null); setSperrePopup(s); }} />}
+      {geraet && <GeraetPopup g={geraet} websperreFest={d.fest && d.sperren.some((s) => s.typ === 'domain' && s.an)} onClose={() => { setGeraet(null); laden(); }} />}
     </div>
   );
 }
@@ -268,7 +270,13 @@ function beschreibung(s: FSperre): string {
   return w;
 }
 
-function EintragPopup({ e, d, onClose, onSperre }: { e: FEintrag; d: FokusZustand; onClose: () => void; onSperre: (wert: string, typ: 'domain' | 'app') => void }) {
+function SperrPille({ s }: { s: { an: boolean; aktiv: boolean } }) {
+  return <span className={`pille nw-erreich ${!s.an ? 'unbekannt' : s.aktiv ? 'offen' : 'teil'}`}>{!s.an ? 'Sperre aus' : s.aktiv ? 'gesperrt' : 'Sperre wartet'}</span>;
+}
+
+function EintragPopup({ e, d, onClose, onSperre }: { e: FEintrag; d: FokusZustand; onClose: () => void; onSperre: (s: FSperre) => void }) {
+  const bestehend = e.sperre ? d.sperren.find((s) => s.id === e.sperre!.id) || null : null;
+  const neu = (): FSperre => ({ id: '', typ: e.art === 'web' ? 'domain' : 'app', wert: e.name, modus: 'immer', von: '08:00', bis: '18:00', limitMin: 30, geraete: 'alle', an: true, aktiv: false, fest: false, nutzungMin: null });
   const [laeuft, setLaeuft] = useState(false);
   async function setzen(kategorie: string) {
     setLaeuft(true);
@@ -283,12 +291,15 @@ function EintragPopup({ e, d, onClose, onSperre }: { e: FEintrag; d: FokusZustan
       {e.manuell && <button className="knopf-klein press" style={{ alignSelf: 'flex-start' }} onClick={() => setzen('auto')} disabled={laeuft}>Automatisch einordnen</button>}
       <h4 className="nw-h">Auf diesen Geräten</h4>
       {Object.entries(e.geraete).map(([id, s]) => <div key={id} className="zeile" style={{ justifyContent: 'space-between', fontSize: 14 }}><span>{d.geraete.find((g) => g.id === id)?.name || id}</span><b>{dauer(s)}</b></div>)}
-      {e.art !== 'prog' && <button className="knopf-akzent press" style={{ alignSelf: 'flex-start', marginTop: 8 }} onClick={() => onSperre(e.art === 'web' ? e.name : e.name, e.art === 'web' ? 'domain' : 'app')}>Sperre dafür anlegen</button>}
+      {e.teil.length > 0 && <div className="leise" style={{ fontSize: 13 }}>Teilweise gesperrt: {e.teil.join(', ')}</div>}
+      {bestehend
+        ? <div className="zeile" style={{ gap: 8, marginTop: 8, flexWrap: 'wrap' }}><SperrPille s={bestehend} /><button className="knopf-klein press" onClick={() => onSperre(bestehend)}>Sperre ansehen</button></div>
+        : e.art !== 'prog' && <button className="knopf-akzent press" style={{ alignSelf: 'flex-start', marginTop: 8 }} onClick={() => onSperre(neu())}>Sperre dafür anlegen</button>}
     </Popup>
   );
 }
 
-function GeraetPopup({ g, onClose }: { g: FGeraet; onClose: () => void }) {
+function GeraetPopup({ g, websperreFest, onClose }: { g: FGeraet; websperreFest: boolean; onClose: () => void }) {
   const [name, setName] = useState(g.name);
   const [ws, setWs] = useState(g.websperre);
   const [sicher, setSicher] = useState(false);
@@ -302,7 +313,7 @@ function GeraetPopup({ g, onClose }: { g: FGeraet; onClose: () => void }) {
   return (
     <Popup titel={g.name} unter={`${g.art} · ${g.online ? 'online' : 'offline'}${g.version ? ' · Version ' + g.version : ''}`} onClose={onClose}>
       <label className="nw-feld">Name<input value={name} onChange={(e) => setName(e.target.value)} maxLength={40} /></label>
-      <Schalter an={ws} onClick={() => setWs(!ws)} titel="Websperre (Pi-hole)" unter="Webseiten-Sperren gelten für dieses Gerät, solange es den Pi als DNS nutzt." />
+      <Schalter an={ws} onClick={() => setWs(!ws)} deaktiviert={websperreFest && g.websperre} titel="Websperre (Pi-hole)" unter={websperreFest && g.websperre ? 'Fest: bleibt an, solange feste Webseiten-Sperren bestehen.' : 'Webseiten-Sperren gelten für dieses Gerät, solange es den Pi als DNS nutzt.'} />
       <div className="leise" style={{ fontSize: 12.5 }}>Adressen: {g.ips.length ? g.ips.join(', ') : 'noch keine'} · gekoppelt {relativ(g.erstellt)}</div>
       {fehler && <div className="fehlerbox">{fehler}</div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
@@ -323,6 +334,7 @@ function SperrePopup({ s, d, onClose }: { s: FSperre | null; d: FokusZustand; on
   const [an, setAn] = useState(s?.an ?? true);
   const [fehler, setFehler] = useState<string | null>(null);
   const bestehend = !!s?.id;
+  const fest = !!s?.fest;
   async function speichern() {
     try { await senden('/api/fokus/sperre', { id: s?.id || undefined, typ, wert: typ === 'bereich' && !wert ? Object.keys(d.bereiche)[0] : wert, modus, von, bis, limitMin: Number(limit), geraete: s?.geraete || 'alle', an }); onClose(); }
     catch (e) { setFehler((e as Error).message); }
@@ -331,17 +343,18 @@ function SperrePopup({ s, d, onClose }: { s: FSperre | null; d: FokusZustand; on
     try { await senden('/api/fokus/sperre', { id: s!.id }, 'DELETE'); onClose(); } catch (e) { setFehler((e as Error).message); }
   }
   return (
-    <Popup titel={bestehend ? 'Sperre bearbeiten' : 'Neue Sperre'} onClose={onClose}>
+    <Popup titel={fest ? 'Feste Sperre' : bestehend ? 'Sperre bearbeiten' : 'Neue Sperre'} onClose={onClose}>
+      {fest && <div className="nw-box nw-merke"><b>Fest</b><span>Diese Sperre lässt sich nicht ausschalten oder löschen. Du kannst sie nur strenger stellen: auf «Immer», ein grösseres Zeitfenster oder ein kleineres Tageslimit.</span></div>}
       <div className="nw-feld">Was
         <div className="segment" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
-          <button aria-pressed={typ === 'domain'} onClick={() => { setTyp('domain'); setWert(''); }}>Webseite</button>
-          <button aria-pressed={typ === 'app'} onClick={() => { setTyp('app'); setWert(''); }}>App</button>
-          <button aria-pressed={typ === 'bereich'} onClick={() => { setTyp('bereich'); setWert(Object.keys(d.bereiche)[0]); }}>Bereich</button>
+          <button aria-pressed={typ === 'domain'} disabled={fest} onClick={() => { setTyp('domain'); setWert(''); }}>Webseite</button>
+          <button aria-pressed={typ === 'app'} disabled={fest} onClick={() => { setTyp('app'); setWert(''); }}>App</button>
+          <button aria-pressed={typ === 'bereich'} disabled={fest} onClick={() => { setTyp('bereich'); setWert(Object.keys(d.bereiche)[0]); }}>Bereich</button>
         </div>
       </div>
       {typ === 'bereich'
-        ? <label className="nw-feld">Bereich (nur Handy)<select value={wert} onChange={(e) => setWert(e.target.value)}>{Object.entries(d.bereiche).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-        : <label className="nw-feld">{typ === 'domain' ? 'Adresse (z. B. reddit.com)' : 'App-Name (so wie in der Liste, z. B. Snapchat)'}<input value={wert} onChange={(e) => setWert(e.target.value)} maxLength={80} /></label>}
+        ? <label className="nw-feld">Bereich (nur Handy)<select value={wert} disabled={fest} onChange={(e) => setWert(e.target.value)}>{Object.entries(d.bereiche).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+        : <label className="nw-feld">{typ === 'domain' ? 'Adresse (z. B. reddit.com)' : 'App-Name (so wie in der Liste, z. B. Snapchat)'}<input value={wert} disabled={fest} onChange={(e) => setWert(e.target.value)} maxLength={80} /></label>}
       <div className="nw-feld">Wann
         <div className="segment" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
           <button aria-pressed={modus === 'immer'} onClick={() => setModus('immer')}>Immer</button>
@@ -351,12 +364,12 @@ function SperrePopup({ s, d, onClose }: { s: FSperre | null; d: FokusZustand; on
       </div>
       {modus === 'zeit' && <div className="fk-zeiten"><label className="nw-feld">Von<input type="time" value={von} onChange={(e) => setVon(e.target.value)} /></label><label className="nw-feld">Bis<input type="time" value={bis} onChange={(e) => setBis(e.target.value)} /></label></div>}
       {modus === 'limit' && <label className="nw-feld">Gesperrt, sobald heute so viele Minuten genutzt wurden<input type="number" min={1} max={1440} value={limit} onChange={(e) => setLimit(e.target.value)} /></label>}
-      <Schalter an={an} onClick={() => setAn(!an)} titel="Sperre aktiv" />
+      <Schalter an={an} onClick={() => setAn(!an)} deaktiviert={fest} titel="Sperre aktiv" unter={fest ? 'Fest: lässt sich nicht ausschalten.' : d.fest && an ? 'Nach dem Speichern ist die Sperre fest und lässt sich nicht mehr ausschalten.' : undefined} />
       {typ === 'app' && <div className="nw-box nw-merke"><b>Hinweis</b><span>App-Sperren setzt die Handy-App um. Auf PC und Laptop wird die App nur gemeldet, nicht beendet.</span></div>}
       {fehler && <div className="fehlerbox">{fehler}</div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
         <button className="knopf-akzent press" onClick={speichern}>Speichern</button>
-        {bestehend && <button className="knopf-klein press" style={{ color: 'var(--fehler)' }} onClick={loeschen}>Löschen</button>}
+        {bestehend && !fest && <button className="knopf-klein press" style={{ color: 'var(--fehler)' }} onClick={loeschen}>Löschen</button>}
       </div>
     </Popup>
   );

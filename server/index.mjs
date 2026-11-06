@@ -134,9 +134,10 @@ async function api(req, res, url) {
   if (p === '/api/fokus/koppelcode' && m === 'POST') return json(res, 200, koppelcodeErzeugen());
   if (p === '/api/fokus/geraet' && m === 'POST') {
     const b = await body(req);
-    const ok = fokusGeraetSetzen(String(b.id || ''), { name: b.name, websperre: b.websperre });
-    if (ok) piholeSync().catch(() => {});
-    return ok ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Gerät nicht gefunden' });
+    const r = fokusGeraetSetzen(String(b.id || ''), { name: b.name, websperre: b.websperre });
+    if (r.fehler) return json(res, r.status || 400, { fehler: r.fehler });
+    piholeSync().catch(() => {});
+    return json(res, 200, { ok: true });
   }
   if (p === '/api/fokus/geraet' && m === 'DELETE') {
     const b = await body(req);
@@ -150,11 +151,12 @@ async function api(req, res, url) {
   }
   if (p === '/api/fokus/sperre' && m === 'POST') {
     const r = sperreSetzen(await body(req));
-    return r.fehler ? json(res, 400, { fehler: r.fehler }) : json(res, 200, r);
+    return r.fehler ? json(res, r.status || 400, { fehler: r.fehler }) : json(res, 200, r);
   }
   if (p === '/api/fokus/sperre' && m === 'DELETE') {
     const b = await body(req);
-    return sperreLoeschen(String(b.id || '')) ? json(res, 200, { ok: true }) : json(res, 404, { fehler: 'Nicht gefunden' });
+    const r = sperreLoeschen(String(b.id || ''));
+    return r.fehler ? json(res, r.status || 400, { fehler: r.fehler }) : json(res, 200, { ok: true });
   }
   if (p === '/api/fokus/parken' && m === 'POST') {
     const r = parkKonfigSetzen(await body(req));

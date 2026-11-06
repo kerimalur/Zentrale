@@ -38,6 +38,7 @@ export function fokusDb() {
   const f = d.fokus;
   f.geraete ||= {}; f.tage ||= {}; f.stunden ||= {}; f.kategorien ||= {}; f.sperren ||= [];
   f.pihole ||= { gruppe: null, hash: '', zeit: 0, fehler: null };
+  if (!f.sperrenVereint) sperrenVereinen(f);
   return f;
 }
 
@@ -109,12 +110,17 @@ export function geraetEntfernen(id) {
 }
 
 export function geraetSetzen(id, { name, websperre }) {
-  const g = fokusDb().geraete[id];
-  if (!g) return null;
+  const f = fokusDb();
+  const g = f.geraete[id];
+  if (!g) return { fehler: 'Gerät nicht gefunden', status: 404 };
+  // Websperre ausschalten würde feste Webseiten-Sperren für dieses Gerät aushebeln.
+  if (websperre === false && g.websperre && sperrenFest() && f.sperren.some((s) => s.typ === 'domain' && s.an)) {
+    return { fehler: 'Die Websperre lässt sich nicht ausschalten, solange feste Webseiten-Sperren bestehen.', status: 403 };
+  }
   if (typeof name === 'string' && name.trim()) g.name = name.trim().slice(0, 40);
   if (typeof websperre === 'boolean') g.websperre = websperre;
   save();
-  return true;
+  return { ok: true };
 }
 
 // ---------- Berichte der Geräte ----------
@@ -305,6 +311,78 @@ function sperrenFuerGeraet(g) {
 
 const sauber = (w) => String(w || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
 
+// Pro Ziel (Webseite, App, Bereich) gibt es genau eine Sperre. Der Schlüssel macht Schreibweisen gleich (www., Gross/Klein).
+function zielKey(typ, wert) {
+  if (typ === 'domain') return `domain:${sauber(wert)}`;
+  if (typ === 'app') return `app:${String(wert || '').trim().toLowerCase()}`;
+  return `${typ}:${wert}`;
+}
+const zielName = (s) => (s.typ === 'bereich' ? BEREICHE[s.wert] || s.wert : s.wert);
+
+// Feste Sperren: Eine eingeschaltete Sperre lässt sich weder ausschalten noch löschen noch lockern, nur strenger stellen.
+// Zentraler Schalter für einen späteren Ausweg (z. B. Verzögerung oder Notfall-Code). Bewusst ohne API und ohne Knopf.
+export const sperrenFest = () => fokusDb().sperrenLocker !== true;
+
+function fensterMinuten(von, bis) {
+  const a = zuMinuten(von || '00:00');
+  const b = zuMinuten(bis || '23:59');
+  return Array.from({ length: 1440 }, (_, m) => (a <= b ? m >= a && m < b : m >= a || m < b));
+}
+
+// Gibt einen Grund zurück, wenn «neu» die feste Sperre «alt» lockern würde; null = gleich streng oder strenger.
+function lockerung(alt, neu, f) {
+  if (!neu.an) return 'Diese Sperre ist fest und lässt sich nicht ausschalten.';
+  if (neu.geraete !== 'alle') {
+    const altIds = alt.geraete === 'alle' ? null : alt.geraete.filter((id) => f.geraete[id]);
+    if (!altIds || !altIds.every((id) => neu.geraete.includes(id))) return 'Eine feste Sperre lässt sich nicht auf weniger Geräte beschränken.';
+  }
+  if (neu.modus === 'immer') return null;
+  if (alt.modus === 'immer') return 'Eine «Immer»-Sperre lässt sich nicht in ein Zeitfenster oder Tageslimit ändern.';
+  if (alt.modus === 'limit') {
+    return neu.modus === 'limit' && neu.limitMin <= alt.limitMin ? null : 'Das Tageslimit lässt sich nur verkleinern oder auf «Immer» stellen.';
+  }
+  if (neu.modus !== 'zeit') return 'Das Zeitfenster lässt sich nur vergrössern oder auf «Immer» stellen.';
+  const a = fensterMinuten(alt.von, alt.bis);
+  const n = fensterMinuten(neu.von, neu.bis);
+  return a.every((drin, m) => !drin || n[m]) ? null : 'Das Zeitfenster lässt sich nur vergrössern oder auf «Immer» stellen.';
+}
+
+// Einmalig: doppelte Sperren (z. B. viermal instagram.com) zu einer zusammenführen. Die strengste Einstellung gewinnt.
+function sperrenVereinen(f) {
+  const gruppen = new Map();
+  for (const s of f.sperren) {
+    const k = zielKey(s.typ, s.wert);
+    if (!gruppen.has(k)) gruppen.set(k, []);
+    gruppen.get(k).push(s);
+  }
+  const RANG = { immer: 0, zeit: 1, limit: 2 };
+  const fenster = (s) => fensterMinuten(s.von, s.bis).filter(Boolean).length;
+  let weg = 0;
+  const neu = [];
+  for (const liste of gruppen.values()) {
+    if (liste.length === 1) { neu.push(liste[0]); continue; }
+    weg += liste.length - 1;
+    const eingeschaltet = liste.filter((s) => s.an);
+    const basis = eingeschaltet.length ? eingeschaltet : liste;
+    const beste = [...basis].sort((x, y) => (RANG[x.modus] ?? 3) - (RANG[y.modus] ?? 3)
+      || (x.modus === 'limit' ? (x.limitMin || 0) - (y.limitMin || 0) : 0)
+      || (x.modus === 'zeit' ? fenster(y) - fenster(x) : 0))[0];
+    const alleGeraete = basis.some((s) => s.geraete === 'alle' || !Array.isArray(s.geraete));
+    neu.push({
+      ...beste,
+      id: liste[0].id,
+      wert: beste.typ === 'domain' ? sauber(beste.wert) : beste.wert,
+      an: eingeschaltet.length > 0,
+      geraete: alleGeraete ? 'alle' : [...new Set(basis.flatMap((s) => s.geraete))],
+      erstellt: Math.min(...liste.map((s) => s.erstellt || jetzt())),
+    });
+  }
+  f.sperren = neu;
+  f.sperrenVereint = true;
+  save();
+  if (weg) ereignis('info', `Fokus: ${weg} doppelte Sperre(n) zusammengeführt.`);
+}
+
 export function sperreSetzen(b) {
   const f = fokusDb();
   const typ = ['domain', 'app', 'bereich'].includes(b.typ) ? b.typ : null;
@@ -318,30 +396,61 @@ export function sperreSetzen(b) {
   } else if (!wert || wert.length > 80) return { fehler: 'Name fehlt.' };
   const modus = ['immer', 'zeit', 'limit'].includes(b.modus) ? b.modus : 'immer';
   const hhmm = /^([01]\d|2[0-3]):[0-5]\d$/;
-  const s = {
-    id: b.id && f.sperren.find((x) => x.id === b.id) ? b.id : crypto.randomBytes(4).toString('hex'),
+  const neu = {
     typ, wert, modus,
     von: hhmm.test(b.von) ? b.von : '08:00',
     bis: hhmm.test(b.bis) ? b.bis : '18:00',
     limitMin: Math.max(1, Math.min(1440, Number(b.limitMin) || 30)),
     geraete: b.geraete === 'alle' || !Array.isArray(b.geraete) ? 'alle' : b.geraete.filter((id) => f.geraete[id]),
     an: b.an !== false,
-    erstellt: jetzt(),
   };
-  const i = f.sperren.findIndex((x) => x.id === s.id);
-  if (i >= 0) { s.erstellt = f.sperren[i].erstellt; f.sperren[i] = s; } else f.sperren.push(s);
+
+  // Gibt es für dieses Ziel schon eine Sperre, wird sie aktualisiert statt eine zweite angelegt.
+  const key = zielKey(typ, wert);
+  const nachId = b.id ? f.sperren.find((x) => x.id === b.id) : null;
+  const nachZiel = f.sperren.find((x) => zielKey(x.typ, x.wert) === key);
+  if (nachId && nachZiel && nachZiel.id !== nachId.id) return { fehler: `Für «${zielName(nachZiel)}» gibt es schon eine Sperre. Bitte diese bearbeiten.` };
+  const alt = nachId || nachZiel;
+  if (alt && alt.an && sperrenFest()) {
+    if (zielKey(alt.typ, alt.wert) !== key) return { fehler: 'Bei einer festen Sperre lässt sich das Ziel nicht ändern.', status: 403 };
+    const grund = lockerung(alt, neu, f);
+    if (grund) return { fehler: grund, status: 403 };
+  }
+
+  const s = { id: alt ? alt.id : crypto.randomBytes(4).toString('hex'), ...neu, erstellt: alt ? alt.erstellt : jetzt() };
+  const i = alt ? f.sperren.findIndex((x) => x.id === alt.id) : -1;
+  if (i >= 0) f.sperren[i] = s; else f.sperren.push(s);
   save();
   piholeSync().catch(() => {});
-  return { ok: true, sperre: s };
+  return { ok: true, sperre: s, zusammengefuehrt: !!alt && !nachId };
 }
 
 export function sperreLoeschen(id) {
   const f = fokusDb();
-  const n = f.sperren.length;
-  f.sperren = f.sperren.filter((s) => s.id !== id);
+  const s = f.sperren.find((x) => x.id === id);
+  if (!s) return { fehler: 'Nicht gefunden', status: 404 };
+  if (s.an && sperrenFest()) return { fehler: 'Diese Sperre ist fest und lässt sich nicht löschen.', status: 403 };
+  f.sperren = f.sperren.filter((x) => x.id !== id);
   save();
   piholeSync().catch(() => {});
-  return f.sperren.length < n;
+  return { ok: true };
+}
+
+// Welche Sperre zu einem Eintrag der Liste gehört (für die Anzeige «gesperrt» direkt in der Liste).
+const BEREICH_APP = { insta_reels: 'instagram', insta_explore: 'instagram', yt_shorts: 'youtube', snap_stories: 'snapchat', snap_spotlight: 'snapchat' };
+function sperreFuerEintrag(e, sperren) {
+  const name = String(e.name || '').toLowerCase();
+  let s = null;
+  if (e.art === 'web') {
+    const host = sauber(e.name);
+    s = sperren.find((x) => x.typ === 'domain' && (host === x.wert || host.endsWith('.' + x.wert))) || null;
+  } else if (e.art === 'app') {
+    s = sperren.find((x) => x.typ === 'app' && x.wert.trim().toLowerCase() === name.trim()) || null;
+  }
+  const teil = e.art === 'app'
+    ? sperren.filter((x) => x.typ === 'bereich' && x.an && BEREICH_APP[x.wert] && name.includes(BEREICH_APP[x.wert])).map((x) => BEREICHE[x.wert])
+    : [];
+  return { sperre: s ? { id: s.id, an: s.an, aktiv: sperreAktiv(s) } : null, teil };
 }
 
 export function kategorieSetzen(key, kategorie) {
@@ -456,6 +565,8 @@ export function fokusZustand(tagParam) {
     (f.stunden[tag]?.[g.id] || []).forEach((v, i) => { stunden[i] += v; });
   }
   const liste = [...eintraege.values()].sort((a, b) => b.sek - a.sek).slice(0, 60);
+  for (const x of liste) Object.assign(x, sperreFuerEintrag(x, f.sperren));
+  const fest = sperrenFest();
   const gesamt = { produktiv: 0, neutral: 0, ablenkung: 0 };
   for (const v of Object.values(proGeraet)) { gesamt.produktiv += v.produktiv; gesamt.neutral += v.neutral; gesamt.ablenkung += v.ablenkung; }
 
@@ -470,7 +581,8 @@ export function fokusZustand(tagParam) {
   return {
     zeit: nun, tag, heute,
     geraete, proGeraet, gesamt, eintraege: liste, stunden, verlauf,
-    sperren: f.sperren.map((s) => ({ ...s, aktiv: sperreAktiv(s), nutzungMin: s.modus === 'limit' ? Math.round(nutzungHeute(s.wert) / 60) : null })),
+    sperren: f.sperren.map((s) => ({ ...s, aktiv: sperreAktiv(s), fest: fest && s.an, nutzungMin: s.modus === 'limit' ? Math.round(nutzungHeute(s.wert) / 60) : null })),
+    fest,
     bereiche: BEREICHE,
     pihole: { gruppe: f.pihole.gruppe, fehler: f.pihole.fehler, zeit: f.pihole.zeit, domains: f.pihole.domains || 0, clients: f.pihole.clients || 0 },
     code: f.code && f.code.bis > nun ? { bis: f.code.bis } : null,
