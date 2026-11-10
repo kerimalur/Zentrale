@@ -1,0 +1,74 @@
+/* Fenster im macOS-Stil: Titelleiste mit drei Knöpfen, Ziehen, Grössern, Zoomen. */
+.fenster {
+  position: absolute; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--glas); backdrop-filter: blur(34px) saturate(180%);
+  border: 1px solid var(--rand-stark); border-radius: var(--radius);
+  box-shadow: var(--schatten); min-width: 340px; min-height: 220px;
+  animation: fensterAuf 0.17s cubic-bezier(.2,.9,.3,1.1);
+}
+@keyframes fensterAuf { from { opacity: 0; transform: scale(0.965); } }
+.fenster.zu { animation: fensterZu 0.14s ease-in forwards; }
+@keyframes fensterZu { to { opacity: 0; transform: scale(0.96); } }
+.fenster.minimiert { display: none; }
+.fenster.voll { border-radius: 0; border: none; }
+.fenster:not(.aktiv) { box-shadow: 0 12px 40px rgba(0,0,0,0.4); }
+.fenster:not(.aktiv) .f-titel { opacity: 0.55; }
+
+.f-leiste {
+  display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; flex: none;
+  border-bottom: 1px solid var(--rand); cursor: default;
+}
+.f-ampel { display: flex; align-items: center; gap: 8px; flex: none; }
+.f-ampel button { width: 12px; height: 12px; border-radius: 50%; display: grid; place-items: center; }
+.f-ampel .zu { background: #ff5f57; }
+.f-ampel .min { background: #febc2e; }
+.f-ampel .max { background: #28c840; }
+.fenster:not(.aktiv) .f-ampel button { background: rgba(150,150,155,0.45); }
+.f-ampel svg { width: 7px; height: 7px; opacity: 0; color: rgba(0,0,0,0.55); }
+.f-ampel:hover svg { opacity: 1; }
+.f-titel { flex: 1; text-align: center; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.f-werkzeuge { display: flex; align-items: center; gap: 6px; flex: none; }
+.f-werkzeuge .wz {
+  width: 26px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--text-leise);
+}
+.f-werkzeuge .wz:hover:not(:disabled) { background: var(--flaeche-hover); color: var(--text); }
+.f-werkzeuge .wz:disabled { opacity: 0.3; }
+.f-werkzeuge .wz svg { width: 15px; height: 15px; }
+
+.f-inhalt { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+
+.f-griff { position: absolute; z-index: 5; }
+.f-griff.n { top: -3px; left: 10px; right: 10px; height: 7px; cursor: ns-resize; }
+.f-griff.s { bottom: -3px; left: 10px; right: 10px; height: 7px; cursor: ns-resize; }
+.f-griff.w { left: -3px; top: 10px; bottom: 10px; width: 7px; cursor: ew-resize; }
+.f-griff.o { right: -3px; top: 10px; bottom: 10px; width: 7px; cursor: ew-resize; }
+.f-griff.nw { top: -3px; left: -3px; width: 14px; height: 14px; cursor: nwse-resize; }
+.f-griff.no { top: -3px; right: -3px; width: 14px; height: 14px; cursor: nesw-resize; }
+.f-griff.sw { bottom: -3px; left: -3px; width: 14px; height: 14px; cursor: nesw-resize; }
+.f-griff.so { bottom: -3px; right: -3px; width: 14px; height: 14px; cursor: nwse-resize; }
+.fenster.voll .f-griff { display: none; }
+
+/* Platzhalter für die eingebettete Zentrale, wenn sie gerade nicht sichtbar ist */
+.web-platz { position: absolute; inset: 0; background-size: cover; background-position: top center; background-color: #0e1526; }
+.web-platz.leer { display: grid; place-items: center; color: var(--text-sehr-leise); font-size: 13px; }
+.web-fehler {
+  position: absolute; inset: 0; display: grid; place-items: center; z-index: 2;
+  background: var(--glas); backdrop-filter: blur(10px); text-align: center; padding: 30px;
+}
+.web-fehler .box { max-width: 380px; }
+.web-fehler h3 { margin: 0 0 8px; font-size: 16px; }
+.web-fehler p { margin: 0 0 16px; font-size: 13px; color: var(--text-leise); line-height: 1.5; }
+
+/* Dialoge */
+.dialog-hinter { position: fixed; inset: 0; z-index: 950; background: rgba(0,0,0,0.42); display: grid; place-items: center; animation: einblenden 0.14s; }
+@keyframes einblenden { from { opacity: 0; } }
+.dialog {
+  width: 380px; max-width: calc(100vw - 48px); padding: 20px;
+  background: var(--glas-hell); backdrop-filter: blur(36px) saturate(180%);
+  border: 1px solid var(--rand-stark); border-radius: 14px; box-shadow: var(--schatten);
+  animation: fensterAuf 0.16s cubic-bezier(.2,.9,.3,1.1);
+}
+.dialog h3 { margin: 0 0 7px; font-size: 15px; }
+.dialog p { margin: 0 0 14px; font-size: 13px; color: var(--text-leise); line-height: 1.5; word-break: break-word; }
+.dialog .feld { width: 100%; }
+.dialog .knoepfe { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }

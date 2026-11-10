@@ -317,3 +317,45 @@ Die Zentrale liest nur, und nur solange der Tab offen ist (jede Minute, Zwischen
 ```
 
 `.env` der Zentrale: `GARMIN_INFLUX_PASSWORD=` (gleicher Wert wie `INFLUXDB_PASSWORD` in garmin-grafana). Optional: `GARMIN_INFLUX_PORT` (8086), `GARMIN_GRAFANA_PORT` (3020), `GARMIN_GRAFANA_URL`, `GARMIN_SCHRITTE_ZIEL` (10000).
+
+## Desktop-App für den HP (`desktop/`)
+
+Der HP, auf dem der Trading-Bot läuft, bekommt eine eigene Oberfläche: Anmeldebildschirm wie bei Windows, macOS-artiger Schreibtisch mit Dock, ein Finder für die Dateien auf dem Pi **und** auf dem HP, eine Steuerung für PC/Fernseher/Szenen – und die Zentrale selbst als Fenster mittendrin. «Ausschalten» schaltet nur den Monitor ab, der HP läuft weiter.
+
+Bauen (auf Windows, braucht Node.js 20+):
+
+```powershell
+cd desktop
+npm install
+npm run dist
+```
+
+Alles Weitere steht in [`desktop/README.md`](desktop/README.md).
+
+## Datei-API (für den Finder der Desktop-App)
+
+Der bisherige Explorer (`/api/explorer`) kann nur lesen. Für den Finder gibt es `server/dateien.mjs` mit Schreibzugriff – nur für angemeldete Sitzungen, und mit denselben Schutzregeln wie der Explorer: nur echte Laufwerks-Einhängepunkte als Wurzel, kein `..`, keine Symlinks im Pfad, nichts ausserhalb des Laufwerks.
+
+| Route | Was |
+|---|---|
+| `GET /api/dateien/laufwerke` | Laufwerke mit Namen und freiem Platz |
+| `GET /api/dateien?wurzel=&pfad=` | Ordner auflisten (`versteckte=1` für Punktdateien) |
+| `GET /api/dateien/inhalt?wurzel=&pfad=` | Datei ausliefern, mit Range (Video, PDF) |
+| `GET /api/dateien/text` · `POST /api/dateien/text` | Textdatei lesen / schreiben (max. 4 MB) |
+| `POST /api/dateien/neu` | Datei oder Ordner anlegen |
+| `POST /api/dateien/umbenennen` | umbenennen |
+| `POST /api/dateien/verschieben` | verschieben oder kopieren (auch über Laufwerke) |
+| `POST /api/dateien/loeschen` | in den Papierkorb des Laufwerks (`endgueltig: true` löscht wirklich) |
+| `POST /api/dateien/papierkorb` | Papierkorb eines Laufwerks leeren |
+| `POST /api/dateien/upload?wurzel=&pfad=&name=` | Datei hochladen (bis 4 GB, gestreamt) |
+| `POST /api/dateien/teilen` | Link mit Ablaufdatum erzeugen |
+| `GET /api/dateien/teilen` · `POST /api/dateien/teilen/weg` | Links auflisten / löschen |
+| `GET /teilen/<token>` | **öffentlich**, ohne Anmeldung – gibt genau diese eine Datei heraus |
+
+Gelöschtes landet unter `<Laufwerk>/.Papierkorb/<Zeitstempel>__<Name>` und bleibt dort, bis du den Papierkorb leerst. Geteilte Links stehen in `data/zentrale.json` und laufen nach 1–90 Tagen ab (Standard 7). Erreichbar sind sie trotzdem nur über Tailscale – `tailscale serve` lässt niemanden sonst an Port 8443.
+
+Nach dem Einspielen auf dem Pi:
+
+```bash
+cd /mnt/daten/zentrale && docker compose up -d --build
+```

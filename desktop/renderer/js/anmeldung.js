@@ -1,0 +1,184 @@
+// Anmeldebildschirm. Sieht aus wie die Windows-Anmeldung (Uhr, dann Passwortfeld),
+// prüft aber gegen die Zentrale auf dem Pi: Passwort + 2FA-Code. Keinen Benutzernamen.
+const Sperre = {
+  el: null, offen: false, laeuft: false, codeNoetig: false, uhrTimer: null, piTimer: null,
+
+  zeigen() {
+    const e = Einst.daten.anmeldung;
+    this.offen = false;
+    this.codeNoetig = false;
+    this.bauen(e);
+    $('#sperre').hidden = false;
+    $('#schreibtisch').setAttribute('aria-hidden', 'true');
+    this.uhrStart();
+    this.piPruefenSchleife();
+    setTimeout(() => this.el.wurzel.focus(), 50);
+  },
+
+  verstecken() {
+    $('#sperre').hidden = true;
+    $('#schreibtisch').setAttribute('aria-hidden', 'false');
+    clearInterval(this.uhrTimer); this.uhrTimer = null;
+    clearInterval(this.piTimer); this.piTimer = null;
+  },
+
+  bauen(e) {
+    const wurzel = leeren($('#sperre'));
+    wurzel.className = 'sperre';
+    wurzel.tabIndex = -1;
+
+    const hg = el('div', { klasse: 'sperre-hintergrund' });
+    this.hintergrundSetzen(hg, e);
+
+    const zeit = el('div', { klasse: 'zeit', text: uhr() });
+    const datum = el('div', { klasse: 'datum', text: langesDatum() });
+    const uhrBlock = el('div', { klasse: 'sperre-uhr' },
+      e.uhrZeigen ? zeit : null,
+      e.datumZeigen ? datum : null,
+    );
+
+    const avatar = el('div', { klasse: 'sperre-avatar' },
+      e.avatar ? el('img', { src: '', alt: '' }) : (e.benutzerName || 'Z').trim().charAt(0).toUpperCase());
+    if (e.avatar) Z.lokal.url(e.avatar).then((r) => { if (r.ok) avatar.querySelector('img').src = r.url; });
+
+    const passwort = el('input', { type: 'password', placeholder: 'Passwort', autocomplete: 'off', spellcheck: 'false' });
+    const code = el('input', { type: 'text', placeholder: '6-stelliger Code', inputmode: 'numeric', maxlength: '8', autocomplete: 'off' });
+    const codeFeld = el('div', { klasse: 'sperre-eingabe', stil: { display: 'none' } }, code,
+      el('button', { klasse: 'sperre-pfeil', html: symbol('pfeilRechts'), onclick: () => this.absenden() }));
+
+    passwort.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') this.absenden(); });
+    code.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') this.absenden(); });
+
+    const fehler = el('div', { klasse: 'sperre-fehler' });
+    const info = el('div', { klasse: 'sperre-info' });
+    const lader = el('div', { klasse: 'lader sperre-lader', stil: { display: 'none' } });
+
+    const karte = el('div', { klasse: 'sperre-karte' },
+      avatar,
+      el('div', { klasse: 'sperre-name', text: e.benutzerName || 'Zentrale' }),
+      e.untertitel ? el('div', { klasse: 'sperre-unter', text: e.untertitel }) : null,
+      el('div', { klasse: 'sperre-eingabe' }, passwort,
+        el('button', { klasse: 'sperre-pfeil', html: symbol('pfeilRechts'), onclick: () => this.absenden() })),
+      codeFeld,
+      fehler, info, lader,
+    );
+
+    const punkt = el('span', { klasse: 'punkt' });
+    const zustandText = el('span', { text: 'Pi wird geprüft …' });
+    const fuss = el('div', { klasse: 'sperre-fuss' },
+      el('div', { klasse: 'zustand' }, punkt, zustandText),
+      el('button', {
+        klasse: 'sperre-rund', title: 'Bildschirm aus', html: symbol('strom'),
+        onclick: (ev) => {
+          ev.stopPropagation();
+          kontextmenue(ev.clientX - 180, ev.clientY - 80, [
+            { text: 'Bildschirm ausschalten', tun: () => Z.system.bildschirmAus() },
+            '-',
+            { text: 'Zentrale neu starten', tun: () => Z.system.neustart() },
+            { text: 'Zentrale beenden', tun: async () => { if (await fragen('Zentrale beenden?', 'Die Oberfläche wird geschlossen. Windows und der Trading-Bot laufen weiter.', 'Beenden', true)) Z.system.beenden(); } },
+          ]);
+        },
+      }),
+    );
+
+    wurzel.append(hg, el('div', { klasse: 'sperre-schleier' }), uhrBlock, karte,
+      el('div', { klasse: 'sperre-hinweis', text: 'Taste drücken oder klicken zum Anmelden' }), fuss);
+
+    this.el = { wurzel, zeit, datum, passwort, code, codeFeld, fehler, info, lader, punkt, zustandText, karte };
+
+    // Irgendeine Eingabe öffnet das Passwortfeld (wie bei Windows).
+    const aufmachen = (ev) => {
+      if (this.offen) return;
+      if (ev.type === 'keydown' && (ev.key === 'Shift' || ev.key === 'Control' || ev.key === 'Alt' || ev.key === 'Meta')) return;
+      this.aufmachen();
+      if (ev.type === 'keydown' && ev.key.length === 1) {
+        this.el.passwort.value = ev.key;
+      }
+    };
+    wurzel.addEventListener('mousedown', aufmachen);
+    wurzel.addEventListener('wheel', aufmachen, { passive: true });
+    wurzel.addEventListener('keydown', aufmachen);
+  },
+
+  async hintergrundSetzen(hg, e) {
+    hg.style.filter = `blur(${this.offen ? Number(e.weichzeichnen) || 0 : 0}px)`;
+    if (e.hintergrundArt === 'farbe') { hg.style.background = e.farbe || '#0b1220'; return; }
+    if (e.hintergrundArt === 'bild' && e.hintergrund) {
+      const r = await Z.lokal.url(e.hintergrund);
+      if (r.ok) { hg.style.backgroundImage = `url("${r.url}")`; return; }
+    }
+    hg.style.background = 'radial-gradient(1200px 820px at 20% 15%, #1e3a8a 0%, transparent 60%),'
+      + 'radial-gradient(1000px 700px at 82% 80%, #4c1d95 0%, transparent 62%),'
+      + 'linear-gradient(165deg, #050a14 0%, #0b1220 50%, #0a0f1c 100%)';
+  },
+
+  aufmachen() {
+    this.offen = true;
+    this.el.wurzel.classList.add('offen');
+    const e = Einst.daten.anmeldung;
+    const hg = this.el.wurzel.querySelector('.sperre-hintergrund');
+    hg.style.filter = `blur(${Number(e.weichzeichnen) || 0}px)`;
+    hg.style.transform = 'scale(1.04)';
+    setTimeout(() => this.el.passwort.focus(), 60);
+  },
+
+  uhrStart() {
+    const tick = () => {
+      if (!this.el) return;
+      this.el.zeit.textContent = uhr();
+      this.el.datum.textContent = langesDatum();
+    };
+    tick();
+    clearInterval(this.uhrTimer);
+    this.uhrTimer = setInterval(tick, 10000);
+  },
+
+  async piPruefenSchleife() {
+    const pruefen = async () => {
+      if (!this.el) return;
+      const r = await Z.anmeldungPruefen();
+      const online = r && r.online;
+      this.el.punkt.className = 'punkt ' + (online ? 'an' : 'weg');
+      this.el.zustandText.textContent = online ? 'Pi verbunden' : 'Pi nicht erreichbar';
+      if (!online && Einst.daten.anmeldung.offlineErlauben && r && r.gemerkt) {
+        this.el.info.textContent = 'Ohne Pi: nur Passwort, kein Code.';
+      } else if (!online) {
+        this.el.info.textContent = '';
+      }
+    };
+    pruefen();
+    clearInterval(this.piTimer);
+    this.piTimer = setInterval(pruefen, 20000);
+  },
+
+  async absenden() {
+    if (this.laeuft) return;
+    const pw = this.el.passwort.value;
+    if (!pw) { this.el.passwort.focus(); return; }
+    this.laeuft = true;
+    this.el.fehler.textContent = '';
+    this.el.lader.style.display = 'block';
+
+    const r = await Z.anmelden(pw, this.codeNoetig ? this.el.code.value.trim() : '');
+
+    this.laeuft = false;
+    this.el.lader.style.display = 'none';
+
+    if (r && r.ok) {
+      this.el.passwort.value = '';
+      this.el.code.value = '';
+      this.verstecken();
+      Schreibtisch.nachAnmeldung(!!r.offline);
+      return;
+    }
+
+    if (r && r.codeNoetig) {
+      this.codeNoetig = true;
+      this.el.codeFeld.style.display = 'block';
+      this.el.info.textContent = 'Code aus der Authenticator-App eingeben.';
+      setTimeout(() => this.el.code.focus(), 40);
+    }
+    this.el.fehler.textContent = (r && r.fehler) || 'Anmeldung fehlgeschlagen.';
+    if (!this.codeNoetig) { this.el.passwort.select(); }
+  },
+};

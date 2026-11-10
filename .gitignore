@@ -14,3 +14,7 @@ android/app/build/
 android/.gradle/
 android/.kotlin/
 android/local.properties
+
+# Desktop-App (HP)
+desktop/node_modules/
+desktop/dist/

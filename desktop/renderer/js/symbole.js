@@ -1,0 +1,65 @@
+// Alle Symbole als SVG. Schlicht gehalten, Strichstärke wie bei macOS.
+const S = (d, fuellen = false) =>
+  `<svg viewBox="0 0 24 24" fill="${fuellen ? 'currentColor' : 'none'}" stroke="${fuellen ? 'none' : 'currentColor'}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+
+const SYMBOL = {
+  zentrale: S('<rect x="3" y="3" width="18" height="18" rx="4"/><rect x="8.5" y="8.5" width="7" height="7" rx="1.6"/><path d="M8.5 1.5v2M15.5 1.5v2M8.5 20.5v2M15.5 20.5v2M20.5 8.5h2M20.5 15.5h2M1.5 8.5h2M1.5 15.5h2"/>'),
+  finder: S('<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M12 4v16"/><path d="M6.5 10.5c.7.8 1.3 1.2 2 1.2M15.5 10.5c.7.8 1.3 1.2 2 1.2M7 16c1.6 1.1 3.4 1.1 5 0"/>'),
+  steuerung: S('<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2.3" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="2.3" fill="currentColor" stroke="none"/><circle cx="7" cy="18" r="2.3" fill="currentColor" stroke="none"/>'),
+  einstellungen: S('<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9.1A1.7 1.7 0 0 0 10.13 3V3a2 2 0 1 1 4 0v.09c0 .67.4 1.28 1.03 1.54.6.26 1.3.14 1.8-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.08c.26.63.87 1.03 1.54 1.03H21a2 2 0 1 1 0 4h-.09c-.67 0-1.28.4-1.51 1z"/>'),
+  ordner: S('<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.2c.5 0 .97.25 1.25.67l.8 1.16c.28.42.74.67 1.25.67h6.5A1.5 1.5 0 0 1 20 10v7.5A1.5 1.5 0 0 1 18.5 19h-14A1.5 1.5 0 0 1 3 17.5z"/>'),
+  datei: S('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'),
+  bild: S('<rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="M21 15.5 16.5 11 7 20.5"/>'),
+  pdf: S('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8.5 16.5c2-1 3.5-3.2 3.5-5 0-.8-.4-1.3-1-1.3s-1 .6-.9 1.6c.2 2.3 2.3 4.7 4 5.1"/>'),
+  video: S('<rect x="2.5" y="5.5" width="14" height="13" rx="2.5"/><path d="m16.5 10.5 5-3v9l-5-3z"/>'),
+  musik: S('<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>'),
+  text: S('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M8.5 13h7M8.5 16.5h5"/>'),
+  archiv: S('<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M12 4v4M12 10v1.5M12 13.5V15"/><rect x="10" y="15" width="4" height="3.5" rx="1"/>'),
+  link: S('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>'),
+  festplatte: S('<rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="M2.5 13.5h19"/><circle cx="17.5" cy="17" r="1.1" fill="currentColor" stroke="none"/>'),
+  home: S('<path d="m3 10.5 9-7 9 7"/><path d="M5.5 9.5V19a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5V9.5"/>'),
+  desktop: S('<rect x="2.5" y="4" width="19" height="12.5" rx="2"/><path d="M9 20.5h6M12 16.5v4"/>'),
+  doc: S('<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/>'),
+  download: S('<path d="M12 3.5v11M7.5 10.5 12 15l4.5-4.5"/><path d="M4 17v2a1.5 1.5 0 0 0 1.5 1.5h13A1.5 1.5 0 0 0 20 19v-2"/>'),
+  pi: S('<rect x="4" y="4" width="16" height="16" rx="2.5"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2.5v1.5M15 2.5v1.5M9 20v1.5M15 20v1.5M20 9h1.5M20 15h1.5M2.5 9H4M2.5 15H4"/>'),
+  zurueck: S('<path d="m14.5 5-7 7 7 7"/>'),
+  vor: S('<path d="m9.5 5 7 7-7 7"/>'),
+  hoch: S('<path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/>'),
+  neu: S('<path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/><path d="M19 3v4.5h-4.5"/>'),
+  plus: S('<path d="M12 5v14M5 12h14"/>'),
+  minus: S('<path d="M5 12h14"/>'),
+  mal: S('<path d="M6 6 18 18M18 6 6 18"/>'),
+  haken: S('<path d="m5 12.5 5 5 9-11"/>'),
+  voll: S('<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M8 21H5a2 2 0 0 1-2-2v-3M16 21h3a2 2 0 0 0 2-2v-3"/>'),
+  teilen: S('<path d="M12 15V3M8 6.5 12 2.5l4 4"/><path d="M4.5 13v6A1.5 1.5 0 0 0 6 20.5h12a1.5 1.5 0 0 0 1.5-1.5v-6"/>'),
+  muell: S('<path d="M3.5 6h17M9 6V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V6M18.5 6l-.8 13a1.5 1.5 0 0 1-1.5 1.4H7.8a1.5 1.5 0 0 1-1.5-1.4L5.5 6"/>'),
+  stift: S('<path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7.5 18.5 3 20l1.5-4.5z"/>'),
+  speichern: S('<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M7 21v-7h10v7M7 3v5h8"/>'),
+  auge: S('<path d="M2 12s3.7-6.5 10-6.5S22 12 22 12s-3.7 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.7"/>'),
+  strom: S('<path d="M12 3v9"/><path d="M6.8 6.8a8 8 0 1 0 10.4 0"/>'),
+  schloss: S('<rect x="4.5" y="10" width="15" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>'),
+  pc: S('<rect x="2.5" y="4" width="19" height="12.5" rx="2"/><path d="M9 20.5h6M12 16.5v4"/>'),
+  tv: S('<rect x="2.5" y="5" width="19" height="13" rx="2.5"/><path d="M8 21h8"/>'),
+  mond: S('<path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.6 6.6 0 0 0 10.5 10.5z"/>'),
+  film: S('<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M7.5 5v14M16.5 5v14M2.5 12h19"/>'),
+  sonne: S('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>'),
+  lauter: S('<path d="M11 5 6.5 8.5H3v7h3.5L11 19z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>'),
+  leiser: S('<path d="M11 5 6.5 8.5H3v7h3.5L11 19z"/><path d="M16 10.5 20.5 15M20.5 10.5 16 15"/>'),
+  kopieren: S('<rect x="8.5" y="8.5" width="12" height="12" rx="2"/><path d="M15.5 8.5v-3a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"/>'),
+  info: S('<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.8v.4"/>'),
+  suche: S('<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>'),
+  liste: S('<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>'),
+  gitter: S('<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>'),
+  pfeilRechts: S('<path d="M4 12h15M13 6l6 6-6 6"/>'),
+  browser: S('<rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="M2.5 9h19M6 6.5h.01M8.5 6.5h.01"/>'),
+};
+
+const symbol = (name) => SYMBOL[name] || SYMBOL.datei;
+const symbolEl = (name, klasse = '') => {
+  const s = el('span', { klasse, html: symbol(name) });
+  return s.firstElementChild || s;
+};
+const artSymbol = (art) => ({
+  ordner: 'ordner', bild: 'bild', pdf: 'pdf', video: 'video', audio: 'musik',
+  text: 'text', archiv: 'archiv', link: 'link',
+}[art] || 'datei');

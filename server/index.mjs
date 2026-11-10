@@ -9,6 +9,7 @@ import { zweifaktorZustand, einrichtungStarten, einrichtungBestaetigen, ausschal
 import { terminalUpgrade } from './terminal.mjs';
 import { schnell, mittel, langsam, sehrLangsam, speicherLauf, zeitplan, snapshot, sshNurSchluesselSetzen, manuelleSzene, laufwerkeListe, cloudJetzt, tsPeers } from './monitor.mjs';
 import { ordnerLesen, ordnerGroessen } from './explorer.mjs';
+import { listen as dateienListen, dateiInfo, textLesen, textSchreiben, neueDatei, neuerOrdner, umbenennen as dateiUmbenennen, verschieben as dateiVerschieben, loeschen as dateiLoeschen, papierkorbLeeren, uploadZiel, teilen as dateiTeilen, freigabenListe, freigabeLoeschen, freigabeAufloesen } from './dateien.mjs';
 import { szeneSetzen, standardGovernorMerken, hddTimerSetzen } from './szenen.mjs';
 import { neustarten } from './collect/docker.mjs';
 import { backupStarten, backupEingerichtet } from './backup.mjs';
@@ -407,6 +408,78 @@ async function api(req, res, url) {
     return json(res, 200, await ordnerGroessen(laufwerkeListe(), url.searchParams.get('wurzel') || '', url.searchParams.get('pfad') || '/'));
   }
 
+  // ---------- Dateien (Finder der Desktop-App) ----------
+  if (p === '/api/dateien/laufwerke' && m === 'GET') {
+    return json(res, 200, { laufwerke: laufwerkeListe().map((l) => ({ mount: l.mount, name: l.name, groesse: l.groesse ?? null, frei: l.frei ?? null, benutzt: l.benutzt ?? null })) });
+  }
+  if (p === '/api/dateien' && m === 'GET') {
+    return json(res, 200, await dateienListen(laufwerkeListe(), url.searchParams.get('wurzel') || '', url.searchParams.get('pfad') || '/', { versteckte: url.searchParams.get('versteckte') === '1' }));
+  }
+  if (p === '/api/dateien/inhalt' && m === 'GET') {
+    const info = await dateiInfo(laufwerkeListe(), url.searchParams.get('wurzel') || '', url.searchParams.get('pfad') || '');
+    return dateiAusliefern(req, res, info, url.searchParams.get('download') === '1');
+  }
+  if (p === '/api/dateien/text' && m === 'GET') {
+    return json(res, 200, await textLesen(laufwerkeListe(), url.searchParams.get('wurzel') || '', url.searchParams.get('pfad') || ''));
+  }
+  if (p === '/api/dateien/text' && (m === 'POST' || m === 'PUT')) {
+    const b = await body(req, 5 * 1024 * 1024);
+    return json(res, 200, await textSchreiben(laufwerkeListe(), String(b.wurzel || ''), String(b.pfad || ''), b.inhalt));
+  }
+  if (p === '/api/dateien/neu' && m === 'POST') {
+    const b = await body(req);
+    const lw = laufwerkeListe();
+    const r = b.ordner
+      ? await neuerOrdner(lw, String(b.wurzel || ''), String(b.pfad || ''))
+      : await neueDatei(lw, String(b.wurzel || ''), String(b.pfad || ''), String(b.inhalt || ''));
+    return json(res, 200, r);
+  }
+  if (p === '/api/dateien/umbenennen' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await dateiUmbenennen(laufwerkeListe(), String(b.wurzel || ''), String(b.pfad || ''), String(b.name || '')));
+  }
+  if (p === '/api/dateien/verschieben' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await dateiVerschieben(laufwerkeListe(), { wurzel: String(b.wurzel || ''), pfad: String(b.pfad || '') }, { wurzel: String(b.zielWurzel || b.wurzel || ''), pfad: String(b.zielPfad || '/') }, { kopieren: !!b.kopieren }));
+  }
+  if (p === '/api/dateien/loeschen' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await dateiLoeschen(laufwerkeListe(), String(b.wurzel || ''), String(b.pfad || ''), { endgueltig: !!b.endgueltig }));
+  }
+  if (p === '/api/dateien/papierkorb' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await papierkorbLeeren(laufwerkeListe(), String(b.wurzel || '')));
+  }
+  if (p === '/api/dateien/upload' && m === 'POST') {
+    const ziel = await uploadZiel(laufwerkeListe(), url.searchParams.get('wurzel') || '', url.searchParams.get('pfad') || '/', url.searchParams.get('name') || '');
+    const max = 4 * 1024 * 1024 * 1024; // 4 GB
+    let gesamt = 0;
+    const strom = fs.createWriteStream(ziel.tmp);
+    try {
+      await new Promise((ok, schief) => {
+        req.on('data', (c) => { gesamt += c.length; if (gesamt > max) { schief(new Error('Datei zu gross (max. 4 GB)')); req.destroy(); } });
+        req.on('error', schief);
+        strom.on('error', schief);
+        strom.on('finish', ok);
+        req.pipe(strom);
+      });
+    } catch (e) {
+      try { fs.unlinkSync(ziel.tmp); } catch {}
+      return json(res, 413, { fehler: e.message });
+    }
+    fs.renameSync(ziel.tmp, ziel.host);
+    return json(res, 200, { ok: true, name: ziel.name, pfad: ziel.pfad, groesse: gesamt });
+  }
+  if (p === '/api/dateien/teilen' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await dateiTeilen(laufwerkeListe(), String(b.wurzel || ''), String(b.pfad || ''), { tage: b.tage, hostName: config.hostName }));
+  }
+  if (p === '/api/dateien/teilen' && m === 'GET') return json(res, 200, { freigaben: freigabenListe(), host: config.hostName });
+  if (p === '/api/dateien/teilen/weg' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, freigabeLoeschen(String(b.token || '')));
+  }
+
   // ---------- Möbel-Lüfter ----------
   if (p === '/api/luefter' && m === 'POST') {
     const b = await body(req);
@@ -503,6 +576,44 @@ function agentDatei(res, pfad) {
   res.end(inhalt);
 }
 
+// Datei ausliefern, mit Unterstuetzung fuer Teil-Anfragen (Range) - noetig fuer Video und PDF.
+function dateiAusliefern(req, res, info, download = false) {
+  const kopf = {
+    'Content-Type': download ? 'application/octet-stream' : info.mime,
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'private, no-cache',
+    'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(info.name)}`,
+  };
+  const bereich = String(req.headers.range || '').match(/^bytes=(\d*)-(\d*)$/);
+  if (bereich && info.groesse > 0) {
+    let von = bereich[1] === '' ? null : Number(bereich[1]);
+    let bis = bereich[2] === '' ? null : Number(bereich[2]);
+    if (von === null) { von = Math.max(info.groesse - (bis || 0), 0); bis = info.groesse - 1; }
+    if (bis === null || bis >= info.groesse) bis = info.groesse - 1;
+    if (von > bis || von >= info.groesse) {
+      res.writeHead(416, { 'Content-Range': `bytes */${info.groesse}` });
+      return res.end();
+    }
+    res.writeHead(206, { ...kopf, 'Content-Range': `bytes ${von}-${bis}/${info.groesse}`, 'Content-Length': bis - von + 1 });
+    return fs.createReadStream(info.host, { start: von, end: bis }).pipe(res);
+  }
+  res.writeHead(200, { ...kopf, 'Content-Length': info.groesse });
+  if (req.method === 'HEAD') return res.end();
+  return fs.createReadStream(info.host).pipe(res);
+}
+
+// Oeffentlicher Teilen-Link: /teilen/<token> - ohne Anmeldung, laeuft ab.
+async function teilenAusliefern(req, res, pfad) {
+  const token = decodeURIComponent(pfad.slice('/teilen/'.length)).split('/')[0];
+  const info = await freigabeAufloesen(laufwerkeListe(), token);
+  if (!info) {
+    res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end('<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;padding:40px;text-align:center"><h2>Link ungültig oder abgelaufen</h2>');
+  }
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  return dateiAusliefern(req, res, info, false);
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -510,6 +621,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname.startsWith('/agent/') && req.method === 'GET') return agentDatei(res, url.pathname);
+    if (url.pathname.startsWith('/teilen/') && (req.method === 'GET' || req.method === 'HEAD')) return await teilenAusliefern(req, res, url.pathname);
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
     if (!OEFFENTLICH.some((r) => r.test(url.pathname)) && !istAngemeldet(req)) {
       res.writeHead(302, { Location: '/login/' });

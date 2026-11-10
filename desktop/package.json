@@ -1,0 +1,42 @@
+{
+  "name": "zentrale-desktop",
+  "productName": "Zentrale",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kerims Zentrale als Desktop-Oberfläche für den HP",
+  "author": "Kerim",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64",
+    "dist:portable": "electron-builder --win portable --x64",
+    "check": "node --check electron/main.js && node --check electron/preload.js"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "ch.kerim.zentrale",
+    "productName": "Zentrale",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["electron/**/*", "renderer/**/*", "package.json"],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "Zentrale-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Zentrale"
+    },
+    "portable": { "artifactName": "Zentrale-portable-${version}.${ext}" }
+  }
+}
