@@ -1,0 +1,54 @@
+#!/bin/bash
+# Root-Helfer von ZentraleOS. Wird nur über sudo (mit Administrator-Passwort) aufgerufen.
+# Jede Aktion ist eine feste Unterfunktion – es wird nie beliebiger Text ausgeführt.
+set -u
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+NFT=/etc/nftables.conf
+case "${1:-}" in
+  pruefen) echo ok ;;
+  firewall-anwenden)
+    # Neue Regeln kommen über die Standardeingabe. Erst prüfen, dann anwenden,
+    # dann 60 Sekunden auf Bestätigung warten – sonst zurück zum alten Stand.
+    neu="$(mktemp)"; cat > "$neu"
+    nft -c -f "$neu" || { rm -f "$neu"; echo "Regeln fehlerhaft" >&2; exit 2; }
+    [ -f "$NFT.vorher" ] || cp -a "$NFT" "$NFT.vorher"
+    install -m 0644 "$neu" "$NFT"; rm -f "$neu"
+    nft -f "$NFT" || { cp -a "$NFT.vorher" "$NFT"; nft -f "$NFT"; exit 3; }
+    systemctl stop zos-fw-ruecknahme.timer zos-fw-ruecknahme.service 2>/dev/null
+    systemctl reset-failed zos-fw-ruecknahme.service 2>/dev/null
+    systemd-run --quiet --unit=zos-fw-ruecknahme --on-active="${2:-60}" /usr/libexec/zentraleos/helfer firewall-zuruecknehmen
+    echo angewendet ;;
+  firewall-bestaetigen)
+    systemctl stop zos-fw-ruecknahme.timer 2>/dev/null; rm -f "$NFT.vorher"; echo bestaetigt ;;
+  firewall-zuruecknehmen)
+    [ -f "$NFT.vorher" ] || exit 0
+    mv -f "$NFT.vorher" "$NFT"; nft -f "$NFT"; logger -t zentraleos "Firewall-Änderung zurückgenommen"; echo zurueckgenommen ;;
+  firewall-zustand) nft list ruleset ;;
+  firewall-protokoll) journalctl -k -g ZOS-VERWORFEN -n "${2:-60}" --no-pager -o short-iso 2>/dev/null ;;
+  ports) ss -tulnpH ;;
+  ssh)
+    if [ "${2:-}" = an ]; then systemctl enable --now ssh; else systemctl disable --now ssh; fi ;;
+  zeitzone) timedatectl set-timezone "$2" ;;
+  ntp) timedatectl set-ntp "$2" ;;
+  hostname) hostnamectl set-hostname "$2" ;;
+  tastatur)
+    case "$2" in *[!a-z]*) exit 2;; esac
+    sed -i "s/^XKBLAYOUT=.*/XKBLAYOUT=\"$2\"/" /etc/default/keyboard ;;
+  updates-suchen) apt-get update -q 2>&1 | tail -3; apt list --upgradable 2>/dev/null | tail -n +2 ;;
+  updates-einspielen) DEBIAN_FRONTEND=noninteractive apt-get -y -q dist-upgrade 2>&1 | tail -15 ;;
+  auto-updates)
+    printf 'APT::Periodic::Update-Package-Lists "%s";\nAPT::Periodic::Unattended-Upgrade "%s";\n' "$2" "$2" > /etc/apt/apt.conf.d/20auto-upgrades ;;
+  paket-installieren)
+    case "$2" in *[!a-z0-9.+-]*) exit 2;; esac
+    DEBIAN_FRONTEND=noninteractive apt-get -y -q install "$2" 2>&1 | tail -8 ;;
+  passwort)
+    # "benutzer:passwort" kommt über die Standardeingabe
+    chpasswd ;;
+  tailscale-anmelden)
+    # Erlaubt dem Benutzer danach, Tailscale selbst zu bedienen (Exit-Node usw.), und gibt den Anmelde-Link aus.
+    tailscale set --operator="${SUDO_USER:-zentrale}" 2>/dev/null
+    timeout 8 tailscale up --operator="${SUDO_USER:-zentrale}" 2>&1 | grep -o 'https://login.tailscale.com[^ ]*' | head -1; true ;;
+  protokoll) journalctl -b -n "${2:-200}" --no-pager -o short-iso ;;
+  energie) case "$2" in neustart) systemctl reboot;; aus) systemctl poweroff;; esac ;;
+  *) echo "Unbekannte Aktion" >&2; exit 64 ;;
+esac

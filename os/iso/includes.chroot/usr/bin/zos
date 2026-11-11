@@ -1,0 +1,3 @@
+#!/bin/sh
+# Schickt einen Befehl an die laufende Shell (z. B. zos sperren, zos spotlight).
+exec /opt/zentraleos/shell/node_modules/electron/dist/electron /opt/zentraleos/shell --befehl="$1" >/dev/null 2>&1

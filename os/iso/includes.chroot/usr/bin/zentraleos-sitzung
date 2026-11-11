@@ -1,0 +1,19 @@
+#!/bin/sh
+# Startet die grafische Sitzung von ZentraleOS (labwc + Shell).
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=ZentraleOS
+export XKB_DEFAULT_LAYOUT="$(. /etc/default/keyboard 2>/dev/null; echo "${XKBLAYOUT:-ch}")"
+export MOZ_ENABLE_WAYLAND=1
+[ -f /etc/zentraleos/sitzung.env ] && . /etc/zentraleos/sitzung.env
+PROTOKOLL="${XDG_RUNTIME_DIR:-/tmp}/labwc.log"
+grep -qw zos.pixman /proc/cmdline && export WLR_RENDERER=pixman
+anfang=$(date +%s)
+labwc >"$PROTOKOLL" 2>&1
+code=$?
+# Stirbt der Compositor sofort (meist: keine brauchbare Grafikbeschleunigung), nochmal ohne.
+if [ $code -ne 0 ] && [ $(( $(date +%s) - anfang )) -lt 15 ] && [ -z "${WLR_RENDERER:-}" ]; then
+  cp "$PROTOKOLL" "$PROTOKOLL.1" 2>/dev/null
+  export WLR_RENDERER=pixman
+  exec labwc >"$PROTOKOLL" 2>&1
+fi
+exit $code

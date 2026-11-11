@@ -1,0 +1,17 @@
+#!/bin/sh
+# Trägt den ersten normalen Benutzer für die automatische Sitzung ein.
+# Die Anmeldung selbst (PIN/Passwort) macht die Shell mit ihrem Sperrbildschirm.
+B="$(awk -F: '$3>=1000 && $3<60000 {print $1; exit}' /etc/passwd)"
+[ -n "$B" ] || B=zentrale
+cat > /etc/greetd/config.toml <<EOT
+[terminal]
+vt = 7
+
+[default_session]
+command = "/usr/sbin/agreety --cmd /usr/bin/zentraleos-sitzung"
+user = "_greetd"
+
+[initial_session]
+command = "/usr/bin/zentraleos-sitzung"
+user = "$B"
+EOT

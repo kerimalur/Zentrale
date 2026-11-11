@@ -1,0 +1,25 @@
+# Fensterrahmen für fremde Programme (Terminal, Browser, Flatpak, Wine)
+border.width: 1
+window.titlebar.padding.width: 10
+window.titlebar.padding.height: 6
+window.active.title.bg.color: #1c2333
+window.inactive.title.bg.color: #161b27
+window.active.label.text.color: #e8ecf5
+window.inactive.label.text.color: #8a93a6
+window.active.border.color: #2b3550
+window.inactive.border.color: #1d2333
+window.label.text.justify: center
+window.button.width: 14
+window.button.height: 14
+window.button.spacing: 8
+window.active.button.close.unpressed.image.color: #ff6b5f
+window.active.button.iconify.unpressed.image.color: #f6c350
+window.active.button.max.unpressed.image.color: #3ecf73
+window.inactive.button.unpressed.image.color: #5b6477
+menu.items.bg.color: #1c2333
+menu.items.text.color: #e8ecf5
+menu.items.active.bg.color: #2457f5
+menu.items.active.text.color: #ffffff
+osd.bg.color: #1c2333
+osd.border.color: #2b3550
+osd.label.text.color: #e8ecf5

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Hält die Shell am Leben: stürzt sie ab, startet sie neu.
+E=/opt/zentraleos/shell/node_modules/electron/dist/electron
+ARGS="--ozone-platform=wayland --enable-wayland-ime --class=zentraleos-shell"
+grep -qw zos.demo /proc/cmdline && ARGS="$ARGS --demo"
+n=0
+while [ $n -lt 20 ]; do
+  "$E" /opt/zentraleos/shell $ARGS >>"${XDG_RUNTIME_DIR:-/tmp}/shell.log" 2>&1
+  [ $? -eq 0 ] && break
+  n=$((n+1)); sleep 1
+done

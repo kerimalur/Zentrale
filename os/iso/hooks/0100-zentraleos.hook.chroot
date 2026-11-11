@@ -1,0 +1,44 @@
+#!/bin/sh
+set -e
+# Sprache: Deutsch (Schweiz)
+sed -i 's/^# *\(de_CH.UTF-8\)/\1/; s/^# *\(en_US.UTF-8\)/\1/' /etc/locale.gen
+locale-gen
+update-locale LANG=de_CH.UTF-8
+ln -sf /usr/share/zoneinfo/Europe/Zurich /etc/localtime
+echo Europe/Zurich > /etc/timezone
+echo zentraleos > /etc/hostname
+
+# Benutzer der Live-Sitzung. Kein Root ohne Passwort: sudo fragt immer nach.
+if ! id zentrale >/dev/null 2>&1; then
+  useradd -m -s /bin/bash -c "ZentraleOS" -G sudo,audio,video,netdev,plugdev,bluetooth,input zentrale
+  echo 'zentrale:zentrale' | chpasswd
+fi
+passwd -l root
+
+# Dienste
+systemctl enable zentraleos-diagnose.timer greetd.service zentraleos-greetd-einrichten.service nftables.service NetworkManager.service bluetooth.service apparmor.service
+systemctl disable ssh.service 2>/dev/null || true
+systemctl set-default graphical.target
+
+# Startanimation
+plymouth-set-default-theme zentraleos
+
+# Electron-Sandbox braucht setuid
+if [ -f /opt/zentraleos/shell/node_modules/electron/dist/chrome-sandbox ]; then
+  chown root:root /opt/zentraleos/shell/node_modules/electron/dist/chrome-sandbox
+  chmod 4755 /opt/zentraleos/shell/node_modules/electron/dist/chrome-sandbox
+fi
+chmod -R a+rX /opt/zentraleos
+
+# Flathub (systemweit bekannt machen; installiert wird pro Benutzer)
+flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
+
+# Tailscale aus dem offiziellen Paketarchiv
+if curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg; then
+  echo "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/debian trixie main" > /etc/apt/sources.list.d/tailscale.list
+  apt-get update -q && apt-get install -y -q tailscale && systemctl enable tailscaled.service || echo "WARNUNG: Tailscale nicht installiert"
+fi
+
+# Automatische Sicherheitsupdates an (abschaltbar in den Einstellungen)
+printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades
+apt-get clean

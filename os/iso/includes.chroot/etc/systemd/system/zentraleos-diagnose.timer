@@ -1,0 +1,10 @@
+[Unit]
+Description=ZentraleOS: Startdiagnose (nur in VMs)
+ConditionVirtualization=vm
+
+[Timer]
+OnBootSec=45
+OnUnitActiveSec=60
+
+[Install]
+WantedBy=timers.target

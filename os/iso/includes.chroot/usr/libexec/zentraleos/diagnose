@@ -1,0 +1,16 @@
+#!/bin/sh
+# Nur in einer virtuellen Maschine: schreibt eine kurze Diagnose auf die serielle
+# Schnittstelle, damit automatische Tests sehen, was beim Start passiert ist.
+systemd-detect-virt -q --vm || exit 0
+[ -c /dev/ttyS0 ] || exit 0
+{
+  echo "=== ZOS-DIAGNOSE $(date -Is) ${1:-} ==="
+  echo "start: $(systemd-analyze 2>/dev/null | head -1)"
+  echo "fehlgeschlagen: $(systemctl --failed --no-legend 2>/dev/null | tr '\n' ';')"
+  echo "sitzungen: $(loginctl list-sessions --no-legend 2>/dev/null | tr '\n' ';')"
+  echo "prozesse: $(pgrep -a 'labwc|electron|greetd|Xwayland' | cut -c1-90 | tr '\n' ';')"
+  journalctl -b -u greetd --no-pager -n 12 -o cat 2>/dev/null | sed 's/^/greetd: /'
+  for f in /run/user/*/labwc.log.1 /run/user/*/labwc.log /run/user/*/shell.log; do [ -f "$f" ] && tail -n 14 "$f" | cut -c1-220 | sed "s|^|$(basename $f): |"; done
+  echo "nft: $(nft list ruleset 2>/dev/null | grep -c .) Zeilen; sudo-ohne-passwort: $(su zentrale -c 'sudo -n true' 2>&1 | head -1)"
+  echo "=== ENDE ==="
+} > /dev/ttyS0 2>&1

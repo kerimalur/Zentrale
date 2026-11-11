@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=ZentraleOS
+Description=Startanimation von ZentraleOS
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/zentraleos
+ScriptFile=/usr/share/plymouth/themes/zentraleos/zentraleos.script

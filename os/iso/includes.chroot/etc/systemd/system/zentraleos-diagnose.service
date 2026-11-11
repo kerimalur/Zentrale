@@ -1,0 +1,7 @@
+[Unit]
+Description=ZentraleOS: Startdiagnose auf die serielle Schnittstelle (nur in VMs)
+ConditionVirtualization=vm
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/zentraleos/diagnose

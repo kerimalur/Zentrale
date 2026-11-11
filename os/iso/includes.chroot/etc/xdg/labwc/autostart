@@ -1,0 +1,2 @@
+dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP DISPLAY 2>/dev/null
+/usr/bin/zentraleos-shell &

@@ -1,0 +1,11 @@
+[Unit]
+Description=ZentraleOS: Sitzungsbenutzer eintragen
+Before=greetd.service
+After=live-config.service systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/zentraleos-greetd-einrichten
+
+[Install]
+WantedBy=multi-user.target

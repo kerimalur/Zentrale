@@ -1,0 +1,92 @@
+/* Anmeldebildschirm – sieht aus wie die Windows-Anmeldung, ist aber frei einstellbar. */
+.sperre {
+  position: fixed; inset: 0; z-index: 1000;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  overflow: hidden; color: #fff;
+}
+.sperre[hidden] { display: none; }
+
+.sperre-hintergrund {
+  position: absolute; inset: -40px; z-index: 0;
+  background-size: cover; background-position: center;
+  transition: filter 0.4s, transform 0.4s;
+}
+.sperre-schleier { position: absolute; inset: 0; z-index: 1; background: rgba(0,0,0,0.42); }
+
+/* Erster Zustand: nur Uhr, wie der Windows-Sperrbildschirm */
+.sperre-uhr {
+  position: absolute; top: 12%; left: 0; right: 0; z-index: 3; text-align: center;
+  transition: opacity 0.3s, transform 0.3s;
+}
+.sperre-uhr .zeit { font-size: 92px; font-weight: 250; letter-spacing: -2px; line-height: 1; text-shadow: 0 2px 24px rgba(0,0,0,0.5); font-variant-numeric: tabular-nums; }
+.sperre-uhr .datum { margin-top: 6px; font-size: 22px; font-weight: 400; opacity: 0.92; text-shadow: 0 2px 14px rgba(0,0,0,0.5); }
+.sperre.offen .sperre-uhr { opacity: 0; transform: translateY(-24px); pointer-events: none; }
+
+.sperre-hinweis {
+  position: absolute; bottom: 12%; left: 0; right: 0; z-index: 3; text-align: center;
+  font-size: 14px; opacity: 0.75; animation: pulsieren 2.4s ease-in-out infinite;
+}
+@keyframes pulsieren { 0%,100% { opacity: 0.5; } 50% { opacity: 0.9; } }
+.sperre.offen .sperre-hinweis { display: none; }
+
+/* Zweiter Zustand: Anmeldefeld */
+.sperre-karte {
+  position: relative; z-index: 4; display: flex; flex-direction: column; align-items: center;
+  width: 330px; opacity: 0; transform: translateY(18px); pointer-events: none; transition: 0.28s cubic-bezier(.2,.9,.3,1.05);
+}
+.sperre.offen .sperre-karte { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+.sperre-avatar {
+  width: 110px; height: 110px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.3);
+  font-size: 46px; font-weight: 300; overflow: hidden; backdrop-filter: blur(10px);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+}
+.sperre-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.sperre-name { margin-top: 16px; font-size: 25px; font-weight: 400; text-shadow: 0 2px 12px rgba(0,0,0,0.5); }
+.sperre-unter { margin-top: 3px; font-size: 13.5px; opacity: 0.7; }
+
+.sperre-eingabe { position: relative; width: 100%; margin-top: 22px; }
+.sperre-eingabe input {
+  width: 100%; height: 38px; padding: 0 40px 0 14px; border-radius: 6px; font-size: 14px;
+  background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.34); color: #fff;
+  outline: none; backdrop-filter: blur(14px); user-select: text;
+}
+.sperre-eingabe input::placeholder { color: rgba(255,255,255,0.62); }
+.sperre-eingabe input:focus { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.65); }
+.sperre-pfeil {
+  position: absolute; right: 4px; top: 4px; width: 30px; height: 30px; border-radius: 4px;
+  display: grid; place-items: center; color: rgba(255,255,255,0.85);
+}
+.sperre-pfeil:hover { background: rgba(255,255,255,0.2); }
+.sperre-pfeil svg { width: 17px; height: 17px; }
+
+.sperre-fehler {
+  margin-top: 11px; min-height: 18px; font-size: 13px; text-align: center;
+  color: #ffb3ad; text-shadow: 0 1px 6px rgba(0,0,0,0.6);
+}
+.sperre-info { margin-top: 6px; font-size: 12.5px; opacity: 0.72; text-align: center; min-height: 16px; }
+.sperre-lader { margin-top: 14px; }
+
+/* Fusszeile: Netz-Zustand und Ausschalten */
+.sperre-fuss {
+  position: absolute; bottom: 24px; right: 28px; z-index: 5;
+  display: flex; align-items: center; gap: 14px;
+}
+.sperre-fuss .zustand { display: flex; align-items: center; gap: 7px; font-size: 12.5px; opacity: 0.82; }
+.sperre-fuss .zustand .punkt { width: 8px; height: 8px; border-radius: 50%; background: #ffd60a; }
+.sperre-fuss .zustand .punkt.an { background: #32d74b; }
+.sperre-fuss .zustand .punkt.weg { background: #ff453a; }
+.sperre-rund {
+  width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+  background: rgba(255,255,255,0.14); border: 1px solid rgba(255,255,255,0.26); color: #fff;
+  backdrop-filter: blur(12px);
+}
+.sperre-rund:hover { background: rgba(255,255,255,0.26); }
+.sperre-rund svg { width: 18px; height: 18px; }
+
+.sperre-wechsel {
+  margin-top: 14px; font-size: 13px; color: rgba(255,255,255,0.82);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.sperre-wechsel:hover { color: #fff; }

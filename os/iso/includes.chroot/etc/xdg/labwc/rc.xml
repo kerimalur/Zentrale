@@ -1,0 +1,40 @@
+<?xml version="1.0"?>
+<labwc_config>
+  <core><decoration>server</decoration><gap>6</gap><adaptiveSync>no</adaptiveSync></core>
+  <theme><name>ZentraleOS</name><cornerRadius>10</cornerRadius>
+    <titlebar><layout>close,iconify,max:</layout><showTitle>yes</showTitle></titlebar>
+    <font place="ActiveWindow"><name>Inter</name><size>10</size><weight>bold</weight></font>
+    <font place="InactiveWindow"><name>Inter</name><size>10</size></font>
+    <dropShadows>yes</dropShadows>
+  </theme>
+  <margin top="30" bottom="86" left="0" right="0" />
+  <snapping><range>12</range><topMaximize>yes</topMaximize></snapping>
+  <desktops number="4"><prefix>Schreibtisch</prefix></desktops>
+  <windowRules>
+    <windowRule identifier="zentraleos-shell" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes" fixedPosition="yes">
+      <action name="ToggleAlwaysOnBottom"/><action name="ToggleOmnipresent"/>
+    </windowRule>
+    <windowRule title="ZentraleOS" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes" fixedPosition="yes"/>
+  </windowRules>
+  <keyboard>
+    <default/>
+    <keybind key="W-l"><action name="Execute" command="zos sperren"/></keybind>
+    <keybind key="W-space"><action name="Execute" command="zos spotlight"/></keybind>
+    <keybind key="W-Return"><action name="Execute" command="foot"/></keybind>
+    <keybind key="W-d"><action name="Execute" command="zos schreibtisch"/></keybind>
+    <keybind key="W-q"><action name="Close"/></keybind>
+    <keybind key="W-Left"><action name="SnapToEdge" direction="left"/></keybind>
+    <keybind key="W-Right"><action name="SnapToEdge" direction="right"/></keybind>
+    <keybind key="W-Up"><action name="ToggleMaximize"/></keybind>
+    <keybind key="W-Down"><action name="Iconify"/></keybind>
+    <keybind key="C-W-Right"><action name="GoToDesktop" to="right"/></keybind>
+    <keybind key="C-W-Left"><action name="GoToDesktop" to="left"/></keybind>
+    <keybind key="Print"><action name="Execute" command="zos bildschirmfoto"/></keybind>
+    <keybind key="XF86AudioRaiseVolume"><action name="Execute" command="wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+"/></keybind>
+    <keybind key="XF86AudioLowerVolume"><action name="Execute" command="wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"/></keybind>
+    <keybind key="XF86AudioMute"><action name="Execute" command="wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"/></keybind>
+    <keybind key="XF86MonBrightnessUp"><action name="Execute" command="brightnessctl set 8%+"/></keybind>
+    <keybind key="XF86MonBrightnessDown"><action name="Execute" command="brightnessctl set 8%-"/></keybind>
+  </keyboard>
+  <libinput><device category="touchpad"><naturalScroll>yes</naturalScroll><tap>yes</tap></device></libinput>
+</labwc_config>

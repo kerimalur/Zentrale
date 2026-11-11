@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><title>Zentrale (Demo)</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1322;--karte:#161e33;--rand:#26304d;--text:#e8ecf5;--leise:#8b95ab;--akzent:#3b82f6;--gut:#34d399;--warn:#fbbf24;--schlecht:#fb7185}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,system-ui,sans-serif;padding:18px 22px 40px}
+h1{font-size:20px;margin:0 0 4px}p.unter{color:var(--leise);margin:0 0 16px}
+.demo{position:fixed;right:14px;top:12px;background:var(--warn);color:#201500;font-weight:700;font-size:11px;letter-spacing:.08em;padding:3px 9px;border-radius:99px}
+.gitter{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.karte{background:var(--karte);border:1px solid var(--rand);border-radius:14px;padding:14px}
+.karte h3{margin:0 0 8px;font-size:12px;font-weight:600;color:var(--leise);text-transform:uppercase;letter-spacing:.06em}
+.gross{font-size:26px;font-weight:700}.klein{color:var(--leise);font-size:12px}
+.zeile{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-top:1px solid var(--rand)}.zeile:first-of-type{border-top:0}
+.punkt{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;background:var(--gut)}.punkt.aus{background:var(--schlecht)}.punkt.pause{background:var(--warn)}
+button{font:inherit;color:var(--text);background:#22304f;border:1px solid var(--rand);border-radius:9px;padding:6px 11px;cursor:pointer}button:hover{background:#2b3c63}button.haupt{background:var(--akzent);border-color:var(--akzent)}
+.reihe{display:flex;gap:8px;flex-wrap:wrap}svg.kurve{width:100%;height:54px}pre{background:#0a0f1b;border:1px solid var(--rand);border-radius:10px;padding:12px;overflow:auto;font:12px/1.5 "JetBrains Mono",monospace}
+header.kopf{display:none}body:not(.nackt) header.kopf{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+</style></head><body>
+<div class="demo">DEMO</div>
+<header class="kopf" id="kopf"></header>
+<main id="inhalt"></main>
+<script>
+const TABS=['Übersicht','Heute','Gesundheit','Fokus','Trading','System','Netz','Speicher','Cloud','Medien','Gäste','Konsole','Einstellungen'];
+if(new URLSearchParams(location.search).get('nackt')==='1')document.body.classList.add('nackt');
+const h=(s)=>String(s??'').replace(/[&<>"]/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const gb=(b)=>b>=1e12?(b/1e12).toFixed(1)+' TB':b>=1e9?(b/1e9).toFixed(0)+' GB':(b/1e6).toFixed(0)+' MB';
+const hole=(p)=>fetch(p).then((r)=>r.json());
+const sende=(p,d)=>fetch(p,{method:'POST',headers:{'Content-Type':'application/json','X-Zentrale':'1'},body:JSON.stringify(d||{})}).then((r)=>r.json()).then(zeichnen);
+const karte=(t,i)=>`<div class="karte"><h3>${h(t)}</h3>${i}</div>`;
+const kurve=(w)=>{const v=w.filter((x)=>x!=null),mn=Math.min(...v),mx=Math.max(...v);return `<svg class="kurve" viewBox="0 0 100 30" preserveAspectRatio="none"><polyline fill="none" stroke="#3b82f6" stroke-width="1.5" points="${v.map((x,i)=>`${i/(v.length-1)*100},${28-(x-mn)/(mx-mn||1)*26}`).join(' ')}"/></svg>`};
+const S={
+ async 'Übersicht'(){const z=await hole('/api/state');return ['Übersicht','Alles auf einen Blick',
+  karte('Szene',`<div class="gross">${h(z.szene.name)}</div><div class="reihe" style="margin-top:8px">${z.szenen.map((s)=>`<button onclick="sende('/api/szene',{id:'${s.id}'})">${h(s.name)}</button>`).join('')}</div>`)+
+  karte('Pi',`<div class="gross">${z.pi.cpu} % CPU</div><div class="klein">${z.pi.temp} °C · ${gb(z.pi.ramBenutzt)} von ${gb(z.pi.ramTotal)} RAM · ${z.pi.container.laufen}/${z.pi.container.gesamt} Container</div>`)+
+  karte('Strom',`<div class="gross">${z.energie.watt} W</div><div class="klein">ca. CHF ${z.energie.chfMonat} pro Monat</div>${kurve(z.energie.verlauf)}`)+
+  karte('Dienste',z.dienste.map((d)=>`<div class="zeile"><span><i class="punkt ${d.status==='online'?'':'pause'}"></i>${h(d.name)}</span><span class="klein">${h(d.kennzahl)} ${h(d.label)}</span></div>`).join(''))+
+  karte('Möbel',`<div class="gross">${z.moebel.temp} °C</div><div class="klein">Lüfter: ${h(z.moebel.luefter.modus)}</div><div class="reihe" style="margin-top:8px">${['auto','an','aus'].map((m)=>`<button onclick="sende('/api/luefter',{modus:'${m}'})">${m}</button>`).join('')}</div>`)+
+  karte('Dieser Rechner',`<div class="klein">Fernsteuerung wie am Handy:</div><div class="reihe" style="margin-top:8px"><button onclick="sende('/api/hp/befehl',{befehl:'sperren'})">Sperren</button><button onclick="sende('/api/hp/befehl',{befehl:'bildschirmAus'})">Bildschirm aus</button></div>`)]},
+ async Heute(){const d=await hole('/api/heute');return ['Heute',d.datum+' · '+d.wetter.ort+' '+d.wetter.temp+' °C, '+d.wetter.text,karte('Termine',d.termine.map((t)=>`<div class="zeile"><span>${h(t.titel)}</span><span class="klein">${t.zeit}</span></div>`).join(''))+karte('Aufgaben',d.aufgaben.map((a)=>`<div class="zeile"><span>${a.erledigt?'✓':'○'} ${h(a.titel)}</span></div>`).join(''))]},
+ async Gesundheit(){const g=await hole('/api/garmin');return ['Gesundheit','Werte der Uhr',karte('Schlaf',`<div class="gross">${g.schlaf.stunden} h</div><div class="klein">Wert ${g.schlaf.wert}</div>`)+karte('Body Battery',`<div class="gross">${g.bodyBattery}</div>`)+karte('Schritte',`<div class="gross">${g.schritte}</div>`)+karte('Ruhepuls',`<div class="gross">${g.ruhepuls}</div><div class="klein">HRV ${g.hrv} · Stress ${g.stress}</div>`)]},
+ async Fokus(){return ['Fokus','Ablenkungen sperren',karte('Sitzung',`<div class="gross">25:00</div><div class="reihe" style="margin-top:8px"><button class="haupt">Starten</button></div>`)+karte('Gesperrt',`<div class="zeile"><span>Soziale Medien</span><span class="klein">Handy + PC</span></div><div class="zeile"><span>Video</span><span class="klein">bis 18:00</span></div>`)]},
+ async Trading(){const t=await hole('/api/trading');return ['Trading',t.konto.name,karte('Konto',`<div class="gross">${t.konto.saldo.toFixed(2)} ${t.konto.waehrung}</div><div class="klein">Equity ${t.konto.equity.toFixed(2)}</div>${kurve(t.kurve)}`)+karte('Heute',`<div class="gross" style="color:var(--gut)">+${t.heute.pnl}</div><div class="klein">${t.heute.trades} Trades</div>`)+karte('Offen',t.offen.map((o)=>`<div class="zeile"><span>${o.paar} ${o.seite}</span><span>${o.pnl}</span></div>`).join(''))+karte('Letzte',t.letzte.map((o)=>`<div class="zeile"><span>${o.paar} ${o.seite}</span><span style="color:${o.pnl<0?'var(--schlecht)':'var(--gut)'}">${o.pnl}</span></div>`).join(''))]},
+ async System(){const z=await hole('/api/state');return ['System',z.pi.modell,karte('Pi',`<div class="zeile"><span>System</span><span class="klein">${h(z.pi.os)}</span></div><div class="zeile"><span>Kernel</span><span class="klein">${z.pi.kernel}</span></div><div class="zeile"><span>Laufzeit</span><span class="klein">${Math.round(z.pi.uptimeS/86400)} Tage</span></div><div class="zeile"><span>Updates</span><span class="klein">${z.pi.updates}</span></div>`)+karte('Notbetrieb',`<div class="gross">${z.steuerung.notbetrieb.an?'an':'aus'}</div><div class="reihe" style="margin-top:8px"><button onclick="sende('/api/notbetrieb',{an:${!z.steuerung.notbetrieb.an}})">umschalten</button></div>`)+karte('Backup',`<div class="gross">${z.backup.laeuft?'läuft …':'bereit'}</div><div class="reihe" style="margin-top:8px"><button onclick="sende('/api/backup/start')">Jetzt sichern</button></div>`)]},
+ async Netz(){const z=await hole('/api/state');return ['Netz','Geräte im Tailscale-Netz',karte('Geräte',z.netz.geraete.map((g)=>`<div class="zeile"><span><i class="punkt ${g.online?'':'aus'}"></i>${h(g.name)}</span><span class="klein">${g.ip}</span></div>`).join(''))+karte('Pi-hole',`<div class="gross">${z.netz.pihole.prozent} %</div><div class="klein">${z.netz.pihole.geblockt} von ${z.netz.pihole.anfragen} geblockt</div>`)+karte('Heute',`<div class="gross">${gb(z.netz.heute.down)}</div><div class="klein">hoch ${gb(z.netz.heute.up)} · Ping ${z.netz.ping} ms</div>`)]},
+ async Speicher(){const z=await hole('/api/state');return ['Speicher','Laufwerke am Pi',z.laufwerke.map((l)=>karte(l.name,`<div class="gross">${gb(l.frei)} frei</div><div class="klein">${h(l.modell)} · ${gb(l.benutzt)} von ${gb(l.gross)} · ${h(l.gesundheit.text)}</div>`)).join('')+karte('Belegung',z.speicher.kategorien.map((k)=>`<div class="zeile"><span>${h(k.name)}</span><span class="klein">${gb(k.bytes)}</span></div>`).join(''))]},
+ async Cloud(){const z=await hole('/api/state');return ['Cloud','Nextcloud',karte('Platz',`<div class="gross">${gb(z.cloud.platz.frei)} frei</div><div class="klein">von ${gb(z.cloud.platz.gross)}</div>`)+karte('Sync',z.sync.map((s)=>`<div class="zeile"><span>${h(s.titel)}</span><span class="klein">${h(s.t)}</span></div>`).join(''))]},
+ async Medien(){const z=await hole('/api/state');const m=z.medien;return ['Medien','Downloads und Bibliothek',karte('VPN',`<div class="gross">${m.vpn.geschuetzt?'geschützt':'offen'}</div><div class="klein">${h(m.vpn.stadt)}, ${h(m.vpn.land)}</div>`)+karte('Downloads',m.downloads.torrents.map((t)=>`<div class="zeile"><span>${h(t.name)}</span><span class="klein">${Math.round(t.fortschritt*100)} %</span></div>`).join(''))+karte('Programme',m.apps.map((a)=>`<div class="zeile"><span><i class="punkt ${a.zustand==='online'?'':'aus'}"></i>${h(a.name)}</span><button onclick="sende('/api/container/${a.id}',{an:${a.ausgeschaltet}})">${a.ausgeschaltet?'starten':'stoppen'}</button></div>`).join(''))]},
+ async 'Gäste'(){return ['Gäste','Zugänge für Besuch',karte('Gäste','<div class="klein">Noch keine Gäste eingeladen.</div><div class="reihe" style="margin-top:8px"><button class="haupt">Gast einladen</button></div>')]},
+ async Konsole(){return ['Konsole','Web-SSH auf den Pi (Demo: nur Anzeige)','<pre>kerim@homelab-demo:~ $ docker ps --format "{{.Names}}" | head -5\nnextcloud\njellyfin\nvaultwarden\npihole\nsyncthing\nkerim@homelab-demo:~ $ ▍</pre>']},
+ async Einstellungen(){return ['Zentrale-Einstellungen','Einstellungen der Zentrale auf dem Pi',karte('Nacht',`<div class="zeile"><span>Automatisch</span><span class="klein">23:00 – 07:00</span></div>`)+karte('Benachrichtigungen',`<div class="zeile"><span>Telegram</span><span class="klein">an</span></div>`)]},
+};
+async function zeichnen(){
+ const tab=decodeURIComponent(location.hash.slice(1))||'Übersicht';const f=S[tab]||S['Übersicht'];
+ document.getElementById('kopf').innerHTML=TABS.map((t)=>`<button onclick="location.hash='${t}'" ${t===tab?'class="haupt"':''}>${t}</button>`).join('');
+ const [titel,unter,inhalt]=await f();document.title=titel+' – Zentrale (Demo)';
+ document.getElementById('inhalt').innerHTML=`<h1>${h(titel)}</h1><p class="unter">${h(unter)}</p><div class="gitter">${inhalt}</div>`;
+}
+addEventListener('hashchange',zeichnen);zeichnen();setInterval(zeichnen,10000);
+</script></body></html>

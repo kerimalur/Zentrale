@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: blob: zdatei:; media-src 'self' blob: zdatei:; object-src zdatei:; frame-src zdatei: http: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' zdatei:;">
+<title>ZentraleOS</title>
+<link rel="stylesheet" href="css/basis.css">
+<link rel="stylesheet" href="css/anmeldung.css">
+<link rel="stylesheet" href="css/fenster.css">
+<link rel="stylesheet" href="css/apps.css">
+<link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+<link rel="stylesheet" href="css/system.css">
+</head>
+<body class="dunkel">
+
+  <!-- Schreibtisch -->
+  <div id="schreibtisch" class="schreibtisch" aria-hidden="false">
+    <div id="tapete" class="tapete"></div>
+    <div id="flaeche" class="flaeche"></div>
+    <div id="menueleiste" class="menueleiste"></div>
+    <div id="fensterflaeche" class="fensterflaeche"></div>
+    <div id="dock" class="dock"></div>
+    <div id="hinweise" class="hinweise"></div>
+  </div>
+
+  <!-- Anmeldebildschirm -->
+  <div id="sperre" class="sperre" hidden></div>
+
+  <!-- Vorlagen-Container für Menüs/Dialoge -->
+  <div id="ebenen" class="ebenen"></div>
+
+  <script src="js/hilfe.js"></script>
+  <script src="js/symbole.js"></script>
+  <script src="js/zustand.js"></script>
+  <script src="js/fenster.js"></script>
+  <script src="js/anmeldung.js"></script>
+  <script src="js/menueleiste.js"></script>
+  <script src="js/dock.js"></script>
+  <script src="js/app-zentrale.js"></script>
+  <script src="js/app-schreibtisch.js"></script>
+  <script src="js/app-finder.js"></script>
+  <script src="js/app-editor.js"></script>
+  <script src="js/app-steuerung.js"></script>
+  <script src="js/app-einstellungen.js"></script>
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="js/start.js"></script>
+  <script src="js/app-system.js"></script>
+</body>
+</html>
