@@ -81,6 +81,39 @@ async function anmelden(passwort, code) {
   return { ok: false, fehler: r.fehler || 'Anmeldung fehlgeschlagen', codeNoetig: !!r.daten?.codeNoetig, online: r.status > 0 };
 }
 
+// Ein langlebiges Geräte-Token holen (nur aus einer angemeldeten Sitzung heraus).
+async function tokenHolen(name) {
+  const r = await anfrage('/api/geraet/token', { method: 'POST', daten: { name, art: 'desktop' }, timeout: 15000 });
+  return r.ok ? { ok: true, token: r.daten.token, bis: r.daten.bis } : { ok: false, fehler: r.fehler };
+}
+
+// Token gegen eine frische Sitzung tauschen. Danach ist auch das eingebettete
+// Zentrale-Fenster angemeldet, weil es dieselbe Partition benutzt.
+async function sitzungMitToken(token) {
+  const r = await anfrage('/api/geraet/sitzung', { method: 'POST', daten: { token }, timeout: 15000 });
+  return r.ok ? { ok: true, name: r.daten.name } : { ok: false, fehler: r.fehler, status: r.status };
+}
+
+// Offene Befehle vom Pi abholen und dabei den eigenen Zustand melden.
+// Ausweis ist das Geräte-Token, keine Sitzung nötig – klappt also auch im
+// gesperrten Zustand und wenn die Sitzung gerade abgelaufen ist.
+async function hpAbholen(token, meldung) {
+  const r = await anfrage('/api/hp/abholen', {
+    method: 'POST', daten: meldung, kopf: { 'X-Geraet-Token': token }, timeout: 10000,
+  });
+  return r.ok ? { ok: true, befehle: r.daten.befehle || [] } : { ok: false, fehler: r.fehler, status: r.status };
+}
+
+async function geraeteListe() {
+  const r = await anfrage('/api/geraete', { timeout: 10000 });
+  return r.ok ? { ok: true, geraete: r.daten.geraete || [] } : { ok: false, fehler: r.fehler };
+}
+
+async function geraetEntkoppeln(id) {
+  const r = await anfrage('/api/geraete/weg', { method: 'POST', daten: { id }, timeout: 10000 });
+  return r.ok ? { ok: true } : { ok: false, fehler: r.fehler };
+}
+
 async function abmelden() {
   await anfrage('/api/logout', { method: 'POST', timeout: 6000 });
   try { await sitzung().clearStorageData({ storages: ['cookies'] }); } catch {}
@@ -142,6 +175,10 @@ const dateien = {
 // ---------- Steuerung (PC, TV, Szenen, Dienste) ----------
 const steuerung = {
   status: () => anfrage('/api/state', { timeout: 12000 }),
+  // Zusatzdaten für Widgets (fehlen sie, zeigt das Widget das einfach an)
+  trading: () => anfrage('/api/trading', { timeout: 12000 }),
+  heute: () => anfrage('/api/heute', { timeout: 15000 }),
+  garmin: () => anfrage('/api/garmin', { timeout: 15000 }),
   pcWecken: () => anfrage('/api/pc/wecken', { method: 'POST', timeout: 20000 }),
   pcAus: () => anfrage('/api/pc/ausschalten', { method: 'POST', daten: { bestaetigt: true }, timeout: 30000 }),
   tvAn: () => anfrage('/api/tv/an', { method: 'POST', timeout: 20000 }),
@@ -151,8 +188,10 @@ const steuerung = {
   container: (name, an) => anfrage('/api/container/' + encodeURIComponent(name), { method: 'POST', daten: { an }, timeout: 120000 }),
   dienstNeustart: (id) => anfrage(`/api/dienst/${encodeURIComponent(id)}/neustart`, { method: 'POST', timeout: 120000 }),
   notbetrieb: (an) => anfrage('/api/notbetrieb', { method: 'POST', daten: { an }, timeout: 120000 }),
+  luefter: (modus) => anfrage('/api/luefter', { method: 'POST', daten: { modus }, timeout: 20000 }),
+  backupStart: () => anfrage('/api/backup/start', { method: 'POST', timeout: 30000 }),
   piNeustart: () => anfrage('/api/pi/neustart', { method: 'POST', daten: { bestaetigt: true }, timeout: 20000 }),
   piAus: () => anfrage('/api/pi/ausschalten', { method: 'POST', daten: { bestaetigt: true }, timeout: 20000 }),
 };
 
-module.exports = { PARTITION, sitzung, basis, url, anfrage, erreichbar, angemeldet, anmelden, abmelden, dateien, steuerung };
+module.exports = { PARTITION, sitzung, basis, url, anfrage, erreichbar, angemeldet, anmelden, abmelden, tokenHolen, sitzungMitToken, hpAbholen, geraeteListe, geraetEntkoppeln, dateien, steuerung };

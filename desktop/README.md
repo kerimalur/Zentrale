@@ -43,14 +43,22 @@ Zum Ausprobieren ohne Build: `npm start`.
 1. Anmeldebildschirm: irgendeine Taste drücken, dann **Zentrale-Passwort**
    (das aus `ZENTRALE_PASSWORT` in der `.env` auf dem Pi) und, falls 2FA an ist,
    den 6-stelligen Code aus der Authenticator-App. Einen Benutzernamen gibt es nicht.
-2. Nach dem ersten erfolgreichen Anmelden merkt sich die App lokal einen
-   scrypt-Hash des Passworts. Ist der Pi mal nicht erreichbar, kommst du damit
-   trotzdem rein – dann ohne 2FA-Code. Abschaltbar unter
-   **Einstellungen → Anmeldung → Anmelden ohne Pi erlauben**.
-3. Stimmt die Adresse des Pi nicht, unter **Einstellungen → Verbindung** ändern.
+2. Danach fragt die App nach einem **PIN** (mindestens 4 Zeichen). Ab dann reicht
+   der PIN; das Zentrale-Passwort bleibt als Rückfall über den Link unten am
+   Anmeldebildschirm.
+3. Beim ersten Anmelden **koppelt** sich die App beim Pi und bekommt ein Geräte-Token.
+   Damit hält sie die Anmeldung selbst aufrecht – du siehst nie wieder einen
+   2FA-Dialog im Zentrale-Fenster. Das Token liegt verschlüsselt (Windows-DPAPI,
+   an dein Windows-Konto gebunden). Weder Passwort noch 2FA-Geheimnis liegen auf dem HP.
+   Gekoppelte Geräte siehst du unter **Einstellungen → Anmeldung → Gekoppelte Geräte**
+   und kannst sie dort jederzeit entkoppeln – danach kommt der HP ohne Passwort nicht mehr rein.
+4. Stimmt die Adresse des Pi nicht, unter **Einstellungen → Verbindung** ändern.
    Standard: `https://homelabkerim.taila4b96b.ts.net:8443`
 
 Der HP muss im Tailscale-Netz sein – sonst ist der Pi nicht erreichbar.
+Läuft auf dem Windows-PC ein VPN-Client (Proton & Co.), zieht der den
+Tailscale-Bereich `100.x` in seinen Tunnel und der Pi ist weg. Trennen oder
+Split-Tunneling einrichten.
 
 ---
 
@@ -60,11 +68,22 @@ Der HP muss im Tailscale-Netz sein – sonst ist der Pi nicht erreichbar.
 Weichzeichnen, Uhr, Datum, Name, Profilbild, automatisches Sperren nach X Minuten.
 Alles unter *Einstellungen → Anmeldung*.
 
-**Zentrale** – die echte Weboberfläche vom Pi, in einem Fenster mit Zurück,
-Vorwärts, Neu laden und einem «Gehe zu»-Menü für alle Tabs. Da es eine echte
-eingebettete Ansicht ist (kein Bild), funktioniert alles: Konsole, Labor, Journal.
-Liegt ein anderes Fenster davor, zeigt das Zentrale-Fenster solange einen
-Schnappschuss der Seite.
+**Die Zentrale-Tabs als eigene Apps** – jeder Tab (Übersicht, Heute, Gesundheit,
+Fokus, Trading, System, Netz, Speicher, Cloud, Medien, Gäste, Konsole,
+Zentrale-Einstellungen) hat ein eigenes Symbol und ein eigenes Fenster. Der Inhalt
+ist die echte Seite vom Pi, aber «nackt»: ohne deren Kopfzeile und Tab-Leiste, weil
+der Fensterrahmen das schon mitbringt. Es ist eine echte eingebettete Ansicht, kein
+Bild – Konsole, Labor und Journal funktionieren normal.
+
+Technisch liegen diese Ansichten über der Oberfläche. Darum ist immer nur die
+vorderste wirklich sichtbar; die anderen Fenster zeigen den letzten Schnappschuss.
+Das fällt nur auf, wenn man genau hinschaut.
+
+**Home-Bildschirm** – App-Symbole und Widgets frei anordnen (ziehen, rastet am
+Raster ein). Rechtsklick auf den Schreibtisch: Widget hinzufügen, App ablegen.
+Rechtsklick auf ein Widget: Grösse ändern oder entfernen. Widgets gibt es für
+Pi-Zustand, Haus & Steuerung, Dienste-Ampel, Strom, Speicherplatz, Netz,
+Downloads, Backup, Szene, Trading, Heute, Gesundheit, Uhr und Notizzettel.
 
 **Finder** – zwei Quellen in einer Seitenleiste:
 * *Favoriten / HP* – Ordner und Laufwerke auf dem HP
@@ -82,9 +101,25 @@ Innerhalb einer Quelle kannst du auch auf einen Ordner ziehen (mit `Strg` kopier
 Link mit Ablaufdatum, der ohne Anmeldung funktioniert – aber nur für Geräte in
 deinem Tailscale-Netz. Übersicht und Löschen unter *Einstellungen → Geteilte Links*.
 
-**Steuerung** – Trading-PC ein/aus (Wake-on-LAN bzw. SSH), Fernseher ein,
-Lautstärke und Fernbedienungstasten, Szenen (Normal/Filmabend/Nacht), Dienste
-neu starten, Pi-Werte, Stromverbrauch.
+**Steuerung** – Trading-PC ein/aus (Wake-on-LAN bzw. SSH), Fernseher mit
+Lautstärke und Fernbedienung, Möbel-Temperatur mit Verlauf, Möbel-Lüfter
+(Auto/An/Aus), Szenen, Dienste neu starten, Medien und Downloads (VPN,
+qBittorrent, Sonarr/Radarr starten und stoppen), Backup von Hand anstossen,
+Notbetrieb, Pi-Werte, Stromverbrauch, Laufwerke.
+
+**Fernsteuerung von der Zentrale** – in der Zentrale (auch vom Handy) gibt es eine
+HP-Karte: sperren, Bildschirm aus, Bildschirm an, Zustand sehen. Der HP ist von
+aussen nicht erreichbar, darum holt die App die Befehle alle paar Sekunden selbst
+ab – es dauert also ein paar Sekunden. Entsperren aus der Ferne gibt es bewusst
+nicht; der PIN wird immer am Gerät verlangt.
+
+**Als Windows-Oberfläche (harter Kiosk)** – unter *Einstellungen → Verhalten*
+kannst du die Zentrale als Windows-Shell eintragen: kein Explorer, keine
+Taskleiste, kein Alt+Tab. Gilt nur für dein Windows-Konto. Die App lässt das erst
+zu, wenn es ein zweites aktives Administrator-Konto als Rettungsweg gibt. Weil ohne
+Explorer niemand mehr die Autostart-Programme startet, trägst du MT5 und alles
+andere unter *Programme beim Start* ein. Zurückstellen geht im selben Schalter,
+und «Explorer jetzt starten» holt die Taskleiste für die laufende Sitzung zurück.
 
 **Einstellungen** – Anmeldung, Aussehen (Hintergrund, helles Thema, Akzentfarbe,
 Dock-Grösse), Verhalten (Autostart, Kiosk, Energie), Verbindung, Finder,

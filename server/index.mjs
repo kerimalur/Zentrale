@@ -5,6 +5,8 @@ import path from 'node:path';
 import { config, ensureDataDir } from './config.mjs';
 import { load, db, save } from './store.mjs';
 import { istAngemeldet, login, logout, sitzungenZustand, andereAbmelden } from './auth.mjs';
+import { tokenAusstellen, sitzungFuerToken, geraeteListe, geraetEntkoppeln } from './geraete.mjs';
+import { befehlSenden as hpBefehl, hpZustand, abholen as hpAbholen, geraetAusAnfrage } from './hp.mjs';
 import { zweifaktorZustand, einrichtungStarten, einrichtungBestaetigen, ausschalten as zweifaktorAus, notfallNeu } from './zweifaktor.mjs';
 import { terminalUpgrade } from './terminal.mjs';
 import { schnell, mittel, langsam, sehrLangsam, speicherLauf, zeitplan, snapshot, sshNurSchluesselSetzen, manuelleSzene, laufwerkeListe, cloudJetzt, tsPeers } from './monitor.mjs';
@@ -93,6 +95,14 @@ async function api(req, res, url) {
   }
   if (p === '/api/me') return json(res, 200, { angemeldet: istAngemeldet(req) });
 
+  // ---------- Gekoppelte Geräte (Desktop-App auf dem HP) ----------
+  // Token gegen eine frische Sitzung tauschen – ohne Anmeldung, dafür mit Bremse.
+  if (p === '/api/geraet/sitzung' && m === 'POST') {
+    const b = await body(req);
+    const r = sitzungFuerToken(req, b.token);
+    return json(res, 200, { ok: true, name: r.name }, { 'Set-Cookie': r.cookie });
+  }
+
   // ---------- Fokus-Agenten (Geräte-Token statt Anmeldung) ----------
   if (p === '/api/fokus/agent/koppeln' && m === 'POST') {
     const b = await body(req);
@@ -108,6 +118,14 @@ async function api(req, res, url) {
     const g = geraetVonToken(req);
     if (!g) return json(res, 401, { fehler: 'Ungültiges Token' });
     return json(res, 200, fokusBericht(g, await body(req), req));
+  }
+
+  // ---------- Desktop-App auf dem HP: Befehle abholen und Zustand melden ----------
+  // Ausweis ist das Geräte-Token im Kopf X-Geraet-Token, keine Sitzung nötig.
+  if (p === '/api/hp/abholen' && m === 'POST') {
+    const g = geraetAusAnfrage(req);
+    if (!g) return json(res, 401, { fehler: 'Gerät nicht gekoppelt' });
+    return json(res, 200, hpAbholen(g, await body(req)));
   }
 
   // ---------- Google-Anmeldung: Rückkehr von Google (ohne Cookie, weil die Weiterleitung von accounts.google.com kommt; geschützt über «state») ----------
@@ -128,6 +146,20 @@ async function api(req, res, url) {
   if (m !== 'GET' && req.headers['x-zentrale'] !== '1') return json(res, 403, { fehler: 'Verboten' });
 
   if (p === '/api/logout' && m === 'POST') return json(res, 200, { ok: true }, { 'Set-Cookie': logout(req) });
+  if (p === '/api/geraet/token' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, tokenAusstellen(req, { name: b.name, art: b.art }));
+  }
+  if (p === '/api/geraete' && m === 'GET') return json(res, 200, { geraete: geraeteListe() });
+  if (p === '/api/hp' && m === 'GET') return json(res, 200, hpZustand());
+  if (p === '/api/hp/befehl' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, { ...hpBefehl(b.befehl), zustand: hpZustand() });
+  }
+  if (p === '/api/geraete/weg' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, geraetEntkoppeln(String(b.id || '')));
+  }
   if (p === '/api/state' && m === 'GET') return json(res, 200, snapshot());
 
   // ---------- Fokus (Tab «Fokus») ----------

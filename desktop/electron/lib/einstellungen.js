@@ -42,7 +42,11 @@ const STANDARD = {
     zentraleBeimStart: true,        // Zentrale-Fenster gleich öffnen
     bildschirmAusBeiSperre: true,   // "Ausschalten" = Monitor aus, Rechner läuft weiter
     niemalsSchlafen: true,          // verhindert Energiesparmodus (Trading-Bot läuft weiter)
+    windowsOberflaeche: false,      // App ersetzt den Explorer als Windows-Shell
   },
+
+  // --- Programme, die die App beim Start mitstartet (ohne Explorer tut das sonst niemand) ---
+  startProgramme: [],               // [{ name, pfad, argumente: [] }]
 
   // --- Finder ---
   finder: {
@@ -52,8 +56,23 @@ const STANDARD = {
     sortierung: 'name',             // name | groesse | geaendert
   },
 
-  // --- Dock ---
-  dock: ['zentrale', 'finder', 'steuerung', 'einstellungen'],
+  // --- Dock --- (Kennungen: 'finder', 'steuerung', 'einstellungen' oder 'zentrale:<Tab>')
+  dock: ['zentrale:Übersicht', 'finder', 'steuerung', 'zentrale:Trading', 'zentrale:System', 'zentrale:Medien', 'einstellungen'],
+
+  // --- Schreibtisch: Symbole und Widgets, frei anzuordnen ---
+  schreibtisch: {
+    raster: 110,              // Rasterweite in Pixeln, an der eingerastet wird
+    einrasten: true,
+    symbole: [
+      { app: 'finder', x: 0, y: 0 },
+      { app: 'zentrale:Übersicht', x: 0, y: 1 },
+      { app: 'steuerung', x: 0, y: 2 },
+    ],
+    widgets: [
+      { id: 'w1', typ: 'pi', x: 2, y: 0, breit: 3, hoch: 2 },
+      { id: 'w2', typ: 'haus', x: 5, y: 0, breit: 3, hoch: 2 },
+    ],
+  },
 };
 
 let datei = null;

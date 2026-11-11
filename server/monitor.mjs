@@ -756,6 +756,7 @@ function medienSnapshot() {
         id: a.id,
         name: a.name,
         url: a.url,
+        container: a.container,
         zustand: k.state === 'running' ? (health === 'unhealthy' ? 'gestoert' : 'online') : k.state === 'paused' ? 'pausiert' : 'offline',
         laufzeit: k.status,
         version: d?.version || null,

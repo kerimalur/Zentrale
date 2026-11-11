@@ -1,13 +1,17 @@
-// Anmeldebildschirm. Sieht aus wie die Windows-Anmeldung (Uhr, dann Passwortfeld),
-// prüft aber gegen die Zentrale auf dem Pi: Passwort + 2FA-Code. Keinen Benutzernamen.
+// Anmeldebildschirm. Sieht aus wie die Windows-Anmeldung: erst nur Uhr, bei einer
+// Eingabe kommt das Feld. Standard ist der PIN; über den Link unten geht es
+// jederzeit auch mit Zentrale-Passwort und 2FA-Code.
 const Sperre = {
-  el: null, offen: false, laeuft: false, codeNoetig: false, uhrTimer: null, piTimer: null,
+  el: null, offen: false, laeuft: false, codeNoetig: false,
+  modus: 'pin', zustand: {}, uhrTimer: null, piTimer: null,
 
-  zeigen() {
-    const e = Einst.daten.anmeldung;
+  async zeigen() {
+    const z = await Z.anmeldungZustand();
+    this.zustand = z && z.ok ? z : { pin: false };
+    this.modus = this.zustand.pin ? 'pin' : 'passwort';
     this.offen = false;
     this.codeNoetig = false;
-    this.bauen(e);
+    this.bauen(Einst.daten.anmeldung);
     $('#sperre').hidden = false;
     $('#schreibtisch').setAttribute('aria-hidden', 'true');
     this.uhrStart();
@@ -32,35 +36,41 @@ const Sperre = {
 
     const zeit = el('div', { klasse: 'zeit', text: uhr() });
     const datum = el('div', { klasse: 'datum', text: langesDatum() });
-    const uhrBlock = el('div', { klasse: 'sperre-uhr' },
-      e.uhrZeigen ? zeit : null,
-      e.datumZeigen ? datum : null,
-    );
+    const uhrBlock = el('div', { klasse: 'sperre-uhr' }, e.uhrZeigen ? zeit : null, e.datumZeigen ? datum : null);
 
     const avatar = el('div', { klasse: 'sperre-avatar' },
       e.avatar ? el('img', { src: '', alt: '' }) : (e.benutzerName || 'Z').trim().charAt(0).toUpperCase());
     if (e.avatar) Z.lokal.url(e.avatar).then((r) => { if (r.ok) avatar.querySelector('img').src = r.url; });
 
-    const passwort = el('input', { type: 'password', placeholder: 'Passwort', autocomplete: 'off', spellcheck: 'false' });
+    const haupt = el('input', { type: 'password', autocomplete: 'off', spellcheck: 'false' });
     const code = el('input', { type: 'text', placeholder: '6-stelliger Code', inputmode: 'numeric', maxlength: '8', autocomplete: 'off' });
     const codeFeld = el('div', { klasse: 'sperre-eingabe', stil: { display: 'none' } }, code,
       el('button', { klasse: 'sperre-pfeil', html: symbol('pfeilRechts'), onclick: () => this.absenden() }));
 
-    passwort.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') this.absenden(); });
+    haupt.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') this.absenden(); });
     code.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') this.absenden(); });
+    // Vierstelliger PIN: abschicken, sobald die Länge stimmt – wie bei Windows.
+    haupt.addEventListener('input', () => {
+      if (this.modus !== 'pin' || this.laeuft) return;
+      if (haupt.value.length === (this.zustand.pinLaenge || 4)) this.absenden();
+    });
 
     const fehler = el('div', { klasse: 'sperre-fehler' });
     const info = el('div', { klasse: 'sperre-info' });
     const lader = el('div', { klasse: 'lader sperre-lader', stil: { display: 'none' } });
 
+    const wechsel = el('button', {
+      klasse: 'sperre-wechsel',
+      onclick: () => this.modusWechseln(this.modus === 'pin' ? 'passwort' : 'pin'),
+    });
+
     const karte = el('div', { klasse: 'sperre-karte' },
       avatar,
       el('div', { klasse: 'sperre-name', text: e.benutzerName || 'Zentrale' }),
       e.untertitel ? el('div', { klasse: 'sperre-unter', text: e.untertitel }) : null,
-      el('div', { klasse: 'sperre-eingabe' }, passwort,
+      el('div', { klasse: 'sperre-eingabe' }, haupt,
         el('button', { klasse: 'sperre-pfeil', html: symbol('pfeilRechts'), onclick: () => this.absenden() })),
-      codeFeld,
-      fehler, info, lader,
+      codeFeld, fehler, info, lader, wechsel,
     );
 
     const punkt = el('span', { klasse: 'punkt' });
@@ -71,7 +81,7 @@ const Sperre = {
         klasse: 'sperre-rund', title: 'Bildschirm aus', html: symbol('strom'),
         onclick: (ev) => {
           ev.stopPropagation();
-          kontextmenue(ev.clientX - 180, ev.clientY - 80, [
+          kontextmenue(ev.clientX - 190, ev.clientY - 90, [
             { text: 'Bildschirm ausschalten', tun: () => Z.system.bildschirmAus() },
             '-',
             { text: 'Zentrale neu starten', tun: () => Z.system.neustart() },
@@ -84,20 +94,48 @@ const Sperre = {
     wurzel.append(hg, el('div', { klasse: 'sperre-schleier' }), uhrBlock, karte,
       el('div', { klasse: 'sperre-hinweis', text: 'Taste drücken oder klicken zum Anmelden' }), fuss);
 
-    this.el = { wurzel, zeit, datum, passwort, code, codeFeld, fehler, info, lader, punkt, zustandText, karte };
+    this.el = { wurzel, zeit, datum, haupt, code, codeFeld, fehler, info, lader, punkt, zustandText, wechsel };
+    this.modusAnwenden();
 
-    // Irgendeine Eingabe öffnet das Passwortfeld (wie bei Windows).
     const aufmachen = (ev) => {
       if (this.offen) return;
-      if (ev.type === 'keydown' && (ev.key === 'Shift' || ev.key === 'Control' || ev.key === 'Alt' || ev.key === 'Meta')) return;
+      if (ev.type === 'keydown' && (['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'Escape'].includes(ev.key) || ev.ctrlKey || ev.altKey || ev.metaKey)) return;
       this.aufmachen();
+      // Das Zeichen, das den Bildschirm geöffnet hat, selbst übernehmen – das Feld
+      // bekommt es sonst nicht mit. Alle weiteren landen direkt im Feld.
       if (ev.type === 'keydown' && ev.key.length === 1) {
-        this.el.passwort.value = ev.key;
+        ev.preventDefault();
+        this.el.haupt.value = ev.key;
+        this.el.haupt.setSelectionRange(1, 1);
       }
     };
     wurzel.addEventListener('mousedown', aufmachen);
     wurzel.addEventListener('wheel', aufmachen, { passive: true });
     wurzel.addEventListener('keydown', aufmachen);
+  },
+
+  modusWechseln(neu) {
+    this.modus = neu;
+    this.codeNoetig = false;
+    this.el.haupt.value = '';
+    this.el.code.value = '';
+    this.el.fehler.textContent = '';
+    this.modusAnwenden();
+    setTimeout(() => this.el.haupt.focus(), 30);
+  },
+
+  modusAnwenden() {
+    const pinDa = !!this.zustand.pin;
+    const istPin = this.modus === 'pin' && pinDa;
+    this.el.haupt.placeholder = istPin ? 'PIN' : 'Zentrale-Passwort';
+    this.el.haupt.maxLength = istPin ? 12 : 200;
+    this.el.haupt.inputMode = istPin ? 'numeric' : 'text';
+    this.el.codeFeld.style.display = 'none';
+    this.el.wechsel.textContent = istPin
+      ? 'Mit Zentrale-Passwort anmelden'
+      : (pinDa ? 'Mit PIN anmelden' : '');
+    this.el.wechsel.style.display = pinDa ? 'block' : 'none';
+    if (!pinDa) this.modus = 'passwort';
   },
 
   async hintergrundSetzen(hg, e) {
@@ -112,6 +150,8 @@ const Sperre = {
       + 'linear-gradient(165deg, #050a14 0%, #0b1220 50%, #0a0f1c 100%)';
   },
 
+  // Wichtig: sofort scharfstellen, nicht erst nach der Animation – sonst gehen
+  // die ersten getippten Zeichen verloren.
   aufmachen() {
     this.offen = true;
     this.el.wurzel.classList.add('offen');
@@ -119,7 +159,8 @@ const Sperre = {
     const hg = this.el.wurzel.querySelector('.sperre-hintergrund');
     hg.style.filter = `blur(${Number(e.weichzeichnen) || 0}px)`;
     hg.style.transform = 'scale(1.04)';
-    setTimeout(() => this.el.passwort.focus(), 60);
+    this.el.haupt.focus();
+    setTimeout(() => { if (document.activeElement !== this.el.haupt) this.el.haupt.focus(); }, 80);
   },
 
   uhrStart() {
@@ -140,10 +181,8 @@ const Sperre = {
       const online = r && r.online;
       this.el.punkt.className = 'punkt ' + (online ? 'an' : 'weg');
       this.el.zustandText.textContent = online ? 'Pi verbunden' : 'Pi nicht erreichbar';
-      if (!online && Einst.daten.anmeldung.offlineErlauben && r && r.gemerkt) {
+      if (!online && this.modus === 'passwort' && Einst.daten.anmeldung.offlineErlauben && r?.passwortGemerkt) {
         this.el.info.textContent = 'Ohne Pi: nur Passwort, kein Code.';
-      } else if (!online) {
-        this.el.info.textContent = '';
       }
     };
     pruefen();
@@ -153,22 +192,22 @@ const Sperre = {
 
   async absenden() {
     if (this.laeuft) return;
-    const pw = this.el.passwort.value;
-    if (!pw) { this.el.passwort.focus(); return; }
+    const wert = this.el.haupt.value;
+    if (!wert) { this.el.haupt.focus(); return; }
     this.laeuft = true;
     this.el.fehler.textContent = '';
     this.el.lader.style.display = 'block';
 
-    const r = await Z.anmelden(pw, this.codeNoetig ? this.el.code.value.trim() : '');
+    const r = await Z.anmelden(wert, this.codeNoetig ? this.el.code.value.trim() : '', this.modus);
 
     this.laeuft = false;
     this.el.lader.style.display = 'none';
 
     if (r && r.ok) {
-      this.el.passwort.value = '';
+      this.el.haupt.value = '';
       this.el.code.value = '';
       this.verstecken();
-      Schreibtisch.nachAnmeldung(!!r.offline);
+      Schreibtisch.nachAnmeldung(r);
       return;
     }
 
@@ -179,6 +218,7 @@ const Sperre = {
       setTimeout(() => this.el.code.focus(), 40);
     }
     this.el.fehler.textContent = (r && r.fehler) || 'Anmeldung fehlgeschlagen.';
-    if (!this.codeNoetig) { this.el.passwort.select(); }
+    this.el.haupt.value = '';
+    if (!this.codeNoetig) this.el.haupt.focus();
   },
 };

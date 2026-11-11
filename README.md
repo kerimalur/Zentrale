@@ -359,3 +359,35 @@ Nach dem Einspielen auf dem Pi:
 ```bash
 cd /mnt/daten/zentrale && docker compose up -d --build
 ```
+
+## HP fernsteuern und Geräte koppeln
+
+Die Desktop-App auf dem HP meldet sich einmal mit Passwort und 2FA an und bekommt
+dann ein **Geräte-Token** (`server/geraete.mjs`). Damit holt sie sich jederzeit eine
+frische Sitzung, ohne dass Passwort oder 2FA-Geheimnis auf dem HP liegen. Das Token
+steht nur gehasht in `data/zentrale.json` und läuft nach einem Jahr ab.
+
+| Route | Was |
+|---|---|
+| `POST /api/geraet/token` | neues Token ausstellen (nur aus angemeldeter Sitzung) |
+| `POST /api/geraet/sitzung` | **ohne Anmeldung** – Token gegen eine frische Sitzung tauschen |
+| `GET /api/geraete` · `POST /api/geraete/weg` | gekoppelte Geräte anzeigen und entkoppeln |
+
+Darauf setzt die Fernsteuerung des HP auf (`server/hp.mjs`). Der HP ist von aussen
+nicht erreichbar, darum holt die App die Befehle selbst ab:
+
+| Route | Was |
+|---|---|
+| `POST /api/hp/abholen` | **Geräte-Token im Kopf `X-Geraet-Token`** – Zustand melden, offene Befehle holen |
+| `GET /api/hp` | Zustand für die Oberfläche |
+| `POST /api/hp/befehl` | `sperren`, `bildschirmAus` oder `bildschirmAn` |
+
+Die HP-Karte steht im Tab **Übersicht**. Entsperren aus der Ferne gibt es bewusst
+nicht – wer Zugriff auf die Zentrale hat, soll damit nicht am PIN vorbeikommen.
+
+## Nackter Modus (`?nackt=1`)
+
+Mit `?nackt=1` lässt die Zentrale ihre eigene Kopfzeile und Tab-Leiste weg und zeigt
+nur den Inhalt des Tabs aus dem Hash (`…/?nackt=1#Trading`). Die Desktop-App auf dem
+HP nutzt das, um jeden Tab in einem eigenen Fenster wie eine native App zu zeigen.
+Im Browser und auf dem Handy ändert sich nichts.

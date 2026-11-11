@@ -84,3 +84,9 @@
 }
 .sperre-rund:hover { background: rgba(255,255,255,0.26); }
 .sperre-rund svg { width: 18px; height: 18px; }
+
+.sperre-wechsel {
+  margin-top: 14px; font-size: 13px; color: rgba(255,255,255,0.82);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.sperre-wechsel:hover { color: #fff; }

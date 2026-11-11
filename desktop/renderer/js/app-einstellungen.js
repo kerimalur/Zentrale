@@ -5,6 +5,7 @@ const EinstellungenApp = {
   BEREICHE: [
     { id: 'anmeldung', name: 'Anmeldung', symbol: 'schloss' },
     { id: 'aussehen', name: 'Aussehen', symbol: 'bild' },
+    { id: 'dock', name: 'Dock & Schreibtisch', symbol: 'raster' },
     { id: 'verhalten', name: 'Verhalten', symbol: 'strom' },
     { id: 'verbindung', name: 'Verbindung', symbol: 'pi' },
     { id: 'finder', name: 'Finder', symbol: 'finder' },
@@ -40,6 +41,7 @@ const EinstellungenApp = {
     const bauen = {
       anmeldung: () => this.anmeldung(i),
       aussehen: () => this.aussehen(i),
+      dock: () => this.dock(i),
       verhalten: () => this.verhalten(i),
       verbindung: () => this.verbindung(i),
       finder: () => this.finder(i),
@@ -121,17 +123,79 @@ const EinstellungenApp = {
             e.avatar ? el('button', { klasse: 'knopf', onclick: () => { s({ avatar: '' }); this.zeichnen(); } }, 'Entfernen') : null)),
       )));
 
+    const pinKasten = el('div', { klasse: 'ein-karte' }, el('div', { klasse: 'ein-reihe' }, el('div', { klasse: 'lader' })));
+    i.append(this.block('PIN', pinKasten));
+    this.pinBlock(pinKasten);
+
     i.append(this.block('Sicherheit',
       this.karte(
-        this.reihe('Anmelden ohne Pi erlauben', 'Ist der Pi nicht erreichbar, kann man sich mit dem zuletzt genutzten Passwort anmelden – ohne 2FA-Code. Aus: ohne Pi kommt niemand rein, auch du nicht.',
+        this.reihe('Anmelden ohne Pi erlauben', 'Ist der Pi nicht erreichbar, kommst du mit dem zuletzt genutzten Passwort rein – ohne 2FA-Code. Aus: ohne Pi kommt niemand rein, auch du nicht.',
           this.schalter(e.offlineErlauben, (v) => s({ offlineErlauben: v }))),
         this.reihe('Automatisch sperren', 'Nach so vielen Minuten ohne Eingabe wird gesperrt. 0 = nie.',
           this.auswahl(String(e.autoSperrenMin), [['0', 'nie'], ['5', '5 Minuten'], ['10', '10 Minuten'], ['15', '15 Minuten'], ['30', '30 Minuten'], ['60', '1 Stunde']], (v) => s({ autoSperrenMin: Number(v) }))),
         this.reihe('Jetzt sperren', 'Bildschirm aus, Windows und der Trading-Bot laufen weiter.',
           el('button', { klasse: 'knopf', onclick: () => Schreibtisch.sperren() }, 'Sperren')),
-        this.reihe('Gespeichertes Passwort löschen', 'Danach geht die Anmeldung nur noch mit erreichbarem Pi.',
+        this.reihe('Alles zurücksetzen und abmelden', 'Löscht PIN, gespeichertes Passwort und die Gerätekopplung auf diesem HP.',
           el('button', { klasse: 'knopf gefahr', onclick: () => Schreibtisch.abmelden() }, 'Abmelden')),
       )));
+
+    const geraeteKasten = el('div', { klasse: 'ein-karte' }, el('div', { klasse: 'ein-reihe' }, el('div', { klasse: 'lader' })));
+    i.append(this.block('Gekoppelte Geräte', geraeteKasten));
+    this.geraeteBlock(geraeteKasten);
+  },
+
+  // PIN-Zustand und Kopplung
+  async pinBlock(kasten) {
+    const z = await Z.anmeldungZustand();
+    leeren(kasten);
+    const gesetzt = !!z.pin;
+
+    kasten.append(this.reihe(
+      gesetzt ? 'PIN ist gesetzt' : 'Kein PIN',
+      gesetzt
+        ? `${z.pinLaenge} Zeichen. Am Anmeldebildschirm reicht der PIN; das Zentrale-Passwort geht weiterhin als Rückfall.`
+        : 'Ohne PIN musst du jedes Mal das Zentrale-Passwort und den 2FA-Code eingeben.',
+      el('div', { stil: { display: 'flex', gap: '6px' } },
+        el('button', { klasse: 'knopf', onclick: async () => { if (await Schreibtisch.pinEinrichten(!gesetzt)) this.zeichnen(); } }, gesetzt ? 'Ändern' : 'Festlegen'),
+        gesetzt ? el('button', { klasse: 'knopf gefahr', onclick: async () => {
+          if (!await fragen('PIN entfernen?', 'Danach brauchst du bei jeder Anmeldung wieder Passwort und 2FA-Code.', 'Entfernen', true)) return;
+          const r = await Z.pinEntfernen();
+          if (pruefen(r)) { hinweis('PIN entfernt', 'ok'); this.zeichnen(); }
+        } }, 'Entfernen') : null)));
+
+    kasten.append(this.reihe(
+      z.gekoppelt ? 'Dieses Gerät ist gekoppelt' : 'Nicht gekoppelt',
+      z.gekoppelt
+        ? (z.tokenVerschluesselt
+          ? 'Die App hält die Anmeldung beim Pi selbst aufrecht. Das Token liegt verschlüsselt und ist an dein Windows-Konto gebunden.'
+          : 'Die App hält die Anmeldung beim Pi selbst aufrecht. Achtung: die Verschlüsselung steht auf diesem System nicht zur Verfügung, das Token liegt im Klartext in deinem Benutzerordner.')
+        : 'Melde dich einmal mit Zentrale-Passwort und 2FA-Code an, dann koppelt sich die App von selbst.',
+      el('button', { klasse: 'knopf', onclick: async () => {
+        const r = await Z.koppeln();
+        if (!pruefen(r, 'Kopplung fehlgeschlagen – bist du beim Pi angemeldet?')) return;
+        hinweis('Gerät gekoppelt', 'ok');
+        this.zeichnen();
+      } }, z.gekoppelt ? 'Neu koppeln' : 'Jetzt koppeln')));
+  },
+
+  async geraeteBlock(kasten) {
+    const r = await Z.geraete();
+    leeren(kasten);
+    if (!r.ok) {
+      kasten.append(this.reihe('Liste nicht abrufbar', r.fehler, el('button', { klasse: 'knopf klein', onclick: () => this.zeichnen() }, 'Nochmal')));
+      return;
+    }
+    const liste = r.geraete || [];
+    if (!liste.length) { kasten.append(this.reihe('Keine Geräte gekoppelt', 'Hier stehen alle Rechner, die sich ohne Passwort bei der Zentrale anmelden dürfen.', null)); return; }
+    for (const g of liste) {
+      kasten.append(this.reihe(g.name,
+        `${g.zuletzt ? 'zuletzt ' + datumZeit(g.zuletzt) : 'noch nicht benutzt'} · gültig bis ${datumZeit(g.bis)}${g.ip ? ' · ' + g.ip : ''}`,
+        el('button', { klasse: 'knopf klein gefahr', onclick: async () => {
+          if (!await fragen('Gerät entkoppeln?', `«${g.name}» muss sich danach wieder mit Passwort und 2FA-Code anmelden.`, 'Entkoppeln', true)) return;
+          const a = await Z.geraetWeg(g.id);
+          if (pruefen(a)) { hinweis('Gerät entkoppelt', 'ok'); this.zeichnen(); }
+        } }, 'Entkoppeln')));
+    }
   },
 
   async vorschauSetzen(el2, e) {
@@ -177,6 +241,154 @@ const EinstellungenApp = {
     el2.style.background = 'radial-gradient(600px 400px at 18% 12%, #1e3a8a 0%, transparent 60%), radial-gradient(500px 350px at 85% 78%, #4c1d95 0%, transparent 62%), linear-gradient(160deg,#060b16,#0b1220)';
   },
 
+  dock(i) {
+    i.append(el('h2', { text: 'Dock & Schreibtisch' }),
+      el('p', { klasse: 'unter', text: 'Welche Apps im Dock liegen und wie der Schreibtisch aufgebaut ist. Symbole und Widgets verschiebst du direkt auf dem Schreibtisch; mit Rechtsklick dort fügst du welche hinzu.' }));
+
+    const imDock = (Einst.daten.dock || []).filter((id) => Apps[id]);
+    const dockListe = el('div');
+    const zeichnen = () => {
+      leeren(dockListe);
+      const liste = (Einst.daten.dock || []).filter((id) => Apps[id]);
+      liste.forEach((id, nr) => {
+        const a = Apps[id];
+        dockListe.append(el('div', { klasse: 'ein-reihe' },
+          el('span', { klasse: 'fl-bild', stil: { width: '30px', height: '30px', borderRadius: '8px', flex: 'none', background: a.farbe || '' }, html: symbol(a.symbol) }),
+          el('div', { klasse: 'text' }, el('div', { klasse: 't', text: a.name })),
+          el('div', { stil: { display: 'flex', gap: '5px' } },
+            el('button', { klasse: 'knopf klein', disabled: nr === 0, title: 'Nach vorne', text: '↑', onclick: () => this.dockVerschieben(id, -1).then(zeichnen) }),
+            el('button', { klasse: 'knopf klein', disabled: nr === liste.length - 1, title: 'Nach hinten', text: '↓', onclick: () => this.dockVerschieben(id, 1).then(zeichnen) }),
+            el('button', { klasse: 'knopf klein gefahr', text: 'Raus', onclick: () => this.dockSetzen(liste.filter((x) => x !== id)).then(zeichnen) }))));
+      });
+      const fehlen = Object.entries(Apps).filter(([id, a]) => !liste.includes(id) && id !== 'zentrale' && !(a === Apps['zentrale:Übersicht'] && liste.includes('zentrale')));
+      if (fehlen.length) {
+        const auswahl = el('select', { klasse: 'feld' });
+        for (const [id, a] of fehlen) auswahl.append(el('option', { value: id }, a.name));
+        dockListe.append(el('div', { klasse: 'ein-reihe' },
+          el('div', { klasse: 'text' }, el('div', { klasse: 't', text: 'App ins Dock legen' })),
+          el('div', { stil: { display: 'flex', gap: '6px' } }, auswahl,
+            el('button', { klasse: 'knopf', onclick: () => this.dockSetzen([...liste, auswahl.value]).then(zeichnen) }, 'Hinzufügen'))));
+      }
+    };
+    zeichnen();
+    i.append(this.block('Apps im Dock', el('div', { klasse: 'ein-karte' }, dockListe)));
+
+    const sch = Einst.daten.schreibtisch || {};
+    i.append(this.block('Schreibtisch', this.karte(
+      this.reihe('Am Raster ausrichten', 'Symbole und Widgets rasten beim Loslassen ein.',
+        this.schalter(sch.einrasten !== false, (v) => { Einst.setzen({ schreibtisch: { einrasten: v } }); })),
+      this.reihe('Rasterweite', 'Abstand der Rasterpunkte in Pixeln.',
+        this.regler(Number(sch.raster) || 110, 80, 180, (v) => { Einst.setzen({ schreibtisch: { raster: v } }); Schreibtischflaeche.zeichnen(); })),
+      this.reihe('Widget hinzufügen', 'Geht auch mit Rechtsklick auf den Schreibtisch.',
+        el('button', { klasse: 'knopf', onclick: () => Schreibtischflaeche.widgetMenue(window.innerWidth / 2, window.innerHeight / 2) }, 'Auswählen')),
+      this.reihe('Schreibtisch leeren', 'Entfernt alle Symbole und Widgets.',
+        el('button', { klasse: 'knopf gefahr', onclick: async () => {
+          if (!await fragen('Schreibtisch leeren?', 'Alle Symbole und Widgets werden entfernt. Die Apps selbst bleiben.', 'Leeren', true)) return;
+          await Einst.setzenAsync({ schreibtisch: { ...Schreibtischflaeche.e, symbole: [], widgets: [] } });
+          Schreibtischflaeche.zeichnen();
+          Schreibtischflaeche.datenHolen();
+        } }, 'Leeren')),
+    )));
+  },
+
+  // Shell-Ersatz: App statt Explorer
+  async kioskBlock(kasten) {
+    const z = await Z.kiosk.zustand();
+    leeren(kasten);
+    if (!z.ok || !z.windows) {
+      kasten.append(this.reihe('Nur unter Windows', 'Dieser Teil funktioniert nur auf dem HP.', null));
+      return;
+    }
+    const konten = z.rettung?.konten || [];
+    const rettungDa = konten.length > 0;
+
+    kasten.append(this.reihe(
+      z.aktiv ? 'Die Zentrale ist deine Windows-Oberfläche' : 'Windows startet normal (Explorer)',
+      z.aktiv
+        ? 'Kein Explorer, keine Taskleiste, kein Alt+Tab. Nur für dein Windows-Konto, andere Konten sind nicht betroffen.'
+        : 'Eingeschaltet ersetzt die Zentrale den Explorer. Danach gibt es auf diesem Konto keine Taskleiste und kein Startmenü mehr.',
+      this.schalter(z.aktiv, async (an) => {
+        if (an) {
+          if (!rettungDa) {
+            await melden('Erst einen Rettungsweg anlegen',
+              'Es gibt kein zweites aktives Administrator-Konto auf diesem HP.\n\nOhne das kommst du nicht mehr an Windows, falls die Zentrale einmal nicht startet. Leg zuerst ein zweites Konto an (Einstellungen → Konten → Weitere Benutzer), mach es zum Administrator, und melde dich einmal damit an.');
+            this.zeichnen();
+            return;
+          }
+          const ja = await fragen('Zentrale als Windows-Oberfläche?',
+            `Nach dem nächsten Anmelden startet statt des Explorers die Zentrale. Keine Taskleiste, kein Startmenü, kein Alt+Tab.\n\nRettungsweg: ${konten.join(', ')} – damit kommst du jederzeit an ein normales Windows.\n\nProgramme wie MT5 musst du unten unter «Programme beim Start» eintragen, sonst startet sie niemand mehr.`,
+            'Einschalten', true);
+          if (!ja) { this.zeichnen(); return; }
+        } else if (!await fragen('Wieder normal starten?', 'Beim nächsten Anmelden startet wieder der Windows-Explorer mit Taskleiste.', 'Zurückstellen')) {
+          this.zeichnen();
+          return;
+        }
+        const r = await Z.kiosk.setzen(an);
+        if (!pruefen(r, 'Registry liess sich nicht ändern')) { this.zeichnen(); return; }
+        hinweis(an ? 'Aktiv ab der nächsten Anmeldung' : 'Zurückgestellt – beim nächsten Anmelden kommt der Explorer', 'ok');
+        this.zeichnen();
+      })));
+
+    kasten.append(this.reihe('Rettungsweg',
+      rettungDa ? `Zweites Administrator-Konto vorhanden: ${konten.join(', ')}` : 'Kein zweites Administrator-Konto – bitte zuerst eines anlegen.',
+      el('span', { klasse: 'u', text: rettungDa ? 'in Ordnung' : 'fehlt' })));
+
+    kasten.append(this.reihe('Explorer jetzt starten',
+      'Holt Taskleiste und Startmenü für diese Sitzung zurück, ohne etwas umzustellen.',
+      el('button', { klasse: 'knopf', onclick: async () => {
+        const r = await Z.kiosk.explorer();
+        hinweis(r.ok ? 'Explorer gestartet' : (r.fehler || 'Hat nicht geklappt'), r.ok ? 'ok' : 'fehler');
+      } }, 'Starten')));
+
+    if (z.shell) kasten.append(this.reihe('Eingetragene Oberfläche', z.shell, null));
+  },
+
+  // Programme, die die App mitstartet (ohne Explorer macht das sonst niemand)
+  programmBlock(kasten) {
+    const zeichnen = () => {
+      leeren(kasten);
+      const liste = Einst.daten.startProgramme || [];
+      for (const p of liste) {
+        kasten.append(this.reihe(p.name || p.pfad, p.pfad,
+          el('div', { stil: { display: 'flex', gap: '6px' } },
+            el('button', { klasse: 'knopf klein', onclick: async () => {
+              const r = await Z.kiosk.programmStarten(p.pfad, p.argumente || []);
+              hinweis(r.ok ? (p.name || 'Programm') + ' gestartet' : (r.fehler || 'Start fehlgeschlagen'), r.ok ? 'ok' : 'fehler');
+            } }, 'Jetzt starten'),
+            el('button', { klasse: 'knopf klein gefahr', onclick: async () => {
+              await Einst.setzenAsync({ startProgramme: liste.filter((x) => x.pfad !== p.pfad) });
+              zeichnen();
+            } }, 'Entfernen'))));
+      }
+      if (!liste.length) {
+        kasten.append(this.reihe('Keine Programme', 'Trag hier MT5 und alles andere ein, was auf dem HP mitlaufen soll.', null));
+      }
+      kasten.append(this.reihe('Programm hinzufügen', 'Wird ein paar Sekunden nach dem Start der Zentrale gestartet.',
+        el('button', { klasse: 'knopf', onclick: async () => {
+          const w = await Z.kiosk.programmWaehlen();
+          if (!w.ok) return;
+          const alt = Einst.daten.startProgramme || [];
+          if (alt.some((x) => x.pfad === w.pfad)) return hinweis('Steht schon in der Liste', 'warnung');
+          await Einst.setzenAsync({ startProgramme: [...alt, { name: w.name, pfad: w.pfad, argumente: [] }] });
+          zeichnen();
+        } }, 'Wählen')));
+    };
+    zeichnen();
+  },
+
+  async dockSetzen(liste) {
+    await Einst.setzenAsync({ dock: liste });
+    Dock.bauen();
+  },
+  async dockVerschieben(id, richtung) {
+    const liste = [...(Einst.daten.dock || [])];
+    const i = liste.indexOf(id);
+    const j = i + richtung;
+    if (i < 0 || j < 0 || j >= liste.length) return;
+    [liste[i], liste[j]] = [liste[j], liste[i]];
+    await this.dockSetzen(liste);
+  },
+
   verhalten(i) {
     const v = Einst.daten.verhalten;
     const s = (teil) => Einst.setzen({ verhalten: teil });
@@ -193,9 +405,17 @@ const EinstellungenApp = {
     )));
 
     i.append(this.block('Vollbild', this.karte(
-      this.reihe('Wie ein Betriebssystem (Kiosk)', 'Vollbild ohne Windows-Rahmen. Notausstieg: Strg + Alt + Shift + K, Beenden: Strg + Alt + Shift + Q.',
+      this.reihe('Vollbild ohne Rahmen', 'Die App füllt den Bildschirm. Notausstieg: Strg + Alt + Shift + K, Beenden: Strg + Alt + Shift + Q.',
         this.schalter(v.kiosk, (x) => Z.system.kiosk(x))),
     )));
+
+    const kioskKasten = el('div', { klasse: 'ein-karte' }, el('div', { klasse: 'ein-reihe' }, el('div', { klasse: 'lader' })));
+    i.append(this.block('Als Windows-Oberfläche', kioskKasten));
+    this.kioskBlock(kioskKasten);
+
+    const progKasten = el('div', { klasse: 'ein-karte' });
+    i.append(this.block('Programme beim Start', progKasten));
+    this.programmBlock(progKasten);
 
     i.append(this.block('Strom', this.karte(
       this.reihe('Nie in den Energiesparmodus', 'Verhindert, dass Windows den Rechner schlafen legt. Für den Trading-Bot unbedingt an lassen.',

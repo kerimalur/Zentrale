@@ -81,7 +81,12 @@ function dialog({ titel, text, felder = [], okText = 'OK', abbrechenText = 'Abbr
       klasse: 'feld', type: f.type || 'text', value: f.wert || '', placeholder: f.platzhalter || '',
       stil: { marginBottom: '8px' },
     }));
-    const schliessen = (wert) => { hinter.remove(); document.removeEventListener('keydown', taste, true); fertig(wert); };
+    const schliessen = (wert) => {
+      hinter.remove();
+      document.removeEventListener('keydown', taste, true);
+      ueberlagernAus();
+      fertig(wert);
+    };
     const ok = () => schliessen(felder.length ? eingaben.map((i) => i.value) : true);
     const taste = (e) => {
       if (e.key === 'Escape') { e.stopPropagation(); schliessen(null); }
@@ -98,6 +103,7 @@ function dialog({ titel, text, felder = [], okText = 'OK', abbrechenText = 'Abbr
     );
     const hinter = el('div', { klasse: 'dialog-hinter', onmousedown: (e) => { if (e.target === hinter) schliessen(null); } }, kasten);
     $('#ebenen').append(hinter);
+    ueberlagernAn();   // sonst liegt der Dialog hinter einem eingebetteten Zentrale-Fenster
     document.addEventListener('keydown', taste, true);
     setTimeout(() => (eingaben[0] || kasten.querySelector('.haupt')).focus(), 30);
     if (eingaben[0]) setTimeout(() => eingaben[0].select(), 40);
@@ -108,6 +114,17 @@ const fragen = (titel, text, okText = 'OK', gefahr = false) => dialog({ titel, t
 const melden = (titel, text) => dialog({ titel, text, okText: 'OK', nurOk: true });
 const abfragen = (titel, text, wert = '', okText = 'OK') =>
   dialog({ titel, text, felder: [{ wert }], okText }).then((r) => (r ? r[0] : null));
+
+// ---------- Überlagerung ----------
+// Die eingebetteten Zentrale-Ansichten liegen technisch über der Oberfläche.
+// Solange ein Menü oder Dialog offen ist, müssen sie ausgeblendet werden –
+// sonst erscheint das Menü hinter der Webseite und ist nicht bedienbar.
+function ueberlagernAn() {
+  if (typeof FM !== 'undefined') FM.ueberlagernAn();
+}
+function ueberlagernAus() {
+  if (typeof FM !== 'undefined') FM.ueberlagernAus();
+}
 
 // ---------- Kontextmenü ----------
 function kontextmenue(x, y, eintraege) {
@@ -122,6 +139,7 @@ function kontextmenue(x, y, eintraege) {
     }, el('span', { text: e.text }), e.kuerzel ? el('span', { klasse: 'kuerzel', text: e.kuerzel }) : null));
   }
   $('#ebenen').append(m);
+  ueberlagernAn();
   const b = m.getBoundingClientRect();
   m.style.left = Math.min(x, window.innerWidth - b.width - 8) + 'px';
   m.style.top = Math.min(y, window.innerHeight - b.height - 8) + 'px';
@@ -132,7 +150,9 @@ function kontextmenue(x, y, eintraege) {
   return m;
 }
 function schliesseMenues() {
-  $$('#ebenen .menue').forEach((m) => m.remove());
+  const offen = $$('#ebenen .menue');
+  offen.forEach((m) => m.remove());
+  for (let i = 0; i < offen.length; i++) ueberlagernAus();
   $$('.mb-knopf.offen').forEach((k) => k.classList.remove('offen'));
 }
 

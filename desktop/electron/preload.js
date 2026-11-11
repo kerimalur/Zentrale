@@ -9,8 +9,15 @@ contextBridge.exposeInMainWorld('zentrale', {
   zustand: () => r('app:zustand'),
 
   // Anmeldung / Sperre
-  anmelden: (passwort, code) => r('anmeldung:anmelden', passwort, code),
+  anmelden: (eingabe, code, modus) => r('anmeldung:anmelden', eingabe, code, modus),
+  anmeldungZustand: () => r('anmeldung:zustand'),
   anmeldungPruefen: () => r('anmeldung:pruefen'),
+  pinSetzen: (pin) => r('anmeldung:pinSetzen', pin),
+  pinEntfernen: () => r('anmeldung:pinEntfernen'),
+  koppeln: () => r('anmeldung:koppeln'),
+  geraete: () => r('anmeldung:geraete'),
+  geraetWeg: (id) => r('anmeldung:geraetWeg', id),
+  sitzungSichern: () => r('anmeldung:sitzungSichern'),
   sperren: (opt) => r('anmeldung:sperren', opt),
   abmelden: () => r('anmeldung:abmelden'),
 
@@ -23,13 +30,14 @@ contextBridge.exposeInMainWorld('zentrale', {
     ordnerWaehlen: () => r('einstellungen:ordnerWaehlen'),
   },
 
-  // Eingebettete Zentrale
+  // Eingebettete Zentrale – eine Ansicht je Fenster (id)
   web: {
-    zeigen: (flaeche) => r('zentrale:zeigen', flaeche),
-    verstecken: (mitBild) => r('zentrale:verstecken', mitBild),
-    befehl: (was) => r('zentrale:befehl', was),
-    oeffnen: (pfad) => r('zentrale:oeffnen', pfad),
-    imBrowser: () => r('zentrale:imBrowser'),
+    zeigen: (id, flaeche, url) => r('zentrale:zeigen', id, flaeche, url),
+    verstecken: (id, mitBild) => r('zentrale:verstecken', id, mitBild),
+    schliessen: (id) => r('zentrale:schliessen', id),
+    befehl: (id, was) => r('zentrale:befehl', id, was),
+    laden: (id, url) => r('zentrale:laden', id, url),
+    imBrowser: (url) => r('zentrale:imBrowser', url),
   },
 
   // Dateien auf dem Pi
@@ -47,6 +55,9 @@ contextBridge.exposeInMainWorld('zentrale', {
     freigaben: () => r('pi:freigaben'),
     freigabeWeg: (t) => r('pi:freigabeWeg', t),
     status: () => r('pi:status'),
+    trading: () => r('pi:trading'),
+    heute: () => r('pi:heute'),
+    garmin: () => r('pi:garmin'),
     steuern: (was, arg) => r('pi:steuern', was, arg),
     url: (w, p) => r('url:pi', w, p),
   },
@@ -70,6 +81,15 @@ contextBridge.exposeInMainWorld('zentrale', {
   uebertragen: {
     piZuLokal: (w, p, ziel) => r('uebertragen:piZuLokal', w, p, ziel),
     lokalZuPi: (quelle, w, ziel) => r('uebertragen:lokalZuPi', quelle, w, ziel),
+  },
+
+  // Harter Kiosk (App als Windows-Oberfläche) und Startprogramme
+  kiosk: {
+    zustand: () => r('kiosk:zustand'),
+    setzen: (an) => r('kiosk:setzen', an),
+    explorer: () => r('kiosk:explorer'),
+    programmStarten: (pfad, argumente) => r('kiosk:programmStarten', pfad, argumente),
+    programmWaehlen: () => r('kiosk:programmWaehlen'),
   },
 
   // System

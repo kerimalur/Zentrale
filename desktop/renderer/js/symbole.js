@@ -52,6 +52,18 @@ const SYMBOL = {
   gitter: S('<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>'),
   pfeilRechts: S('<path d="M4 12h15M13 6l6 6-6 6"/>'),
   browser: S('<rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="M2.5 9h19M6 6.5h.01M8.5 6.5h.01"/>'),
+  heute: S('<rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/><circle cx="8.5" cy="14" r="1.2" fill="currentColor" stroke="none"/><circle cx="12.5" cy="14" r="1.2" fill="currentColor" stroke="none"/>'),
+  herz: S('<path d="M12 20s-7-4.4-7-9.5A4 4 0 0 1 12 7.5 4 4 0 0 1 19 10.5c0 5.1-7 9.5-7 9.5z"/><path d="M3 13.5h3l1.5-3 2 6 2-4.5 1.5 1.5h6" stroke-width="1.3"/>'),
+  fokus: S('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>'),
+  trading: S('<path d="M3 17.5 9 11l4 4 7.5-8"/><path d="M15.5 7.5h5v5"/>'),
+  netz: S('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z"/>'),
+  cloud: S('<path d="M7 18.5a4.3 4.3 0 0 1-.4-8.6 5.6 5.6 0 0 1 10.8-1.3A4.1 4.1 0 0 1 17.5 18.5z"/>'),
+  gaeste: S('<circle cx="9" cy="8.5" r="3.3"/><path d="M3 20c0-3.1 2.7-5.2 6-5.2s6 2.1 6 5.2"/><path d="M16.5 6.2a3.3 3.3 0 0 1 0 6.3M18 14.2c2.1.6 3.5 2.3 3.5 4.3" stroke-width="1.5"/>'),
+  konsole: S('<rect x="2.5" y="4" width="19" height="16" rx="2.5"/><path d="m7 9.5 3 2.5-3 2.5M12.5 15h4.5"/>'),
+  speicher: S('<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>'),
+  widget: S('<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="5" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="10" width="8" height="11" rx="2"/>'),
+  raster: S('<rect x="3" y="3" width="18" height="18" rx="2.5"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>'),
+  verschieben: S('<path d="M12 3v18M3 12h18M12 3 9 6M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>'),
 };
 
 const symbol = (name) => SYMBOL[name] || SYMBOL.datei;

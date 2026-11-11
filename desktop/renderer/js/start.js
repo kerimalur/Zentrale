@@ -28,12 +28,22 @@ const Einst = {
 };
 
 // ---------------------------------------------------------------- Apps
+// Eigene Apps der Oberfläche plus ein Eintrag je Zentrale-Tab.
 const Apps = {
-  zentrale: { name: 'Zentrale', symbol: 'zentrale', fensterId: 'zentrale', farbe: 'linear-gradient(160deg,#3b82f6,#1d4ed8)', oeffnen: (tab) => ZentraleFenster.oeffnen(typeof tab === 'string' ? tab : null) },
   finder: { name: 'Finder', symbol: 'finder', fensterId: 'finder', farbe: 'linear-gradient(160deg,#38bdf8,#0369a1)', oeffnen: (start) => Finder.oeffnen(start && start.quelle ? start : null) },
   steuerung: { name: 'Steuerung', symbol: 'steuerung', fensterId: 'steuerung', farbe: 'linear-gradient(160deg,#a78bfa,#6d28d9)', oeffnen: () => Steuerung.oeffnen() },
   einstellungen: { name: 'Einstellungen', symbol: 'einstellungen', fensterId: 'einstellungen', farbe: 'linear-gradient(160deg,#9ca3af,#4b5563)', oeffnen: (b) => EinstellungenApp.oeffnen(typeof b === 'string' ? b : null) },
 };
+for (const t of ZENTRALE_TABS) {
+  Apps['zentrale:' + t.id] = {
+    name: t.name, symbol: t.symbol, farbe: t.farbe,
+    fensterId: 'zentrale:' + t.id,
+    zentrale: true,
+    oeffnen: () => ZentraleFenster.oeffnen(t.id),
+  };
+}
+// Alte Kennung aus früheren Einstellungen weiterhin verstehen.
+Apps.zentrale = Apps['zentrale:Übersicht'];
 
 // ---------------------------------------------------------------- Schreibtisch
 const Schreibtisch = {
@@ -47,11 +57,12 @@ const Schreibtisch = {
     this.aussehenAnwenden();
     Menueleiste.bauen();
     Dock.bauen();
+    Schreibtischflaeche.bauen();
     this.horchen();
     this.tasten();
 
     if (z && z.gesperrt) Sperre.zeigen();
-    else this.nachAnmeldung(false, true);
+    else this.nachAnmeldung({ ok: true, pi: true, offline: false }, true);
   },
 
   aussehenAnwenden() {
@@ -70,22 +81,44 @@ const Schreibtisch = {
     }
   },
 
-  nachAnmeldung(offline, start = false) {
+  async nachAnmeldung(r = {}, start = false) {
     this.aussehenAnwenden();
-    if (offline) {
-      hinweis('Der Pi ist gerade nicht erreichbar. Dateien auf dem HP gehen trotzdem.', 'warnung', 'Ohne Pi angemeldet');
+    const ohnePi = r.offline || r.pi === false;
+
+    if (ohnePi) hinweis('Der Pi ist gerade nicht erreichbar. Dateien auf dem HP gehen trotzdem.', 'warnung', 'Ohne Pi angemeldet');
+    else if (r.piFehler) hinweis(r.piFehler, 'warnung', 'Zentrale nicht angemeldet');
+    if (r.gekoppelt === false && r.kopplungFehler) {
+      hinweis('Gerät konnte nicht gekoppelt werden: ' + r.kopplungFehler + ' – du musst dich weiter mit Passwort anmelden.', 'warnung');
     }
-    if (Einst.daten.verhalten?.zentraleBeimStart !== false && !offline) {
-      if (!FM.finden('zentrale')) ZentraleFenster.oeffnen();
-    } else if (offline && start) {
+
+    if (Einst.daten.verhalten?.zentraleBeimStart !== false && !ohnePi) {
+      if (!FM.finden('zentrale:Übersicht')) ZentraleFenster.oeffnen('Übersicht');
+    } else if (ohnePi && start) {
       Finder.oeffnen();
     }
     setTimeout(() => ZentraleFenster.anpassen(), 120);
     Menueleiste.piTick();
+
+    // Nach der ersten Anmeldung mit Passwort gleich einen PIN anbieten.
+    if (r.pinNoetig) setTimeout(() => this.pinEinrichten(true), 600);
+  },
+
+  // Fragt einen neuen PIN ab (zweimal) und speichert ihn.
+  async pinEinrichten(ersteMal = false) {
+    const text = ersteMal
+      ? 'Damit du dich nicht jedes Mal mit Passwort und 2FA-Code anmelden musst: leg einen PIN fest. Mindestens 4 Zeichen. Das Zentrale-Passwort funktioniert weiterhin als Rückfall.'
+      : 'Neuen PIN festlegen. Mindestens 4 Zeichen.';
+    const a = await dialog({ titel: 'PIN festlegen', text, felder: [{ type: 'password', platzhalter: 'Neuer PIN' }, { type: 'password', platzhalter: 'Nochmal' }], okText: 'Speichern' });
+    if (!a) return false;
+    const [p1, p2] = a;
+    if (p1 !== p2) { hinweis('Die beiden Eingaben stimmen nicht überein.', 'fehler'); return this.pinEinrichten(ersteMal); }
+    const r = await Z.pinSetzen(p1);
+    if (!r.ok) { hinweis(r.fehler || 'PIN konnte nicht gesetzt werden', 'fehler'); return this.pinEinrichten(ersteMal); }
+    hinweis('PIN gespeichert', 'ok');
+    return true;
   },
 
   async sperren() {
-    await Z.web.verstecken(false);
     await Z.sperren();
   },
 
@@ -102,8 +135,7 @@ const Schreibtisch = {
 
   ausschaltenMenue(knopf) {
     const r = knopf.getBoundingClientRect();
-    FM.ueberlagernAn();
-    const m = kontextmenue(r.left - 90, r.top - 190, [
+    kontextmenue(r.left - 90, r.top - 190, [
       { titel: 'Der HP bleibt an' },
       { text: 'Bildschirm aus & sperren', kuerzel: '⌘L', tun: () => this.sperren() },
       { text: 'Nur sperren', tun: () => Z.sperren({ bildschirmAus: false }) },
@@ -113,8 +145,6 @@ const Schreibtisch = {
       '-',
       { text: 'Zentrale beenden …', tun: () => this.beenden() },
     ]);
-    const b = new MutationObserver(() => { if (!m.isConnected) { FM.ueberlagernAus(); b.disconnect(); } });
-    b.observe($('#ebenen'), { childList: true });
   },
 
   horchen() {
@@ -151,22 +181,18 @@ const Schreibtisch = {
       else if (k === ',') { e.preventDefault(); Apps.einstellungen.oeffnen(); }
       else if (k === 'w') { e.preventDefault(); FM.oben && FM.oben.schliessen(); }
       else if (k === 'm') { e.preventDefault(); FM.oben && FM.oben.minimieren(); }
-      else if (k === 'r' && FM.oben?.appId === 'zentrale') { e.preventDefault(); Z.web.befehl('neu'); }
+      else if (k === 'r' && FM.oben?.appId?.startsWith('zentrale:')) { e.preventDefault(); Z.web.befehl(FM.oben.appId, 'neu'); }
     }, true);
 
     // Rechtsklick auf den Schreibtisch
-    $('#tapete').addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      kontextmenue(e.clientX, e.clientY, [
-        { text: 'Finder öffnen', kuerzel: '⌘E', tun: () => Apps.finder.oeffnen() },
-        { text: 'Zentrale öffnen', tun: () => Apps.zentrale.oeffnen() },
-        { text: 'Steuerung öffnen', tun: () => Apps.steuerung.oeffnen() },
-        '-',
-        { text: 'Hintergrund ändern …', tun: () => Apps.einstellungen.oeffnen('aussehen') },
-        { text: 'Einstellungen …', kuerzel: '⌘,', tun: () => Apps.einstellungen.oeffnen() },
-      ]);
-    });
-    $('#tapete').addEventListener('mousedown', () => schliesseMenues());
+    for (const ziel of [$('#tapete'), $('#flaeche')]) {
+      ziel.addEventListener('contextmenu', (e) => {
+        if (e.target.closest('.fl-symbol, .fl-widget')) return;
+        e.preventDefault();
+        Schreibtischflaeche.menue(e.clientX, e.clientY);
+      });
+      ziel.addEventListener('mousedown', (e) => { if (!e.target.closest('.fl-symbol, .fl-widget')) schliesseMenues(); });
+    }
   },
 };
 

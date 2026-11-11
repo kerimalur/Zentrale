@@ -13,6 +13,7 @@ const pi = require('./lib/pi');
 const lokal = require('./lib/lokal');
 const anmeldung = require('./lib/anmeldung');
 const strom = require('./lib/strom');
+const kiosk = require('./lib/kiosk');
 
 protokoll.schemaAnmelden();
 
@@ -20,10 +21,8 @@ protokoll.schemaAnmelden();
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 let fenster = null;          // Haupt-BrowserWindow (die ganze Oberfläche)
-let zentraleView = null;     // eingebettete Zentrale (echte Webseite vom Pi)
 let gesperrt = true;
-let zentraleSichtbar = false;
-let letzterSchnappschuss = null;
+let bildschirmAus = false;
 let sperrTimer = null;
 
 // ---------------------------------------------------------------- Fenster
@@ -67,7 +66,7 @@ function fensterBauen() {
   });
 
   fenster.on('resize', () => fenster.webContents.send('fenster:groesse'));
-  fenster.on('closed', () => { fenster = null; zentraleView = null; });
+  fenster.on('closed', () => { fenster = null; ansichten.clear(); });
 
   // Links aus der Oberfläche im echten Browser öffnen.
   fenster.webContents.setWindowOpenHandler(({ url }) => {
@@ -77,10 +76,20 @@ function fensterBauen() {
 }
 
 // ---------------------------------------------------------------- Zentrale einbetten
+//
+// Jeder Tab der Zentrale bekommt sein eigenes Fenster und damit seine eigene
+// eingebettete Ansicht. Sie laufen alle in derselben Partition, also mit einer
+// Anmeldung. Technisch liegen diese Ansichten über der Oberfläche – darum zeigt
+// die Oberfläche immer nur die vorderste und blendet die anderen aus (mit einem
+// Schnappschuss als Platzhalter, damit kein schwarzes Loch bleibt).
 
-function zentraleBauen() {
-  if (zentraleView || !fenster) return zentraleView;
-  zentraleView = new WebContentsView({
+const ansichten = new Map(); // id -> { view, sichtbar }
+
+function ansichtBauen(id, url) {
+  if (ansichten.has(id)) return ansichten.get(id);
+  if (!fenster) return null;
+
+  const view = new WebContentsView({
     webPreferences: {
       partition: pi.PARTITION,
       contextIsolation: true,
@@ -88,18 +97,19 @@ function zentraleBauen() {
       backgroundThrottling: false,
     },
   });
-  zentraleView.setBackgroundColor('#00000000');
-  fenster.contentView.addChildView(zentraleView);
-  zentraleView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+  view.setBackgroundColor('#00000000');
+  fenster.contentView.addChildView(view);
+  view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
 
-  const wc = zentraleView.webContents;
-  wc.setWindowOpenHandler(({ url }) => {
-    if (/^https?:/i.test(url)) shell.openExternal(url);
+  const wc = view.webContents;
+  wc.setWindowOpenHandler(({ url: ziel }) => {
+    if (/^https?:/i.test(ziel)) shell.openExternal(ziel);
     return { action: 'deny' };
   });
   const melden = () => {
-    if (!fenster) return;
+    if (!fenster || fenster.isDestroyed()) return;
     fenster.webContents.send('zentrale:zustand', {
+      id,
       url: wc.getURL(),
       laedt: wc.isLoading(),
       zurueck: wc.navigationHistory ? wc.navigationHistory.canGoBack() : wc.canGoBack(),
@@ -111,44 +121,58 @@ function zentraleBauen() {
   wc.on('did-stop-loading', melden);
   wc.on('did-navigate', melden);
   wc.on('did-navigate-in-page', melden);
-  wc.on('did-fail-load', (_e, code, text, url, haupt) => {
+  wc.on('did-fail-load', (_e, code, text, _url, haupt) => {
     if (!haupt || code === -3) return;
-    if (fenster) fenster.webContents.send('zentrale:fehler', { code, text, url });
+    if (fenster) fenster.webContents.send('zentrale:fehler', { id, code, text });
   });
 
-  wc.loadURL(pi.basis() + '/');
-  return zentraleView;
+  const eintrag = { view, sichtbar: false };
+  ansichten.set(id, eintrag);
+  wc.loadURL(url || pi.basis() + '/');
+  return eintrag;
 }
 
-function zentraleVerstecken() {
-  if (!zentraleView) return;
-  zentraleSichtbar = false;
-  zentraleView.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+function ansichtSchliessen(id) {
+  const a = ansichten.get(id);
+  if (!a) return;
+  try { fenster?.contentView.removeChildView(a.view); } catch {}
+  try { a.view.webContents.close(); } catch {}
+  ansichten.delete(id);
 }
 
-async function zentraleSchnappschuss() {
-  if (!zentraleView || !zentraleSichtbar) return null;
+function alleAnsichtenVerstecken() {
+  for (const a of ansichten.values()) {
+    a.sichtbar = false;
+    try { a.view.setBounds({ x: 0, y: 0, width: 0, height: 0 }); } catch {}
+  }
+  if (fenster && !fenster.isDestroyed()) fenster.webContents.focus();
+}
+
+const hatSichtbareAnsicht = () => [...ansichten.values()].some((a) => a.sichtbar);
+
+async function ansichtSchnappschuss(id) {
+  const a = ansichten.get(id);
+  if (!a || !a.sichtbar) return null;
   try {
-    const bild = await zentraleView.webContents.capturePage();
-    if (bild.isEmpty()) return null;
-    letzterSchnappschuss = bild.toDataURL();
-    return letzterSchnappschuss;
+    const bild = await a.view.webContents.capturePage();
+    return bild.isEmpty() ? null : bild.toDataURL();
   } catch { return null; }
 }
 
 // ---------------------------------------------------------------- Sperren
 
-async function sperren({ bildschirmAus = null } = {}) {
+async function sperren({ bildschirmAus: schirmAus = null } = {}) {
   const e = einstellungen.alle();
   gesperrt = true;
-  zentraleVerstecken();
+  alleAnsichtenVerstecken();
   if (fenster) {
     fenster.webContents.send('sperre:zustand', { gesperrt: true });
     fenster.focus();
   }
-  const aus = bildschirmAus === null ? e.verhalten.bildschirmAusBeiSperre : bildschirmAus;
+  const aus = schirmAus === null ? e.verhalten.bildschirmAusBeiSperre : schirmAus;
   if (aus) {
     const r = await strom.bildschirmAus();
+    bildschirmAus = !!r.ok;
     if (!r.ok && fenster) fenster.webContents.send('hinweis', { art: 'warnung', text: 'Monitor liess sich nicht abschalten: ' + (r.fehler || '') });
   }
   return { ok: true };
@@ -156,6 +180,7 @@ async function sperren({ bildschirmAus = null } = {}) {
 
 function entsperren() {
   gesperrt = false;
+  bildschirmAus = false;
   if (fenster) fenster.webContents.send('sperre:zustand', { gesperrt: false });
   return { ok: true };
 }
@@ -169,6 +194,44 @@ function sperrTimerSetzen() {
     if (gesperrt) return;
     if (strom.untaetigSekunden() >= min * 60) sperren();
   }, 15000);
+}
+
+// ---------------------------------------------------------------- Befehle vom Pi
+
+// Der HP ist von aussen nicht erreichbar, darum fragt die App selbst nach.
+// Alle paar Sekunden: Zustand melden, offene Befehle abholen, ausführen.
+let abholTimer = null;
+let abholFehlerGemeldet = false;
+
+async function befehleAbholen() {
+  const token = anmeldung.tokenLesen();
+  if (!token) return;
+  const r = await pi.hpAbholen(token, {
+    gesperrt,
+    bildschirmAus,
+    version: app.getVersion(),
+    rechner: require('node:os').hostname(),
+    benutzer: process.env.USERNAME || process.env.USER || '',
+  });
+  if (!r.ok) {
+    // Nur einmal meckern, nicht im Sekundentakt.
+    if (r.status === 401 && !abholFehlerGemeldet) {
+      abholFehlerGemeldet = true;
+      if (fenster) fenster.webContents.send('hinweis', { art: 'warnung', text: 'Dieses Gerät wurde in der Zentrale entkoppelt. Fernsteuerung ist aus.' });
+    }
+    return;
+  }
+  abholFehlerGemeldet = false;
+  for (const b of r.befehle || []) {
+    if (b === 'sperren') await sperren({ bildschirmAus: false });
+    else if (b === 'bildschirmAus') await sperren({ bildschirmAus: true });
+    else if (b === 'bildschirmAn') { const a = await strom.bildschirmAn(); bildschirmAus = !a.ok; }
+  }
+}
+
+function abholenStarten() {
+  if (abholTimer) clearInterval(abholTimer);
+  abholTimer = setInterval(() => befehleAbholen().catch(() => {}), 5000);
 }
 
 // ---------------------------------------------------------------- IPC
@@ -194,23 +257,30 @@ function ipcEinrichten() {
   })));
 
   // --- Anmeldung ---
-  ipcMain.handle('anmeldung:anmelden', sicher(async (_e, passwort, code) => {
-    const r = await anmeldung.anmelden(passwort, code);
+  ipcMain.handle('anmeldung:anmelden', sicher(async (_e, eingabe, code, modus) => {
+    const r = await anmeldung.anmelden(eingabe, code, modus || 'pin');
     if (r.ok) {
       entsperren();
-      if (!r.offline) { zentraleBauen(); zentraleView.webContents.reload(); }
+      if (r.pi) for (const a of ansichten.values()) a.view.webContents.reload();
     }
     return r;
   }));
+  ipcMain.handle('anmeldung:zustand', sicher(async () => ({ ok: true, ...anmeldung.zustand() })));
   ipcMain.handle('anmeldung:pruefen', sicher(async () => {
     const z = await pi.angemeldet();
-    return { ok: true, ...z, gemerkt: anmeldung.gemerkt() };
+    return { ok: true, ...z, ...anmeldung.zustand() };
   }));
+  ipcMain.handle('anmeldung:pinSetzen', sicher(async (_e, pin) => anmeldung.pinSetzen(pin)));
+  ipcMain.handle('anmeldung:pinEntfernen', sicher(async () => anmeldung.pinEntfernen()));
+  ipcMain.handle('anmeldung:koppeln', sicher(async () => anmeldung.koppeln()));
+  ipcMain.handle('anmeldung:geraete', sicher(async () => pi.geraeteListe()));
+  ipcMain.handle('anmeldung:geraetWeg', sicher(async (_e, id) => pi.geraetEntkoppeln(id)));
+  ipcMain.handle('anmeldung:sitzungSichern', sicher(async () => anmeldung.sitzungSichern()));
   ipcMain.handle('anmeldung:sperren', sicher(async (_e, opt) => sperren(opt || {})));
   ipcMain.handle('anmeldung:abmelden', sicher(async () => {
     await pi.abmelden();
-    anmeldung.vergessen();
-    if (zentraleView) zentraleView.webContents.loadURL('about:blank');
+    anmeldung.alleszuruecksetzen();
+    for (const id of [...ansichten.keys()]) ansichtSchliessen(id);
     return sperren({ bildschirmAus: false });
   }));
 
@@ -228,7 +298,7 @@ function ipcEinrichten() {
       fenster.setKiosk(!!kioskNeu);
       fenster.setFullScreen(!!kioskNeu);
     }
-    if (teil?.zentraleUrl && zentraleView) zentraleView.webContents.loadURL(pi.basis() + '/');
+    if (teil?.zentraleUrl) for (const id of [...ansichten.keys()]) ansichtSchliessen(id);
     return { ok: true, einstellungen: neu, autostart: strom.autostartAn() };
   }));
   ipcMain.handle('einstellungen:zuruecksetzen', sicher(async () => ({ ok: true, einstellungen: einstellungen.zuruecksetzen() })));
@@ -247,43 +317,52 @@ function ipcEinrichten() {
     return { ok: true, pfad: r.filePaths[0] };
   }));
 
-  // --- Zentrale-Fenster ---
-  ipcMain.handle('zentrale:zeigen', sicher(async (_e, flaeche) => {
+  // --- Zentrale-Fenster (eines pro Tab) ---
+  ipcMain.handle('zentrale:zeigen', sicher(async (_e, id, flaeche, url) => {
     if (gesperrt) return { ok: false, fehler: 'Gesperrt' };
-    zentraleBauen();
+    const a = ansichtBauen(String(id), url);
+    if (!a) return { ok: false, fehler: 'Kein Fenster' };
     const b = {
       x: Math.round(flaeche.x), y: Math.round(flaeche.y),
       width: Math.max(0, Math.round(flaeche.width)), height: Math.max(0, Math.round(flaeche.height)),
     };
-    zentraleView.setBounds(b);
-    zentraleSichtbar = b.width > 0 && b.height > 0;
+    a.view.setBounds(b);
+    a.sichtbar = b.width > 0 && b.height > 0;
+    // Tastatur an die Seite geben, solange sie vorne ist.
+    if (a.sichtbar) a.view.webContents.focus();
     return { ok: true };
   }));
-  ipcMain.handle('zentrale:verstecken', sicher(async (_e, mitBild) => {
-    const bild = mitBild ? await zentraleSchnappschuss() : null;
-    zentraleVerstecken();
+  ipcMain.handle('zentrale:verstecken', sicher(async (_e, id, mitBild) => {
+    const bild = mitBild ? await ansichtSchnappschuss(String(id)) : null;
+    const a = ansichten.get(String(id));
+    if (a) { a.sichtbar = false; a.view.setBounds({ x: 0, y: 0, width: 0, height: 0 }); }
+    // Tastatur zurück an die Oberfläche – sonst landen Eingaben in Dialogen und
+    // Menüs weiterhin in der ausgeblendeten Webseite.
+    if (!hatSichtbareAnsicht() && fenster && !fenster.isDestroyed()) fenster.webContents.focus();
     return { ok: true, bild };
   }));
-  ipcMain.handle('zentrale:befehl', sicher(async (_e, was) => {
-    zentraleBauen();
-    const wc = zentraleView.webContents;
+  ipcMain.handle('zentrale:schliessen', sicher(async (_e, id) => { ansichtSchliessen(String(id)); return { ok: true }; }));
+  ipcMain.handle('zentrale:befehl', sicher(async (_e, id, was) => {
+    const a = ansichten.get(String(id));
+    if (!a) return { ok: false, fehler: 'Kein Fenster' };
+    const wc = a.view.webContents;
     const h = wc.navigationHistory;
     if (was === 'zurueck') h ? h.goBack() : wc.goBack();
     else if (was === 'vor') h ? h.goForward() : wc.goForward();
     else if (was === 'neu') wc.reload();
-    else if (was === 'start') wc.loadURL(pi.basis() + '/');
     else if (was === 'werkzeuge') wc.toggleDevTools();
     else if (was === 'groesser') wc.setZoomLevel(Math.min(wc.getZoomLevel() + 0.5, 5));
     else if (was === 'kleiner') wc.setZoomLevel(Math.max(wc.getZoomLevel() - 0.5, -5));
     else if (was === 'normal') wc.setZoomLevel(0);
     return { ok: true };
   }));
-  ipcMain.handle('zentrale:oeffnen', sicher(async (_e, pfad) => {
-    zentraleBauen();
-    zentraleView.webContents.loadURL(pi.basis() + String(pfad || '/'));
+  ipcMain.handle('zentrale:laden', sicher(async (_e, id, url) => {
+    const a = ansichtBauen(String(id), url);
+    if (!a) return { ok: false };
+    a.view.webContents.loadURL(url);
     return { ok: true };
   }));
-  ipcMain.handle('zentrale:imBrowser', sicher(async () => { await shell.openExternal(pi.basis() + '/'); return { ok: true }; }));
+  ipcMain.handle('zentrale:imBrowser', sicher(async (_e, url) => { await shell.openExternal(url || pi.basis() + '/'); return { ok: true }; }));
 
   // --- Dateien: Pi ---
   const piAntwort = (r) => (r.ok ? { ok: true, ...(r.daten || {}) } : { ok: false, fehler: r.fehler });
@@ -300,6 +379,9 @@ function ipcEinrichten() {
   ipcMain.handle('pi:freigaben', sicher(async () => piAntwort(await pi.dateien.freigaben())));
   ipcMain.handle('pi:freigabeWeg', sicher(async (_e, t) => piAntwort(await pi.dateien.freigabeWeg(t))));
   ipcMain.handle('pi:status', sicher(async () => piAntwort(await pi.steuerung.status())));
+  ipcMain.handle('pi:trading', sicher(async () => piAntwort(await pi.steuerung.trading())));
+  ipcMain.handle('pi:heute', sicher(async () => piAntwort(await pi.steuerung.heute())));
+  ipcMain.handle('pi:garmin', sicher(async () => piAntwort(await pi.steuerung.garmin())));
   ipcMain.handle('pi:steuern', sicher(async (_e, was, arg) => {
     const s = pi.steuerung;
     const karte = {
@@ -307,6 +389,7 @@ function ipcEinrichten() {
       tvAn: () => s.tvAn(), tvTaste: () => s.tvTaste(arg), tvLautstaerke: () => s.tvLautstaerke(arg),
       szene: () => s.szene(arg), container: () => s.container(arg?.name, arg?.an),
       dienstNeustart: () => s.dienstNeustart(arg), notbetrieb: () => s.notbetrieb(arg),
+      luefter: () => s.luefter(arg), backupStart: () => s.backupStart(),
       piNeustart: () => s.piNeustart(), piAus: () => s.piAus(),
     };
     if (!karte[was]) return { ok: false, fehler: 'Unbekannter Befehl' };
@@ -363,6 +446,31 @@ function ipcEinrichten() {
     await shell.openExternal(url);
     return { ok: true };
   }));
+  // --- Harter Kiosk: App als Windows-Oberfläche ---
+  ipcMain.handle('kiosk:zustand', sicher(async () => ({
+    ok: true,
+    aktiv: await kiosk.kioskAktiv(),
+    shell: (await kiosk.shellLesen()).wert,
+    rettung: await kiosk.rettungskonten(),
+    windows: process.platform === 'win32',
+  })));
+  ipcMain.handle('kiosk:setzen', sicher(async (_e, an) => {
+    const r = await kiosk.shellSetzen(!!an);
+    if (r.ok) einstellungen.setzen({ verhalten: { windowsOberflaeche: !!an } });
+    return r;
+  }));
+  ipcMain.handle('kiosk:explorer', sicher(async () => kiosk.explorerStarten()));
+  ipcMain.handle('kiosk:programmStarten', sicher(async (_e, pfad, argumente) => kiosk.programmStarten(pfad, argumente)));
+  ipcMain.handle('kiosk:programmWaehlen', sicher(async () => {
+    const r = await dialog.showOpenDialog(fenster, {
+      title: 'Programm auswählen',
+      properties: ['openFile'],
+      filters: [{ name: 'Programme', extensions: ['exe', 'bat', 'cmd', 'lnk'] }],
+    });
+    if (r.canceled || !r.filePaths[0]) return { ok: false, abgebrochen: true };
+    return { ok: true, pfad: r.filePaths[0], name: path.basename(r.filePaths[0], path.extname(r.filePaths[0])) };
+  }));
+
   ipcMain.handle('app:kopieren', sicher(async (_e, text) => {
     require('electron').clipboard.writeText(String(text || ''));
     return { ok: true };
@@ -396,8 +504,25 @@ app.whenReady().then(async () => {
     einstellungen.setzen({ verhalten: { kiosk: an } });
   });
 
-  // War die Sitzung beim Pi noch gültig? Dann ist nach dem Entsperren alles sofort da.
-  pi.angemeldet().catch(() => {});
+  // Sitzung zum Pi im Hintergrund gültig halten (Token-Kopplung), damit nie ein
+  // Anmeldedialog im Zentrale-Fenster auftaucht.
+  const sitzungPflegen = () => anmeldung.sitzungSichern().catch(() => {});
+  sitzungPflegen();
+  setInterval(sitzungPflegen, 30 * 60_000);
+
+  abholenStarten();
+
+  // Ohne Explorer startet Windows die Autostart-Programme nicht – das macht die App.
+  const startProgramme = einstellungen.alle().startProgramme || [];
+  if (startProgramme.length) {
+    setTimeout(async () => {
+      const r = await kiosk.programmeStarten(startProgramme);
+      const schief = r.filter((x) => !x.ok);
+      if (schief.length && fenster) {
+        fenster.webContents.send('hinweis', { art: 'warnung', text: 'Nicht gestartet: ' + schief.map((x) => x.name).join(', ') });
+      }
+    }, 4000);
+  }
 });
 
 app.on('second-instance', () => {

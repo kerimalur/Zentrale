@@ -5,6 +5,7 @@ import { senden } from '@/lib/api';
 import { komma, uhr, zahl } from '@/lib/format';
 import { Icon, Ring, Verlauf, type IconName } from './ui';
 import { PcKarte } from './Pc';
+import { HpKarte } from './Hp';
 import { FernseherKarte } from './Fernseher';
 
 export const APP_FARBE: Record<Dienst['id'], string> = {
@@ -87,6 +88,7 @@ export function Uebersicht({ z, aktualisieren }: { z: Zustand; aktualisieren: ()
 
       <div className="rechts">
         <PcKarte z={z} aktualisieren={aktualisieren} />
+        <HpKarte />
         <FernseherKarte z={z} aktualisieren={aktualisieren} />
         <section className="karte in" style={{ animationDelay: '180ms', flex: 1 }} aria-label="Ereignisse">
           <h2 className="karte-titel">Ereignisse & Fehler</h2>

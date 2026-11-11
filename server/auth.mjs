@@ -75,6 +75,18 @@ export function login(req, passwort, code) {
   return { ok: true, cookie: `${COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${DAUER / 1000}` };
 }
 
+// Eine Sitzung von Hand anlegen – für gekoppelte Geräte (Desktop-App auf dem HP),
+// die sich mit einem Geräte-Token statt mit Passwort und Code ausweisen.
+export function sitzungErzeugen(ip = '') {
+  const jetzt = Date.now();
+  const token = crypto.randomBytes(32).toString('hex');
+  const sitzungen = db().sitzungen;
+  for (const [k, v] of Object.entries(sitzungen)) if (v.bis < jetzt) delete sitzungen[k];
+  sitzungen[hash(token)] = { bis: jetzt + DAUER, ip };
+  save();
+  return `${COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${DAUER / 1000}`;
+}
+
 export function logout(req) {
   const token = parseCookies(req.headers.cookie)[COOKIE];
   if (token) { delete db().sitzungen[hash(token)]; save(); }

@@ -190,3 +190,51 @@ body.hell .feld { background: rgba(255,255,255,0.75); }
 .knopf.klein svg { width: 14px; height: 14px; }
 .knopf:has(> svg:only-child) { min-width: 30px; padding: 0 8px; }
 .knopf.klein:has(> svg:only-child) { min-width: 25px; padding: 0 7px; }
+
+/* ---------- Schreibtischfläche: Symbole und Widgets ---------- */
+.flaeche {
+  position: absolute; left: 14px; right: 14px; z-index: 5;
+  top: calc(var(--menue-h) + 12px); bottom: calc(var(--dock-h) + 14px);
+}
+.flaeche > * { position: absolute; }
+
+.fl-symbol {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 8px 4px; border-radius: 12px; text-align: center; color: var(--text);
+  text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+body.hell .fl-symbol { text-shadow: none; }
+.fl-symbol:hover { background: rgba(255,255,255,0.09); }
+body.hell .fl-symbol:hover { background: rgba(0,0,0,0.07); }
+.fl-symbol.zieht { opacity: 0.7; z-index: 50; }
+.fl-bild {
+  width: 56px; height: 56px; border-radius: 14px; display: grid; place-items: center;
+  background: linear-gradient(160deg, #3b82f6, #1d4ed8); color: #fff;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+}
+.fl-bild svg { width: 58%; height: 58%; }
+.fl-name { font-size: 11.5px; line-height: 1.25; max-width: 100%; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+.fl-widget {
+  padding: 13px 14px; border-radius: 16px; overflow: hidden;
+  background: var(--glas); backdrop-filter: blur(26px) saturate(170%);
+  border: 1px solid var(--rand-stark); box-shadow: 0 10px 34px rgba(0,0,0,0.34);
+}
+.fl-widget.klickbar { cursor: default; }
+.fl-widget:hover { border-color: var(--rand-stark); background: var(--glas-hell); }
+.fl-widget.zieht { opacity: 0.8; z-index: 50; }
+.w-inhalt { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.w-kopf { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 650; color: var(--text-leise); flex: none; }
+.w-kopf svg { width: 14px; height: 14px; }
+.w-gross { font-size: 27px; font-weight: 640; margin: 6px 0 1px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.w-klein { font-size: 11.5px; color: var(--text-sehr-leise); }
+.w-leer { flex: 1; display: grid; place-items: center; font-size: 12px; color: var(--text-sehr-leise); text-align: center; }
+.w-zeilen { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; margin-top: 8px; font-size: 12px; }
+.w-zeilen span { color: var(--text-sehr-leise); }
+.w-zeilen b { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.w-notiz {
+  flex: 1; margin-top: 8px; width: 100%; border: none; outline: none; resize: none;
+  background: rgba(0,0,0,0.2); border-radius: 9px; padding: 8px 9px;
+  color: var(--text); font-size: 12.5px; line-height: 1.5; font-family: var(--schrift); user-select: text;
+}
+body.hell .w-notiz { background: rgba(255,255,255,0.7); }

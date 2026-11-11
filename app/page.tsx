@@ -26,15 +26,29 @@ function gespeicherterTab(): Tab {
   try {
     const h = decodeURIComponent(location.hash.slice(1));
     if ((TABS as readonly string[]).includes(h)) return h as Tab;
+    // Im nackten Modus (Desktop-App) zählt nur die Adresse, nicht der zuletzt benutzte Tab.
+    if (istNackt()) return 'Übersicht';
     const s = localStorage.getItem('zentrale-tab');
     if (s && (TABS as readonly string[]).includes(s)) return s as Tab;
   } catch {}
   return 'Übersicht';
 }
 
+// «Nackt»: ohne Kopfzeile und Tab-Leiste. Dafür sorgt die Desktop-App auf dem HP,
+// die jeden Tab in einem eigenen Fenster zeigt und den Rahmen selbst mitbringt.
+// Im Browser und auf dem Handy ändert sich dadurch nichts.
+function istNackt(): boolean {
+  try {
+    return new URLSearchParams(location.search).get('nackt') === '1';
+  } catch {
+    return false;
+  }
+}
+
 export default function Seite() {
   const [z, setZ] = useState<Zustand | null>(null);
   const [tab, setTab] = useState<Tab>('Übersicht');
+  const [nackt, setNackt] = useState(false);
   const [verbindungFehlt, setVerbindungFehlt] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -51,6 +65,7 @@ export default function Seite() {
   }, []);
 
   useEffect(() => {
+    setNackt(istNackt());
     setTab(gespeicherterTab());
     laden();
     const start = () => { if (!timer.current) timer.current = setInterval(laden, 5000); };
@@ -58,7 +73,9 @@ export default function Seite() {
     const sicht = () => (document.hidden ? stopp() : (laden(), start()));
     start();
     document.addEventListener('visibilitychange', sicht);
-    return () => { stopp(); document.removeEventListener('visibilitychange', sicht); };
+    const hash = () => { const t = decodeURIComponent(location.hash.slice(1)); if ((TABS as readonly string[]).includes(t)) setTab(t as Tab); };
+    window.addEventListener('hashchange', hash);
+    return () => { stopp(); document.removeEventListener('visibilitychange', sicht); window.removeEventListener('hashchange', hash); };
   }, [laden]);
 
   function waehle(t: Tab) {
@@ -73,7 +90,7 @@ export default function Seite() {
 
   if (!z) {
     return (
-      <main className="seite" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <main className={istNackt() ? 'seite nackt' : 'seite'} style={{ alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
         <div className="pop" style={{ textAlign: 'center' }}>
           <div className="dreh" style={{ width: 36, height: 36, border: '4px solid #dfe4ee', borderTopColor: 'var(--accent)', borderRadius: '50%', margin: '0 auto 14px' }} />
           <div className="leise">{verbindungFehlt ? 'Pi nicht erreichbar – versuche weiter …' : 'Lade Zentrale …'}</div>
@@ -89,8 +106,8 @@ export default function Seite() {
   const titel = notbetrieb && !stoerungen.length ? 'Notbetrieb' : stoerungen.length ? (stoerungen.length === 1 ? `${stoerungen[0].name} gestört` : 'Störungen') : z.szene.id === 'normal' ? 'Alles läuft' : z.szene.id === 'film' ? 'Filmabend' : 'Ruhemodus';
 
   return (
-    <main className="seite">
-      <header className="kopf">
+    <main className={nackt ? 'seite nackt' : 'seite'}>
+      {!nackt && <header className="kopf">
         <div>
           <div className="kopf-zeile">
             <span>{datumLang()} · {z.uhrzeit}</span>
@@ -122,9 +139,9 @@ export default function Seite() {
           </nav>
           <button className="press icon-knopf" onClick={abmelden} aria-label="Abmelden" title="Abmelden"><Icon name="abmelden" size={20} /></button>
         </div>
-      </header>
+      </header>}
 
-      <KursdatenLeiste onOeffnen={() => waehle('Trading')} />
+      {(!nackt || tab === 'Trading') && <KursdatenLeiste onOeffnen={() => waehle('Trading')} />}
 
       {tab === 'Übersicht' && <Uebersicht z={z} aktualisieren={laden} />}
       {tab === 'Heute' && <Heute />}

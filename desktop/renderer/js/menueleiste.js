@@ -62,12 +62,7 @@ const Menueleiste = {
     if (offen) return;
     knopf.classList.add('offen');
     const r = knopf.getBoundingClientRect();
-    FM.ueberlagernAn();
-    const m = kontextmenue(r.left, r.bottom + 3, eintraege);
-    const beobachter = new MutationObserver(() => {
-      if (!m.isConnected) { FM.ueberlagernAus(); beobachter.disconnect(); }
-    });
-    beobachter.observe($('#ebenen'), { childList: true });
+    kontextmenue(r.left, r.bottom + 3, eintraege);
   },
 
   systemMenue(knopf) {
@@ -75,7 +70,7 @@ const Menueleiste = {
       { text: 'Über diesen HP', tun: () => Apps.einstellungen.oeffnen('ueber') },
       { text: 'Einstellungen …', kuerzel: '⌘,', tun: () => Apps.einstellungen.oeffnen() },
       '-',
-      { text: 'Zentrale im Browser öffnen', tun: () => Z.web.imBrowser() },
+      { text: 'Zentrale im Browser öffnen', tun: () => Z.system.linkOeffnen(Einst.daten.zentraleUrl) },
       { text: 'Alle Fenster schliessen', tun: () => FM.schliessenAlle() },
       '-',
       { text: 'Sperren (Bildschirm aus)', kuerzel: '⌘L', tun: () => Schreibtisch.sperren() },
@@ -102,10 +97,10 @@ const Menueleiste = {
     this.aufklappen(knopf, [
       { titel: this.piOnline ? 'Pi verbunden' : 'Pi nicht erreichbar' },
       { text: 'Jetzt neu prüfen', tun: () => this.piTick() },
-      { text: 'Zentrale öffnen', tun: () => Apps.zentrale.oeffnen() },
+      { text: 'Übersicht öffnen', tun: () => Apps['zentrale:Übersicht'].oeffnen() },
       { text: 'Steuerung öffnen', tun: () => Apps.steuerung.oeffnen() },
       '-',
-      { text: 'Zentrale neu laden', tun: () => Z.web.befehl('neu') },
+      { text: 'Alle Zentrale-Fenster neu laden', tun: () => { for (const id of ZentraleFenster.offen.keys()) Z.web.befehl('zentrale:' + id, 'neu'); } },
     ]);
   },
 };
