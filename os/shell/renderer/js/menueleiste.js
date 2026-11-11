@@ -45,7 +45,7 @@ const Menueleiste = {
     if (!this.appEl) return;
     const f = FM.oben;
     const app = f ? (Apps[f.appId] || null) : null;
-    this.appEl.textContent = app ? app.name : 'Zentrale';
+    this.appEl.textContent = app ? app.name : 'ZentraleOS';
     leeren(this.menueEl);
     const menues = (f && f.aufMenue) ? f.aufMenue(f) : null;
     if (!menues) return;

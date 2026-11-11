@@ -1,0 +1,12 @@
+[Unit]
+Description=ZentraleOS: Testmodus (nur in VMs mit Kernel-Parameter zos.test)
+ConditionVirtualization=vm
+ConditionKernelCommandLine=zos.test
+After=nftables.service
+
+[Service]
+ExecStart=/usr/libexec/zentraleos/testmodus
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

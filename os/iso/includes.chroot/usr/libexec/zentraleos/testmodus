@@ -1,0 +1,32 @@
+#!/bin/sh
+# Testmodus für automatische VM-Tests. Läuft NUR, wenn beides zutrifft:
+#   - Kernel-Parameter zos.test (steht in keinem Bootmenü-Eintrag)
+#   - das System läuft in einer virtuellen Maschine
+# Dann ist die DevTools-Schnittstelle der Shell über Port 9223 erreichbar, damit Tests die
+# Oberfläche im echten System bedienen können. Auf echter Hardware passiert hier nichts.
+systemd-detect-virt -q --vm || exit 0
+grep -qw zos.test /proc/cmdline || exit 0
+( while true; do
+    nft list chain inet zentraleos eingang 2>/dev/null | grep -q 'dport 9223' || nft insert rule inet zentraleos eingang tcp dport 9223 accept 2>/dev/null
+    sleep 3
+  done ) &
+exec python3 -c '
+import socket, threading
+def pumpe(a, b):
+    try:
+        while True:
+            d = a.recv(65536)
+            if not d: break
+            b.sendall(d)
+    except OSError: pass
+    finally:
+        for s in (a, b):
+            try: s.close()
+            except OSError: pass
+s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1); s.bind(("0.0.0.0", 9223)); s.listen(8)
+while True:
+    c, _ = s.accept()
+    try: z = socket.create_connection(("127.0.0.1", 9222), timeout=5); z.settimeout(None)
+    except OSError: c.close(); continue
+    threading.Thread(target=pumpe, args=(c, z), daemon=True).start(); threading.Thread(target=pumpe, args=(z, c), daemon=True).start()
+'

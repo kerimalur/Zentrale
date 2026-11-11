@@ -16,7 +16,7 @@ fi
 passwd -l root
 
 # Dienste
-systemctl enable zentraleos-diagnose.timer greetd.service zentraleos-greetd-einrichten.service nftables.service NetworkManager.service bluetooth.service apparmor.service
+systemctl enable zentraleos-testmodus.service zentraleos-diagnose.timer greetd.service zentraleos-greetd-einrichten.service nftables.service NetworkManager.service bluetooth.service apparmor.service
 systemctl disable ssh.service 2>/dev/null || true
 systemctl set-default graphical.target
 

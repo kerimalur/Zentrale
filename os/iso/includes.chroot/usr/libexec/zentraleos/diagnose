@@ -11,6 +11,7 @@ systemd-detect-virt -q --vm || exit 0
   echo "prozesse: $(pgrep -a 'labwc|electron|greetd|Xwayland' | cut -c1-90 | tr '\n' ';')"
   journalctl -b -u greetd --no-pager -n 12 -o cat 2>/dev/null | sed 's/^/greetd: /'
   for f in /run/user/*/labwc.log.1 /run/user/*/labwc.log /run/user/*/shell.log; do [ -f "$f" ] && tail -n 14 "$f" | cut -c1-220 | sed "s|^|$(basename $f): |"; done
+  echo "terminaltest: $(cat /tmp/zos-terminal 2>/dev/null)"
   echo "nft: $(nft list ruleset 2>/dev/null | grep -c .) Zeilen; sudo-ohne-passwort: $(su zentrale -c 'sudo -n true' 2>&1 | head -1)"
   echo "=== ENDE ==="
 } > /dev/ttyS0 2>&1

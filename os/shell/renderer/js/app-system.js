@@ -219,7 +219,7 @@ const Launchpad = {
   alle() { return Object.entries(Apps).filter(([id, a]) => id !== 'zentrale' && id !== 'launchpad' && a && a.name).map(([id, a]) => ({ id, ...a })); },
   symbolEl(a, klasse = 'lp-symbol') {
     const s = el('span', { klasse, html: a.bild ? '' : symbol(a.symbol), stil: a.bild ? {} : { background: a.farbe || 'var(--flaeche)' } });
-    if (a.bild) Z.sys.symbolUrl(a.bild).then((r) => { if (r.ok) s.append(el('img', { src: r.url, alt: '' })); });
+    if (a.bild) Z.sys.symbolUrl(a.bild).then((r) => { if (r.ok) s.append(el('img', { src: r.url, alt: '', onerror: () => { s.innerHTML = symbol(a.symbol || 'datei'); s.style.background = a.farbe || 'linear-gradient(160deg,#475569,#1e293b)'; } })); });
     return s;
   },
   async oeffnen() {

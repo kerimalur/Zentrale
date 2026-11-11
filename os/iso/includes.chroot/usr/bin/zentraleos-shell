@@ -3,6 +3,8 @@
 E=/opt/zentraleos/shell/node_modules/electron/dist/electron
 ARGS="--ozone-platform=wayland --enable-wayland-ime --class=zentraleos-shell"
 grep -qw zos.demo /proc/cmdline && ARGS="$ARGS --demo"
+# Nur für automatische Tests in einer VM (siehe /usr/libexec/zentraleos/testmodus)
+grep -qw zos.test /proc/cmdline && systemd-detect-virt -q --vm && ARGS="$ARGS --remote-debugging-port=9222"
 n=0
 while [ $n -lt 20 ]; do
   "$E" /opt/zentraleos/shell $ARGS >>"${XDG_RUNTIME_DIR:-/tmp}/shell.log" 2>&1
