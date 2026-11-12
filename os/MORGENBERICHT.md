@@ -51,6 +51,8 @@ enthält weder Firmware noch Bootmenü (5 s Wartezeit). Das Ziel «unter 25 s au
 6. Bootmenü und Startanimation habe ich in der Endfassung nicht angesehen; möglich, dass dort noch Debian steht.
 7. Anzeige-Einstellungen gelten nur bis zum Abmelden. Tastaturlayout-Wechsel erst nach Neustart.
 
+Ein Release mit Tag `os-nacht-1` gibt es nicht: Das Pushen des Tags wurde von meiner Umgebung abgelehnt. Das ISO liegt nur als Actions-Artefakt vor (90 Tage). Release selbst anlegen: `git tag os-nacht-1 1a357de && git push origin os-nacht-1` – der Workflow hängt das ISO dann an.
+
 ## Was du zuerst prüfen sollst
 
 1. ISO aus dem Actions-Artefakt laden, Prüfsumme vergleichen, Stick schreiben (LIESMICH.md).
