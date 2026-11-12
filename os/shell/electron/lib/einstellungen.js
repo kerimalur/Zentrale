@@ -98,6 +98,7 @@ const STANDARD = {
       { app: 'finder', x: 0, y: 0 },
       { app: 'zentrale:Übersicht', x: 0, y: 1 },
       { app: 'steuerung', x: 0, y: 2 },
+      { app: 'papierkorb', x: 0, y: 3 },
     ],
     widgets: [
       { id: 'w0', typ: 'uhr', x: 8, y: 0, breit: 3, hoch: 1, stil: 'ohne' },

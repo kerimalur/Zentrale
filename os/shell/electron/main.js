@@ -488,6 +488,12 @@ app.whenReady().then(async () => {
   if (e.verhalten.autostart !== strom.autostartAn()) strom.autostart(!!e.verhalten.autostart);
 
   gesperrt = e.verhalten.beimStartSperren !== false;
+  // Startet die Oberfläche in derselben Sitzung noch einmal (Absturz, «Oberfläche neu starten»), ist sie immer gesperrt –
+  // sonst liesse sich die Sperre durch einen Absturz umgehen.
+  if (process.platform === 'linux' && process.env.XDG_RUNTIME_DIR) {
+    const marke = path.join(process.env.XDG_RUNTIME_DIR, 'zos-lief');
+    if (fs.existsSync(marke)) gesperrt = true; else { try { fs.writeFileSync(marke, String(Date.now())); } catch {} }
+  }
 
   fensterBauen();
   sperrTimerSetzen();
