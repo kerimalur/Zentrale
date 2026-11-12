@@ -1,13 +1,19 @@
 #!/bin/sh
-# Hält die Shell am Leben: stürzt sie ab, startet sie neu.
+# Hält die Shell am Leben: stürzt sie ab, startet sie neu. Stürzt sie immer wieder ab,
+# kommt die Notfall-Sitzung (Passwort nötig), danach beginnt es von vorn.
 E=/opt/zentraleos/shell/node_modules/electron/dist/electron
-ARGS="--ozone-platform=wayland --enable-wayland-ime --class=zentraleos-shell"
+ARGS="--ozone-platform=wayland --enable-wayland-ime --class=zentraleos-shell --password-store=basic"
 grep -qw zos.demo /proc/cmdline && ARGS="$ARGS --demo"
 # Nur für automatische Tests in einer VM (siehe /usr/libexec/zentraleos/testmodus)
 grep -qw zos.test /proc/cmdline && systemd-detect-virt -q --vm && ARGS="$ARGS --remote-debugging-port=9222"
-n=0
-while [ $n -lt 20 ]; do
-  "$E" /opt/zentraleos/shell $ARGS >>"${XDG_RUNTIME_DIR:-/tmp}/shell.log" 2>&1
-  [ $? -eq 0 ] && break
-  n=$((n+1)); sleep 1
+while true; do
+  n=0; anfang=$(date +%s)
+  while [ $n -lt 6 ]; do
+    "$E" /opt/zentraleos/shell $ARGS >>"${XDG_RUNTIME_DIR:-/tmp}/shell.log" 2>&1
+    [ $? -eq 0 ] && exit 0
+    # Lief sie länger als zwei Minuten, zählt der Absturz neu.
+    jetzt=$(date +%s); [ $((jetzt - anfang)) -gt 120 ] && n=0; anfang=$jetzt
+    n=$((n+1)); sleep 1
+  done
+  foot --fullscreen -e /usr/libexec/zentraleos/notfall || sleep 5
 done

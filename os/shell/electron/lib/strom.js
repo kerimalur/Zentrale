@@ -36,11 +36,15 @@ const autostartAn = () => true;
 
 // Untätigkeit: unter Wayland meldet Chromium das nicht verlässlich, darum zusätzlich swayidle.
 const untaetigSekunden = () => { try { return powerMonitor.getSystemIdleTime(); } catch { return 0; } };
-function leerlaufWaechter(minuten) {
+function leerlaufWaechter(sperrMin, ausMin) {
   if (waechter) { try { waechter.kill(); } catch {} waechter = null; }
-  const min = Number(minuten) || 0;
-  if (min <= 0) return;
-  waechter = spawn('swayidle', ['-w', 'timeout', String(Math.round(min * 60)), 'zos sperren'], { stdio: 'ignore' });
+  const sperr = Number(sperrMin) || 0; const aus = Number(ausMin) || 0;
+  const args = ['-w'];
+  if (sperr > 0) args.push('timeout', String(Math.round(sperr * 60)), 'zos sperren');
+  // Bildschirm aus (und sperren); jede Eingabe weckt den Bildschirm wieder – entsperrt aber nicht.
+  if (aus > 0) args.push('timeout', String(Math.round(aus * 60)), 'zos bildschirmAus', 'resume', 'zos bildschirmAn');
+  if (args.length === 1) return;
+  waechter = spawn('swayidle', args, { stdio: 'ignore' });
   waechter.on('error', () => { waechter = null; });
 }
 

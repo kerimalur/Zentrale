@@ -351,6 +351,7 @@ async function bildschirmfoto(bereich) {
   const d = new Date(); const z = (n) => String(n).padStart(2, '0');
   const ziel = path.join(ordner, `Bildschirmfoto ${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}.${z(d.getMinutes())}.${z(d.getSeconds())}.png`);
   const r = bereich ? await lauf('sh', ['-c', 'grim -g "$(slurp)" "$0"', ziel], { timeout: 60000 }) : await lauf('grim', [ziel], { timeout: 10000 });
+  if (r.ok) lauf('sh', ['-c', 'wl-copy -t image/png < "$0"', ziel], { timeout: 8000 }).catch(() => {});   // gleich in die Zwischenablage
   return r.ok ? { ok: true, pfad: ziel } : { ok: false, fehler: r.fehler || 'Bildschirmfoto fehlgeschlagen' };
 }
 

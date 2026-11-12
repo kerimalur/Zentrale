@@ -32,8 +32,6 @@ libatspi2.0-0t64
 libsecret-1-0
 libdrm2
 libxkbcommon0
-gnome-keyring
-libpam-gnome-keyring
 xdg-utils
 xdg-user-dirs
 xdg-desktop-portal
@@ -44,5 +42,15 @@ fonts-jetbrains-mono
 fonts-noto-core
 fonts-noto-color-emoji
 chromium
-calamares
-calamares-settings-debian
+netcat-openbsd
+wtype
+smartmontools
+gdisk
+rsync
+libglib2.0-bin
+shim-signed
+grub-efi-amd64-signed
+nmap
+dnsutils
+whois
+libnotify-bin

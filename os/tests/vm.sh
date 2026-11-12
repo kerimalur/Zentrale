@@ -16,9 +16,11 @@ if [ "${ZOS_VM_DIREKT:-0}" = 1 ]; then
   cp "$(ls "$ORT"/live/vmlinuz* | head -1)" "$ORT/vmlinuz"; cp "$(ls "$ORT"/live/initrd* | head -1)" "$ORT/initrd"; chmod -R u+w "$ORT/live"; rm -rf "$ORT/live"
   DIREKT=(-kernel "$ORT/vmlinuz" -initrd "$ORT/initrd" -append "boot=live components quiet locales=de_CH.UTF-8 keyboard-layouts=ch timezone=Europe/Zurich hostname=zentraleos username=zentrale noautologin live-config.nocomponents=user-setup,sudo,policykit,xinit console=tty0 ${ZOS_VM_PARAMETER:-zos.test}")
 fi
+# ZOS_VM_PLATTE=1: ohne ISO, nur von der (installierten) Platte starten
+CD=(-drive "file=$ISO,media=cdrom,readonly=on"); [ "${ZOS_VM_PLATTE:-0}" = 1 ] && CD=()
 exec qemu-system-x86_64 $BESCHL "${DIREKT[@]}" -machine q35 -smp "${ZOS_VM_CPUS:-2}" -m "${ZOS_VM_RAM:-3072}" \
   -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" -drive if=pflash,format=raw,file="$ORT/vars.fd" \
-  -drive file="$ISO",media=cdrom,readonly=on -drive file="$ORT/platte.qcow2",if=virtio \
+  "${CD[@]}" -drive file="$ORT/platte.qcow2",if=virtio \
   -device virtio-vga -display none -vnc "unix:$ORT/vnc.sock" \
   -device virtio-net-pci,netdev=n0 -netdev user,id=n0,hostfwd=tcp:127.0.0.1:${ZOS_VM_SSH:-2222}-:22,hostfwd=tcp:127.0.0.1:${ZOS_VM_PORT:-8099}-:8099,hostfwd=tcp:127.0.0.1:${ZOS_VM_CDP:-9223}-:9223 \
   -device qemu-xhci -device usb-tablet -device usb-kbd \

@@ -82,6 +82,11 @@ contextBridge.exposeInMainWorld('zentrale', {
     'flatpakSuche', 'flatpakListe', 'flatpakInstallieren', 'flatpakEntfernen', 'flatpakAktualisieren', 'terminalStarten', 'terminalEingabe', 'terminalGroesse', 'terminalBeenden',
     'bildschirmfoto', 'browser', 'symbolUrl'].map((name) => [name, (...args) => r('sys:' + name, ...args)])),
 
+  // Weitere Systemfunktionen (siehe electron/lib/mehr.js)
+  mehr: Object.fromEntries(['ablageListe', 'ablageNehmen', 'ablageLeeren', 'papierkorb', 'papierkorbZurueck', 'papierkorbLeeren', 'fotos', 'datentraeger', 'ordnerAnalyse', 'einhaengen', 'aushaengen', 'smart',
+    'sicherheit', 'netz', 'netzVergessen', 'botStand', 'botPruefen', 'meldeTest', 'backupSchluessel', 'backupJetzt', 'schlafen', 'fokusStart', 'fokusEnde', 'fokusStand',
+    'installPlatten', 'installieren', 'installStand', 'energie', 'fernzugriff', 'rootMehr', 'desktopTaste', 'fensterKlein'].map((name) => [name, (...args) => r('mehr:' + name, ...args)])),
+
   // System
   system: {
     bildschirmAus: () => r('strom:bildschirmAus'),

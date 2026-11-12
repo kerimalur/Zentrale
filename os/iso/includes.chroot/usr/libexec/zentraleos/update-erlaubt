@@ -1,0 +1,6 @@
+#!/bin/sh
+# Automatische Updates laufen nur, wenn kein Programm sie sperrt. Der Bot-Wächter (oder der Bot selbst)
+# legt bei offenen Positionen die Datei /run/zentraleos/positionen-offen an.
+[ -e /run/zentraleos/positionen-offen ] && { logger -t zentraleos "Updates übersprungen: offene Positionen"; exit 1; }
+for f in /home/*/.config/ZentraleOS/positionen-offen; do [ -e "$f" ] && { logger -t zentraleos "Updates übersprungen: offene Positionen"; exit 1; }; done
+exit 0

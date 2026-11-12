@@ -35,6 +35,9 @@ const STANDARD = {
     radius: 11,                     // Eckenradius der Fenster (px)
     tempo: 1,                       // Animationsgeschwindigkeit (0 = aus)
     schrift: 13,                    // Schriftgrösse der Oberfläche (px)
+    skala: 1.25,                    // Grösse der ganzen Oberfläche (scharf gerechnet, kein Bild-Zoom)
+    symbolGroesse: 1.15,            // Schreibtisch-Symbole
+    widgetGroesse: 1,               // Inhalt der Widgets
     verlauf: 'akzent',              // eingebauter Hintergrund: akzent | blau | abend | wald | graphit
     dockGroesse: 56,
     dockVergroessern: true,
@@ -53,6 +56,23 @@ const STANDARD = {
     windowsOberflaeche: false,      // App ersetzt den Explorer als Windows-Shell
   },
 
+  // --- Ruhe: Bildschirm aus, «Schlafen gehen» ---
+  ruhe: {
+    bildschirmAusMin: 10,           // Bildschirm aus und sperren nach X Minuten ohne Eingabe (0 = nie)
+    ausnahmen: ['terminal64', 'metatrader', 'wineserver', 'bot'],   // bleibt bei «Schlafen gehen» am Leben (Teil von Programmname oder Fenstertitel)
+  },
+  // --- Bot-Wächter ---
+  bot: { an: false, name: 'MetaTrader 5', muster: 'terminal64.exe', start: '', meldeAdresse: '' },
+  // --- Backup auf den Pi (rsync über SSH) ---
+  backup: { ziel: '', ordner: ['Dokumente', 'Bilder'], taeglich: false, stunde: 3, zuletzt: '', ergebnis: '' },
+  // --- Fokusmodus ---
+  fokus: { minuten: 50, streng: false, seiten: ['youtube.com', 'instagram.com', 'tiktok.com', 'x.com', 'twitter.com', 'reddit.com', 'netflix.com', 'twitch.tv', 'facebook.com'], programme: [] },
+  // --- Netzwerkwächter ---
+  netzwaechter: { an: true },
+  // --- Updates ---
+  updates: { fenster: true, tag: 'Sat', stunde: 10 },
+  fotos: { ordner: [] },
+
   // --- Programme, die die App beim Start mitstartet (ohne Explorer tut das sonst niemand) ---
   startProgramme: [],               // [{ name, pfad, argumente: [] }]
 
@@ -65,7 +85,7 @@ const STANDARD = {
   },
 
   // --- Dock --- (Kennungen: 'finder', 'steuerung', 'einstellungen' oder 'zentrale:<Tab>')
-  dock: ['finder', 'zentrale:Übersicht', 'zentrale:Trading', 'steuerung', 'web', 'terminal', 'software', 'einstellungen'],
+  dock: ['finder', 'zentrale:Übersicht', 'zentrale:Trading', 'steuerung', 'web', 'fotos', 'terminal', 'software', 'einstellungen'],
 
   // --- Taskleiste ---
   taskleiste: { position: 'unten', ausrichtung: 'mitte', schwebend: true, suche: true, hoehe: 52, uhrDatum: true },

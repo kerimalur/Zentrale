@@ -1,0 +1,15 @@
+#!/bin/bash
+# Notfall-Sitzung: erscheint, wenn die Oberfläche wiederholt abstürzt. Erst nach dem Passwort gibt es ein Menü.
+clear; echo "ZentraleOS – Notfall-Sitzung"; echo "Die Oberfläche ist mehrmals abgestürzt."; echo
+until sudo -k -v -p "Passwort für $USER: "; do sleep 2; done
+while true; do
+  echo; echo "1) Oberfläche neu starten"; echo "2) Einstellungen der Oberfläche zurücksetzen und neu starten"; echo "3) Fehlerprotokoll zeigen"; echo "4) Konsole"; echo "5) Rechner neu starten"
+  read -r -p "Auswahl: " a
+  case "$a" in
+    1) exit 0 ;;
+    2) mv "$HOME/.config/ZentraleOS/einstellungen.json" "$HOME/.config/ZentraleOS/einstellungen.kaputt.json" 2>/dev/null; exit 0 ;;
+    3) tail -n 60 "${XDG_RUNTIME_DIR:-/tmp}/shell.log" | less ;;
+    4) bash ;;
+    5) systemctl reboot ;;
+  esac
+done

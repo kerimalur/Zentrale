@@ -16,6 +16,7 @@ const anmeldung = require('./lib/anmeldung');
 const strom = require('./lib/strom');
 const demo = require('./lib/demo');
 const system = require('./lib/system');
+const mehr = require('./lib/mehr');
 
 const ARG = process.argv.slice(1);
 const ENTWICKLUNG = ARG.includes('--entwicklung');
@@ -32,8 +33,16 @@ let fenster = null;          // Haupt-BrowserWindow (die ganze Oberfläche)
 let gesperrt = true;
 let bildschirmAus = false;
 let sperrTimer = null;
+let ausSeit = 0;              // wann der Bildschirm abgeschaltet wurde
+let sperrWache = null;        // hält fremde Fenster unten, solange gesperrt ist
 
 // ---------------------------------------------------------------- Fenster
+
+function skalaAnwenden() {
+  if (!fenster || fenster.isDestroyed()) return;
+  const s = Math.max(0.8, Math.min(2.5, Number(einstellungen.alle().aussehen.skala) || 1));
+  fenster.webContents.setZoomFactor(s);
+}
 
 function fensterBauen() {
   const e = einstellungen.alle();
@@ -64,6 +73,7 @@ function fensterBauen() {
   fenster.setMenuBarVisibility(false);
   fenster.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
 
+  fenster.webContents.on('did-finish-load', skalaAnwenden);
   fenster.once('ready-to-show', () => {
     fenster.show();
     fenster.focus();
@@ -120,6 +130,7 @@ async function sperren({ bildschirmAus: schirmAus = null } = {}) {
   const e = einstellungen.alle();
   gesperrt = true;
   system.alleMinimieren().catch(() => {});   // fremde Fenster dürfen nicht über der Sperre liegen
+  sperrWacheStarten();
   if (fenster) {
     fenster.webContents.send('sperre:zustand', { gesperrt: true });
     fenster.focus();
@@ -127,14 +138,35 @@ async function sperren({ bildschirmAus: schirmAus = null } = {}) {
   const aus = schirmAus === null ? e.verhalten.bildschirmAusBeiSperre : schirmAus;
   if (aus) {
     const r = await strom.bildschirmAus();
-    bildschirmAus = !!r.ok;
+    bildschirmAus = !!r.ok; ausSeit = Date.now();
     if (!r.ok && fenster) fenster.webContents.send('hinweis', { art: 'warnung', text: 'Monitor liess sich nicht abschalten: ' + (r.fehler || '') });
   }
   return { ok: true };
 }
 
+// Solange gesperrt ist, darf kein fremdes Fenster nach vorn: jede Sekunde alles Fremde wieder ablegen.
+function sperrWacheStarten() {
+  if (sperrWache || process.platform !== 'linux') return;
+  sperrWache = setInterval(() => { if (!gesperrt) { clearInterval(sperrWache); sperrWache = null; return; } system.alleMinimieren().catch(() => {}); if (fenster && !fenster.isFocused()) fenster.focus(); }, 1000);
+}
+
+// Bildschirm wieder an (Maus, Taste oder Befehl aus der Zentrale). Entsperrt NICHT – der Code bleibt nötig.
+async function wecken() {
+  if (!bildschirmAus || Date.now() - ausSeit < 2500) return { ok: true };
+  const a = await strom.bildschirmAn(); bildschirmAus = !a.ok; return a;
+}
+
+// «Schlafen gehen»: alle Programme beenden (ausser den Ausnahmen, z. B. dem Bot), sperren, Bildschirm aus.
+async function schlafen() {
+  if (fenster) fenster.webContents.send('befehl', 'alleSchliessen');
+  const r = await mehr.allesBeenden().catch((f) => ({ ok: false, fehler: String(f.message || f) }));
+  await sperren({ bildschirmAus: true });
+  return r;
+}
+
 function entsperren() {
   gesperrt = false;
+  if (sperrWache) { clearInterval(sperrWache); sperrWache = null; }
   bildschirmAus = false;
   if (fenster) fenster.webContents.send('sperre:zustand', { gesperrt: false });
   return { ok: true };
@@ -180,7 +212,8 @@ async function befehleAbholen() {
   for (const b of r.befehle || []) {
     if (b === 'sperren') await sperren({ bildschirmAus: false });
     else if (b === 'bildschirmAus') await sperren({ bildschirmAus: true });
-    else if (b === 'bildschirmAn') { const a = await strom.bildschirmAn(); bildschirmAus = !a.ok; }
+    else if (b === 'bildschirmAn') { ausSeit = 0; await wecken(); }
+    else if (b === 'schlafen') await schlafen();
   }
 }
 
@@ -250,7 +283,8 @@ function ipcEinrichten() {
     if (teil?.verhalten?.niemalsSchlafen !== undefined) strom.schlafenVerhindern(!!teil.verhalten.niemalsSchlafen);
     if (teil?.anmeldung?.autoSperrenMin !== undefined) sperrTimerSetzen();
     if (teil?.aussehen?.hell !== undefined) nativeTheme.themeSource = teil.aussehen.hell ? 'light' : 'dark';
-    if (teil?.anmeldung?.autoSperrenMin !== undefined) strom.leerlaufWaechter(neu.anmeldung.autoSperrenMin);
+    if (teil?.anmeldung?.autoSperrenMin !== undefined || teil?.ruhe?.bildschirmAusMin !== undefined) strom.leerlaufWaechter(neu.anmeldung.autoSperrenMin, neu.ruhe.bildschirmAusMin);
+    if (teil?.aussehen?.skala !== undefined) skalaAnwenden();
     if ((teil?.demo !== undefined && !!teil.demo !== !!vorher.demo) || (teil?.zentraleUrl && teil.zentraleUrl !== vorher.zentraleUrl)) setTimeout(() => { app.relaunch(); app.exit(0); }, 400);
     return { ok: true, einstellungen: neu, autostart: strom.autostartAn() };
   }));
@@ -339,7 +373,7 @@ function ipcEinrichten() {
 
   // --- Strom & App ---
   ipcMain.handle('strom:bildschirmAus', sicher(async () => strom.bildschirmAus()));
-  ipcMain.handle('strom:bildschirmAn', sicher(async () => strom.bildschirmAn()));
+  ipcMain.handle('strom:bildschirmAn', sicher(async () => wecken()));
   ipcMain.handle('app:beenden', sicher(async () => { app.exit(0); return { ok: true }; }));
   ipcMain.handle('app:neustart', sicher(async () => { app.relaunch(); app.exit(0); return { ok: true }; }));
   ipcMain.handle('app:linkOeffnen', sicher(async (_e, url) => {
@@ -359,6 +393,15 @@ function ipcEinrichten() {
 
 function befehlAusfuehren(b) {
   if (b === 'sperren') return sperren({ bildschirmAus: false });
+  if (b === 'bildschirmAus') return bildschirmAus ? null : sperren({ bildschirmAus: true });
+  if (b === 'bildschirmAn') return wecken();
+  if (b === 'schlafen') return schlafen();
+  if (b === 'bildschirmfoto-bereich') { if (!gesperrt) system.bildschirmfoto(true).then((r) => fenster && r && fenster.webContents.send('hinweis', r.ok ? { art: 'ok', text: 'Bildschirmfoto gespeichert: ' + r.pfad } : { art: 'fehler', text: r.fehler || 'Abgebrochen' })); return null; }
+  if (['wechsler', 'wechsler-zurueck', 'uebersicht', 'zwischenablage', 'terminal', 'desktop-rechts', 'desktop-links'].includes(b)) {
+    if (fenster && !gesperrt) { if (!b.startsWith('desktop') && !b.startsWith('wechsler')) { system.fensterFokus('zentraleos-shell').catch(() => {}); fenster.focus(); } fenster.webContents.send('befehl', b); }
+    return null;
+  }
+  if (b === 'bildschirmfoto' && gesperrt) return null;
   if (b === 'bildschirmfoto') return system.bildschirmfoto(false).then((r) => fenster && fenster.webContents.send('hinweis', r.ok ? { art: 'ok', text: 'Bildschirmfoto gespeichert: ' + r.pfad } : { art: 'fehler', text: r.fehler }));
   if (['spotlight', 'schreibtisch', 'launchpad', 'kontrollzentrum', 'start'].includes(b)) {
     if (b !== 'schreibtisch') system.fensterFokus('zentraleos-shell').catch(() => {});
@@ -400,8 +443,28 @@ function systemIpc() {
   h('terminalStarten', nurOffen((id, opt) => system.terminalStarten(String(id), senden('terminal:daten'), opt || {})));
   h('terminalEingabe', (id, t) => system.terminalEingabe(String(id), String(t))); h('terminalGroesse', (id, s, z) => system.terminalGroesse(String(id), s, z)); h('terminalBeenden', (id) => system.terminalBeenden(String(id)));
   h('bildschirmfoto', nurOffen(system.bildschirmfoto));
-  h('browser', nurOffen(async (url) => system.befehlStarten('chromium' + (/^https?:\/\/[^\s"'`$\\]+$/i.test(String(url || '')) ? ` '${url}'` : ''))));
+  h('browser', nurOffen(async (url) => system.befehlStarten((fs.existsSync('/usr/bin/brave-browser') ? 'brave-browser --password-store=basic' : 'chromium') + (/^https?:\/\/[^\s"'`$\\]+$/i.test(String(url || '')) ? ` '${url}'` : ''))));
   h('symbolUrl', async (p) => ({ ok: true, url: protokoll.lokalUrl(p) }));
+
+  // --- Weitere Systemfunktionen (lib/mehr.js) ---
+  const m = (kanal, fn) => ipcMain.handle('mehr:' + kanal, sicher(async (_e, ...a) => fn(...a)));
+  m('ablageListe', nurOffen(mehr.ablageListe)); m('ablageNehmen', nurOffen(mehr.ablageNehmen)); m('ablageLeeren', mehr.ablageLeeren);
+  m('papierkorb', mehr.papierkorb); m('papierkorbZurueck', nurOffen(mehr.papierkorbZurueck)); m('papierkorbLeeren', nurOffen(mehr.papierkorbLeeren));
+  m('fotos', nurOffen(mehr.fotos));
+  m('datentraeger', mehr.datentraeger); m('ordnerAnalyse', nurOffen(mehr.ordnerAnalyse));
+  m('einhaengen', nurOffen(async (g) => klein(await mehr.einhaengen(g)))); m('aushaengen', nurOffen(async (g) => klein(await mehr.aushaengen(g))));
+  m('smart', nurOffen(async (g, pw) => klein(await mehr.smart(g, pw))));
+  m('sicherheit', () => mehr.sicherheit({ pinGesetzt: anmeldung.pinGesetzt() }));
+  m('netz', mehr.netz); m('netzVergessen', nurOffen(mehr.netzVergessen));
+  m('botStand', mehr.botStand); m('botPruefen', async () => { await mehr.botPruefen(); return mehr.botStand(); }); m('meldeTest', nurOffen(() => mehr.melden('Testmeldung von ZentraleOS (' + require('node:os').hostname() + ')')));
+  m('backupSchluessel', nurOffen(mehr.backupSchluessel)); m('backupJetzt', nurOffen(mehr.backupJetzt));
+  m('schlafen', nurOffen(schlafen));
+  m('fokusStart', nurOffen(async (pw) => { const r = await mehr.fokusStart(pw); return r.ok ? r : klein(r); })); m('fokusEnde', nurOffen(async (pw) => { const r = await mehr.fokusEnde(pw); return r.ok ? r : klein(r); })); m('fokusStand', mehr.fokusStand);
+  m('installPlatten', mehr.installPlatten); m('installieren', nurOffen(async (k, pw) => klein(await mehr.installieren(k || {}, pw)))); m('installStand', mehr.installStand);
+  m('energie', nurOffen(mehr.energie)); m('fernzugriff', mehr.fernzugriff);
+  m('rootMehr', nurOffen(async (aktion, args, pw) => (['ssh-fern', 'update-fenster'].includes(aktion) ? klein(await system.alsRoot(aktion, args || [], { passwort: pw, timeout: 60000 })) : { ok: false, fehler: 'Nicht erlaubt' })));
+  m('desktopTaste', nurOffen(async (richtung) => klein(await system.lauf('wtype', ['-M', 'ctrl', '-M', 'logo', '-k', richtung === 'links' ? 'Left' : 'Right'], { timeout: 4000 }))));
+  m('fensterKlein', async (a) => klein(await system.lauf('wlrctl', ['toplevel', 'minimize', `app_id:${String(a)}`], { timeout: 4000 })));
 }
 
 // ---------------------------------------------------------------- Start
@@ -428,7 +491,10 @@ app.whenReady().then(async () => {
 
   fensterBauen();
   sperrTimerSetzen();
-  strom.leerlaufWaechter(e.anmeldung.autoSperrenMin);
+  strom.leerlaufWaechter(e.anmeldung.autoSperrenMin, e.ruhe.bildschirmAusMin);
+  if (gesperrt) sperrWacheStarten();
+  if (process.platform === 'linux') mehr.socketStarten((b) => { try { befehlAusfuehren(b); } catch {} });
+  mehr.starten({ hinweis: (text, art) => { if (fenster && !fenster.isDestroyed()) fenster.webContents.send('hinweis', { text, art: art || 'info' }); } });
 
   if (ENTWICKLUNG) globalShortcut.register('Control+Alt+Shift+Q', () => { app.exit(0); });
 

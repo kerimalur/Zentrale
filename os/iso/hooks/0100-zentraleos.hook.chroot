@@ -18,6 +18,9 @@ passwd -l root
 # Dienste
 systemctl enable zentraleos-testmodus.service zentraleos-diagnose.timer greetd.service zentraleos-greetd-einrichten.service nftables.service NetworkManager.service bluetooth.service apparmor.service
 systemctl disable ssh.service 2>/dev/null || true
+# smartd nur auf Abruf (in VMs findet er keine Platte und gilt dann als fehlgeschlagen)
+systemctl disable smartmontools.service smartd.service 2>/dev/null || true
+systemctl mask smartmontools.service 2>/dev/null || true
 systemctl set-default graphical.target
 
 # Startanimation
@@ -40,6 +43,21 @@ if curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg -o /us
 else
   echo "WARNUNG: Tailscale-Paketquelle nicht erreichbar – Tailscale fehlt in diesem Abbild"
 fi
+
+# Brave aus dem offiziellen Paketarchiv (Standard-Browser; fehlt er, bleibt Chromium)
+if curl -fsSL https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg -o /usr/share/keyrings/brave-browser-archive-keyring.gpg; then
+  echo "deb [signed-by=/usr/share/keyrings/brave-browser-archive-keyring.gpg arch=amd64] https://brave-browser-apt-release.s3.brave.com/ stable main" > /etc/apt/sources.list.d/brave-browser-release.list
+  apt-get update -q && apt-get install -y -q brave-browser || echo "WARNUNG: Brave nicht installiert"
+  # Kein Schlüsselbund-Fenster
+  [ -f /usr/share/applications/brave-browser.desktop ] && sed -i 's|^Exec=/usr/bin/brave-browser-stable|Exec=/usr/bin/brave-browser-stable --password-store=basic|' /usr/share/applications/brave-browser.desktop
+else
+  echo "WARNUNG: Brave-Paketquelle nicht erreichbar – Brave fehlt in diesem Abbild"
+fi
+
+# Automatische Updates: nur im Wartungsfenster (Samstag 10 Uhr) und nie bei offenen Positionen
+mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d /etc/systemd/system/apt-daily-upgrade.service.d
+printf '[Timer]\nOnCalendar=\nOnCalendar=Sat *-*-* 10:00\nRandomizedDelaySec=0\n' > /etc/systemd/system/apt-daily-upgrade.timer.d/zentraleos.conf
+printf '[Service]\nExecCondition=/usr/libexec/zentraleos/update-erlaubt\n' > /etc/systemd/system/apt-daily-upgrade.service.d/zentraleos.conf
 
 # Automatische Sicherheitsupdates an (abschaltbar in den Einstellungen)
 printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades

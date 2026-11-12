@@ -1,0 +1,2 @@
+# Kein Schlüsselbund-Fenster: Passwörter im Profil speichern
+export CHROMIUM_FLAGS="$CHROMIUM_FLAGS --password-store=basic"

@@ -1,3 +1,6 @@
 #!/bin/sh
-# Schickt einen Befehl an die laufende Shell (z. B. zos sperren, zos spotlight).
+# Schickt einen Befehl an die laufende Shell (z. B. zos sperren, zos start). Schnell über einen Socket,
+# sonst über eine zweite Instanz.
+S="${XDG_RUNTIME_DIR:-/tmp}/zos.sock"
+if [ -S "$S" ] && printf '%s\n' "$1" | nc -U -N -w 1 "$S" >/dev/null 2>&1; then exit 0; fi
 exec /opt/zentraleos/shell/node_modules/electron/dist/electron /opt/zentraleos/shell --befehl="$1" >/dev/null 2>&1

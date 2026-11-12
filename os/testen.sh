@@ -60,5 +60,18 @@ for _ in $(seq 1 $(( 40 * LANGSAM ))); do sleep 5; diag "prozesse:" | grep -q el
 LANGSAM=$([ $LANGSAM = 1 ] && echo 1 || echo 3) node tests/systemtest.cjs "$AUS" 2>&1 | tee "$AUS/systemtest-ausgabe.txt"
 ST=${PIPESTATUS[0]}; [ "$ST" = 0 ] || FEHLER=$((FEHLER+1))
 echo "Systemtests: $([ "$ST" = 0 ] && echo alle bestanden || echo "nicht alle bestanden (siehe systemtest.txt)")" | tee -a "$ERG"
+if [ "$(cat "$AUS/installiert" 2>/dev/null)" = ja ]; then
+  echo "== Teil 3: Start von der installierten Platte (ohne ISO) =="
+  kill "$(cat "$VM/qemu.pid" 2>/dev/null)" 2>/dev/null; sleep 4; cp "$VM/seriell.log" "$AUS/seriell-teil2.log" 2>/dev/null; : > "$VM/seriell.log"
+  ZOS_VM_PLATTE=1 tests/vm.sh "$ISO" "$VM" || exit 3
+  for _ in $(seq 1 $(( 40 * LANGSAM ))); do sleep 5; diag "prozesse:" | grep -q electron && break; done; warte 4; foto 30-installiert
+  pruefe "Installiert: System startet von der Platte"        'grep -aq "=== ENDE" "$VM/seriell.log"'
+  pruefe "Installiert: Compositor und Shell laufen"          'diag "prozesse:" | grep -q labwc && diag "prozesse:" | grep -q electron'
+  pruefe "Installiert: Sitzung gehört dem neuen Benutzer"    'diag "sitzungen:" | grep -q kerim'
+  pruefe "Installiert: kein Dienst fehlgeschlagen"           '[ -z "$(diag "fehlgeschlagen:" | sed "s/.*fehlgeschlagen: *//")" ]'
+  pruefe "Installiert: Bildschirm zeigt etwas"               '[ $(stat -c %s "$AUS/30-installiert.png") -gt 20000 ]'
+else
+  echo "Teil 3 (Start von der Platte) übersprungen: Installation lief nicht durch" | tee -a "$ERG"
+fi
 echo; echo "Fehler: $FEHLER" | tee -a "$ERG"
 exit $(( FEHLER > 0 ))

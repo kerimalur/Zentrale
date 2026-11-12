@@ -50,6 +50,39 @@ case "${1:-}" in
     tailscale set --operator="${SUDO_USER:-zentrale}" 2>/dev/null
     timeout 8 tailscale up --operator="${SUDO_USER:-zentrale}" 2>&1 | grep -o 'https://login.tailscale.com[^ ]*' | head -1; true ;;
   protokoll) journalctl -b -n "${2:-200}" --no-pager -o short-iso ;;
-  energie) case "$2" in neustart) systemctl reboot;; aus) systemctl poweroff;; esac ;;
+  energie) case "$2" in neustart) systemctl reboot;; aus) systemctl poweroff;; firmware) systemctl reboot --firmware-setup;; esac ;;
+  installieren) exec /usr/libexec/zentraleos/installieren ;;
+  smart)
+    case "$2" in /dev/sd[a-z]|/dev/nvme[0-9]n[0-9]|/dev/vd[a-z]|/dev/mmcblk[0-9]) smartctl -H -A -i "$2" 2>&1 | head -80 ;; *) exit 2;; esac ;;
+  fokus-sperre)
+    # Sperrt Internetseiten über /etc/hosts. Die Liste (ein Name pro Zeile) kommt über die Standardeingabe; leer = aufheben.
+    sed -i '/# ZOS-FOKUS$/d' /etc/hosts
+    while IFS= read -r n; do
+      case "$n" in ''|*[!a-z0-9.-]*) continue;; esac
+      printf '0.0.0.0 %s # ZOS-FOKUS\n0.0.0.0 www.%s # ZOS-FOKUS\n' "$n" "$n" >> /etc/hosts
+    done
+    systemctl stop zos-fokus-ende.timer 2>/dev/null; systemctl reset-failed zos-fokus-ende.service 2>/dev/null
+    # Mit Sekundenangabe: die Sperre hebt sich danach von selbst auf, auch wenn die Oberfläche nicht läuft.
+    case "${2:-}" in ''|*[!0-9]*) ;; *) systemd-run --quiet --unit=zos-fokus-ende --timer-property=AccuracySec=1s --on-active="$2" /usr/libexec/zentraleos/helfer fokus-sperre ;; esac
+    echo ok ;;
+  ssh-fern)
+    # SSH nur über Tailscale: Dienst an, aber er hört nur auf der Tailscale-Adresse.
+    if [ "${2:-}" = an ]; then
+      ip="$(tailscale ip -4 2>/dev/null | head -1)"; [ -n "$ip" ] || { echo "Tailscale ist nicht verbunden" >&2; exit 3; }
+      mkdir -p /etc/ssh/sshd_config.d; printf 'ListenAddress %s\nPasswordAuthentication yes\nPermitRootLogin no\n' "$ip" > /etc/ssh/sshd_config.d/zentraleos.conf
+      mkdir -p /etc/systemd/system/ssh.service.d; printf '[Unit]\nAfter=tailscaled.service\nWants=tailscaled.service\n[Service]\nRestart=on-failure\nRestartSec=10\n' > /etc/systemd/system/ssh.service.d/zentraleos.conf
+      systemctl daemon-reload; systemctl enable ssh >/dev/null 2>&1; systemctl restart ssh; echo "an $ip"
+    else systemctl disable --now ssh >/dev/null 2>&1; rm -f /etc/ssh/sshd_config.d/zentraleos.conf; echo aus; fi ;;
+  update-fenster)
+    # Automatische Updates nur im Wartungsfenster: $2 = aus | Wochentag (Mon..Sun), $3 = Stunde
+    mkdir -p /etc/systemd/system/apt-daily-upgrade.timer.d /etc/systemd/system/apt-daily-upgrade.service.d
+    if [ "$2" = aus ]; then
+      rm -f /etc/systemd/system/apt-daily-upgrade.timer.d/zentraleos.conf
+    else
+      case "$2" in Mon|Tue|Wed|Thu|Fri|Sat|Sun) ;; *) exit 2;; esac; case "$3" in ''|*[!0-9]*) exit 2;; esac
+      printf '[Timer]\nOnCalendar=\nOnCalendar=%s *-*-* %02d:00\nRandomizedDelaySec=0\n' "$2" "$3" > /etc/systemd/system/apt-daily-upgrade.timer.d/zentraleos.conf
+    fi
+    printf '[Service]\nExecCondition=/usr/libexec/zentraleos/update-erlaubt\n' > /etc/systemd/system/apt-daily-upgrade.service.d/zentraleos.conf
+    systemctl daemon-reload; systemctl restart apt-daily-upgrade.timer; echo ok ;;
   *) echo "Unbekannte Aktion" >&2; exit 64 ;;
 esac
