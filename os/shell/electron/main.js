@@ -378,7 +378,7 @@ function systemIpc() {
   h('wlan', system.wlan); h('wlanSchalten', async (an) => klein(await system.wlanSchalten(an)));
   h('wlanVerbinden', nurOffen(async (ssid, pw) => klein(await system.wlanVerbinden(ssid, pw)))); h('wlanTrennen', async (g) => klein(await system.wlanTrennen(g)));
   h('bluetooth', system.bluetooth); h('bluetoothSchalten', async (an) => klein(await system.bluetoothSchalten(an)));
-  h('tailscale', system.tailscale); h('tailscaleExit', async (ip) => klein(await system.tailscaleExit(ip)));
+  h('tailscale', system.tailscale); h('netzweg', system.netzweg); h('tailscaleDns', nurOffen(async (an) => klein(await system.tailscaleDns(an)))); h('tailscaleExit', async (ip) => klein(await system.tailscaleExit(ip)));
   h('ton', system.ton); h('tonSetzen', async (p) => klein(await system.tonSetzen(p))); h('tonStumm', async (an) => klein(await system.tonStumm(an))); h('tonAusgabe', async (id) => klein(await system.tonAusgabe(id)));
   h('helligkeit', system.helligkeit); h('helligkeitSetzen', async (p) => klein(await system.helligkeitSetzen(p)));
   h('anzeige', system.anzeige); h('anzeigeSetzen', async (n, o) => klein(await system.anzeigeSetzen(n, o)));

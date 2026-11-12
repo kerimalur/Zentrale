@@ -112,6 +112,11 @@ async function verbinden() {
   r = await js(`FM.schliessenAlle(); Aktivitaet.oeffnen(); await warte(${3000 * LANGSAM}); Aktivitaet.reiter = 'dienste'; Aktivitaet.reiterZeichnen(); await Aktivitaet.holen(); await warte(${1500 * LANGSAM}); return document.querySelectorAll('.sy-zeile').length`);
   pruefe('Task-Manager: Reiter «Dienste» listet laufende Dienste', r > 8, r); await foto('25-task-manager');
 
+  r = await js(`FM.schliessenAlle(); const w = Schreibtischflaeche.e.widgets[0]; await Schreibtischflaeche.widgetSetzen(w.id, { x: 3.37, y: 2.21, breit: 2.6, hoch: 1.4 }); Schreibtischflaeche.zeichnen(); const k = document.querySelector('[data-widget="' + w.id + '"]'); const g = (await Z.einstellungen.alle()).einstellungen.schreibtisch.widgets.find((x) => x.id === w.id); return { frei: Schreibtischflaeche.frei(), links: k.style.left, breit: k.style.width, x: g.x, b: g.breit }`);
+  pruefe('Widgets frei platzierbar und stufenlos gross (ohne Raster), gespeichert', r.frei === true && r.x === 3.37 && r.b === 2.6 && parseFloat(r.links) % 110 !== 0, JSON.stringify(r));
+  r = await js(`Apps.netzplan.oeffnen(); await warte(${4000 * LANGSAM}); const a = document.querySelectorAll('.np-knoten').length; const t = document.querySelector('.np').innerText; return { knoten: a, router: /Router/.test(t), dns: /DNS/.test(t), schalter: document.querySelectorAll('.np .schalter, .np select').length }`);
+  pruefe('Netzplan zeigt Weg, DNS und Schalter', r.knoten >= 6 && r.router && r.dns && r.schalter >= 2, JSON.stringify(r)); await foto('26-netzplan');
+
   // --- Fremdes Programm als echtes Fenster ---
   r = await js(`FM.schliessenAlle(); const s = await Z.sys.programmStarten('foot'); await warte(${5000 * LANGSAM}); const w = await Z.sys.fremdeFenster(); await warte(3000); return { s: s.ok, fenster: w.liste, dock: document.querySelectorAll('#dock .fremd').length }`);
   pruefe('Fremdes Programm (foot) startet als eigenes Fenster und erscheint im Dock', r.s && r.fenster.some((f) => f.app === 'foot') && r.dock >= 1, JSON.stringify(r));

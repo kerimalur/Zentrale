@@ -38,7 +38,7 @@ const Startmenue = {
         if (!treffer.length && !bereiche.length) koerper.append(el('div', { klasse: 'u', text: 'Nichts gefunden.', stil: { padding: '8px 4px', color: 'var(--text-leise)' } }));
         return;
       }
-      const angeheftet = ['finder', 'web', 'terminal', 'software', 'einstellungen', 'aktivitaet', 'geraete', 'steuerung', 'zentrale:Übersicht', 'zentrale:Trading', 'zentrale:Heute', 'zentrale:Medien'].filter((id) => Apps[id]);
+      const angeheftet = ['finder', 'web', 'terminal', 'software', 'einstellungen', 'aktivitaet', 'geraete', 'netzplan', 'steuerung', 'zentrale:Übersicht', 'zentrale:Trading', 'zentrale:Heute'].filter((id) => Apps[id]);
       koerper.append(el('div', { klasse: 'sm-titel', text: 'Angeheftet' }), el('div', { klasse: 'sm-gitter' }, angeheftet.map((id) => this.appKnopf(id, Apps[id]))),
         el('div', { klasse: 'sm-titel', text: 'Zentrale · vorinstalliert' }), el('div', { klasse: 'sm-chips' }, ZENTRALE_TABS.map((x) => el('button', { klasse: 'sm-chip', text: x.name, onclick: () => { this.schliessen(); ZentraleFenster.oeffnen(x.id); } }))),
         el('div', { klasse: 'sm-titel', text: 'Alle Programme' }), el('div', { klasse: 'sm-alle' }, alle().sort((a, b) => a.name.localeCompare(b.name, 'de')).map((a) => this.appKnopf(a.id, a, 'sm-zeile'))));
@@ -262,3 +262,107 @@ const Geraete = {
 };
 Apps.geraete = { name: 'Geräte-Manager', symbol: 'chip', fensterId: 'geraete', farbe: 'linear-gradient(160deg,#64748b,#334155)', oeffnen: () => Geraete.oeffnen() };
 Spotlight.BEFEHLE = ((alt) => () => [...alt(), { name: 'Geräte-Manager', unter: 'System', tun: () => Geraete.oeffnen() }, { name: 'Task-Manager', unter: 'System', tun: () => Aktivitaet.oeffnen() }, { name: 'Personalisierung', unter: 'Einstellungen', tun: () => Apps.einstellungen.oeffnen('aussehen') }])(Spotlight.BEFEHLE);
+
+// ---------------------------------------------------------------- Frei platzieren
+// Ohne «Am Raster einrasten» bleiben Symbole und Widgets genau dort, wo man sie loslässt,
+// und Widgets lassen sich stufenlos in der Grösse ziehen. Gespeichert wird in Rastereinheiten
+// mit Nachkommastellen, damit alte Einstellungen weiter gelten.
+Schreibtischflaeche.frei = function () { return this.e.einrasten === false; };
+Schreibtischflaeche.ziehbar = function (knoten, fertig) {
+  knoten.addEventListener('mousedown', (ev) => {
+    if (ev.button !== 0 || ev.target.closest('button:not(.fl-symbol), textarea, input, a, .w-griff')) return;
+    ev.preventDefault(); const r = this.raster;
+    const start = { x: ev.clientX, y: ev.clientY, l: parseFloat(knoten.style.left), t: parseFloat(knoten.style.top) }; let bewegt = false;
+    const grenze = this.wurzel.getBoundingClientRect();
+    const bewegen = (e2) => {
+      const dx = e2.clientX - start.x; const dy = e2.clientY - start.y;
+      if (!bewegt && Math.abs(dx) + Math.abs(dy) < 4) return;
+      if (!bewegt) { bewegt = true; knoten.classList.add('zieht'); FM.ueberlagernAn(); }
+      knoten.style.left = Math.max(0, Math.min(grenze.width - 40, start.l + dx)) + 'px'; knoten.style.top = Math.max(0, Math.min(grenze.height - 40, start.t + dy)) + 'px';
+    };
+    const los = (e3) => {
+      document.removeEventListener('mousemove', bewegen); document.removeEventListener('mouseup', los);
+      if (!bewegt) return; knoten.classList.remove('zieht'); FM.ueberlagernAus();
+      const l = parseFloat(knoten.style.left); const t = parseFloat(knoten.style.top); const raster = !this.frei() || e3.shiftKey;   // Umschalt beim Loslassen rastet trotzdem ein
+      const gx = raster ? Math.max(0, Math.round(l / r)) : Math.round((l / r) * 1000) / 1000; const gy = raster ? Math.max(0, Math.round(t / r)) : Math.round((t / r) * 1000) / 1000;
+      knoten.style.left = gx * r + 'px'; knoten.style.top = gy * r + 'px'; fertig(gx, gy);
+    };
+    document.addEventListener('mousemove', bewegen); document.addEventListener('mouseup', los);
+  });
+};
+{ // Grösse stufenlos: den Griff neu verdrahten, wenn frei platziert wird
+  const alt = Schreibtischflaeche.zeichnen;
+  Schreibtischflaeche.zeichnen = function () {
+    alt.call(this); if (!this.frei()) return; const r = this.raster;
+    for (const w of this.e.widgets || []) {
+      const k = this.wurzel.querySelector(`[data-widget="${w.id}"]`); const alterGriff = k && k.querySelector('.w-griff'); if (!alterGriff) continue;
+      const griff = alterGriff.cloneNode(true); alterGriff.replaceWith(griff);
+      griff.addEventListener('mousedown', (ev) => {
+        ev.preventDefault(); ev.stopPropagation(); const s = { x: ev.clientX, y: ev.clientY, b: k.offsetWidth, h: k.offsetHeight }; FM.ueberlagernAn();
+        const bew = (e2) => { k.style.width = Math.max(70, s.b + e2.clientX - s.x) + 'px'; k.style.height = Math.max(50, s.h + e2.clientY - s.y) + 'px'; };
+        const los = () => { document.removeEventListener('mousemove', bew); document.removeEventListener('mouseup', los); FM.ueberlagernAus();
+          this.widgetSetzen(w.id, { breit: Math.round(((k.offsetWidth + 10) / r) * 1000) / 1000, hoch: Math.round(((k.offsetHeight + 10) / r) * 1000) / 1000 }); };
+        document.addEventListener('mousemove', bew); document.addEventListener('mouseup', los);
+      });
+    }
+  };
+}
+
+// ---------------------------------------------------------------- Netzplan: wie geht mein Verkehr ins Internet?
+Object.assign(SYMBOL, { netzplan: S('<circle cx="5" cy="12" r="2.5"/><circle cx="19" cy="6" r="2.5"/><circle cx="19" cy="18" r="2.5"/><path d="M7.3 11l9.4-4M7.3 13l9.4 4"/>') });
+const Netzplan = {
+  vorschau: { exit: false, dns: true },
+  oeffnen() {
+    FM.oeffnen({ id: 'netzplan', appId: 'netzplan', titel: 'Netzplan', symbol: 'netzplan', breite: 900, hoehe: 640, minBreite: 620, minHoehe: 420,
+      werkzeuge: [{ id: 'neu', symbol: 'neu', titel: 'Neu einlesen', tun: () => this.laden() }],
+      aufbauen: (inhalt) => { this.el = el('div', { klasse: 'np' }); inhalt.append(this.el); this.laden(); this.timer = setInterval(() => { if (!this.beschaeftigt) this.laden(true); }, 15000); },
+      beimSchliessen: () => { clearInterval(this.timer); return true; } });
+  },
+  knoten(titel, unter, art = '', marke = '') { return el('div', { klasse: 'np-knoten ' + art }, marke ? el('small', { klasse: 'np-marke', text: marke }) : null, el('b', { text: titel }), el('span', { text: unter || '' })); },
+  pfeil(text, an = true) { return el('div', { klasse: 'np-pfeil' + (an ? '' : ' aus') }, el('i'), el('small', { text: text || '' })); },
+  async laden(still = false) {
+    if (!still) leeren(this.el).append(el('div', { klasse: 'web-platz leer', stil: { position: 'static', padding: '40px' } }, 'Netz wird eingelesen …'));
+    const [weg, ts] = await Promise.all([Z.sys.netzweg(), Z.sys.tailscale()]); const z = Zustand.daten || {};
+    if (!this.el.isConnected) return; const E = EinstellungenApp;
+    const echt = ts.ok && ts.angemeldet; const exitGeraete = echt ? ts.geraete.filter((g) => g.exitMoeglich) : [{ name: 'pi-proton', ip: 'vorschau', exitAktiv: this.vorschau.exit }];
+    const exit = exitGeraete.find((g) => g.exitAktiv); const dnsAn = echt ? !!weg.tailscale?.dnsAn : this.vorschau.dns;
+    const pihole = (z.netz && z.netz.pihole) || null; const piName = (z.netz && z.netz.tailscale && z.netz.tailscale.dns) || 'Pi';
+    const dnsServer = echt ? (weg.dns.join(', ') || 'unbekannt') : (dnsAn ? '100.x (Pi-hole)' : (weg.dns.join(', ') || 'Router'));
+    const ich = Schreibtisch.zustand.rechner || 'Dieser Rechner';
+    leeren(this.el);
+    if (!echt) this.el.append(el('div', { klasse: 'np-hinweis', text: (ts.ok ? 'Tailscale ist auf diesem Rechner nicht angemeldet' : 'Tailscale ist nicht installiert') + ' – die Schalter unten zeigen eine Vorschau, wie der Weg aussähe. Anmelden: Einstellungen → Tailscale.' }));
+
+    // 1) Der Weg einer Seite, am Beispiel YouTube
+    this.el.append(el('h3', { text: 'Weg ins Internet – Beispiel youtube.com' }), el('div', { klasse: 'np-reihe' },
+      this.knoten(ich, [weg.adresse, weg.schnittstelle].filter(Boolean).join(' · ') || 'kein Netz', 'ich'), this.pfeil(weg.schnittstelle && /^wl/.test(weg.schnittstelle) ? 'WLAN' : 'Kabel'),
+      this.knoten('Router / Switch', weg.router || 'unbekannt', '', 'Heimnetz'),
+      ...(exit ? [this.pfeil('verschlüsselt (Tailscale)'), this.knoten(exit.name, 'Exit-Node', 'akzent', echt ? '' : 'Vorschau'), this.pfeil('VPN')] : [this.pfeil('direkt')]),
+      this.knoten('youtube.com', exit ? 'sieht die Adresse des Exit-Node' : 'sieht deine Heim-Adresse', exit ? 'gut' : 'warn')));
+
+    // 2) Namensauflösung und Werbung
+    this.el.append(el('h3', { text: 'DNS und Werbung' }), el('div', { klasse: 'np-reihe' },
+      this.knoten('Frage: youtube.com?', 'jede Seite beginnt mit einer DNS-Anfrage', 'ich'), this.pfeil(dnsAn ? 'über Tailscale' : 'im Heimnetz'),
+      this.knoten(dnsAn ? 'Pi-hole auf dem Pi' : 'DNS des Routers', dnsServer, dnsAn ? 'akzent' : '', echt ? '' : 'Vorschau'), this.pfeil(dnsAn ? 'gefiltert' : 'ungefiltert', true),
+      this.knoten(dnsAn ? 'Werbung wird geblockt' : 'Werbung kommt durch', dnsAn && pihole && pihole.prozent != null ? `${pihole.prozent} % der Anfragen geblockt` : dnsAn ? 'Werbe- und Tracking-Adressen laufen ins Leere' : 'kein Filter aktiv', dnsAn ? 'gut' : 'warn')),
+      el('p', { klasse: 'np-klein', text: 'Hinweis: Werbung innerhalb von YouTube-Videos kommt von denselben Servern wie die Videos und lässt sich per DNS nicht blocken – Pi-hole blockt Werbenetze und Tracker auf anderen Seiten und in Apps.' }));
+
+    // 3) Schalter
+    const exitWahl = E.auswahl(exit ? exit.ip : '', [['', 'aus – direkt ins Internet'], ...exitGeraete.map((g) => [g.ip, 'über ' + g.name])], async (ip) => {
+      if (!echt) { this.vorschau.exit = !!ip; return this.laden(true); }
+      this.beschaeftigt = true; const r = await Z.sys.tailscaleExit(ip); this.beschaeftigt = false; r.ok ? hinweis(ip ? 'Exit-Node eingeschaltet' : 'Exit-Node ausgeschaltet', 'ok') : hinweis((r.fehler || 'Hat nicht geklappt') + ' – einmal unter Einstellungen → Tailscale «Link erzeugen» ausführen.', 'fehler'); this.laden(true); });
+    this.el.append(el('h3', { text: 'Schalten' }), E.karte(
+      E.reihe('Exit-Node', 'Leitet den ganzen Internet-Verkehr dieses Rechners über ein anderes Gerät in deinem Tailscale-Netz.', exitWahl),
+      E.reihe('DNS über Tailscale (Pi-hole)', 'Aus: der Rechner fragt den Router und sieht Werbung ungefiltert.', E.schalter(dnsAn, async (an) => { if (!echt) { this.vorschau.dns = an; return this.laden(true); } this.beschaeftigt = true; const r = await Z.sys.tailscaleDns(an); this.beschaeftigt = false; r.ok || hinweis(r.fehler, 'fehler'); this.laden(true); })),
+      E.reihe('Firewall', 'Eingehende Verbindungen aus dem Heimnetz werden verworfen, Tailscale bleibt offen.', el('button', { klasse: 'knopf', onclick: () => Apps.einstellungen.oeffnen('firewall') }, 'Öffnen'))));
+
+    // 4) Geräte
+    const tsGeraete = echt ? ts.geraete : []; const heim = (z.netz && z.netz.geraete) || [];
+    const zeile = (name, unter, online, marke) => el('div', { klasse: 'np-geraet' }, el('i', { klasse: online ? 'an' : '' }), el('b', { text: name }), el('span', { text: unter }), marke ? el('small', { text: marke }) : null);
+    this.el.append(el('h3', { text: 'Geräte' }), el('div', { klasse: 'np-geraete' },
+      el('div', {}, el('h4', { text: `Tailscale-Netz${echt ? ` (${tsGeraete.length})` : ''}` }), tsGeraete.length ? tsGeraete.map((g) => zeile(g.name, [g.ip, g.os].filter(Boolean).join(' · '), g.online, g.exitAktiv ? 'Exit-Node aktiv' : g.exitMoeglich ? 'kann Exit-Node' : '')) : el('p', { klasse: 'np-klein', text: 'Erst nach der Anmeldung bei Tailscale sichtbar.' })),
+      el('div', {}, el('h4', { text: `Vom Pi gesehen${heim.length ? ` (${heim.length})` : ''}` + (Schreibtisch.zustand.demo ? ' · Demo' : '') }), heim.length ? heim.map((g) => zeile(g.name, [g.ip, g.os].filter(Boolean).join(' · '), g.online, g.dns != null ? g.dns + ' DNS-Anfragen' : '')) : el('p', { klasse: 'np-klein', text: 'Der Pi meldet gerade keine Geräte.' }))),
+      el('p', { klasse: 'np-klein', text: 'Welches Gerät an welchem Anschluss des Switch hängt, lässt sich nicht auslesen (ein einfacher Switch gibt das nicht preis). Gezeigt wird, was der Rechner und der Pi selbst sehen.' }));
+  },
+};
+Apps.netzplan = { name: 'Netzplan', symbol: 'netzplan', fensterId: 'netzplan', farbe: 'linear-gradient(160deg,#14b8a6,#0f766e)', oeffnen: () => { Zustand.abonnieren(() => {}); Netzplan.oeffnen(); } };
+Spotlight.BEFEHLE = ((alt) => () => [...alt(), { name: 'Netzplan', unter: 'Netz', tun: () => Apps.netzplan.oeffnen() }])(Spotlight.BEFEHLE);

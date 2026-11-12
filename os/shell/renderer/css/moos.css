@@ -152,3 +152,25 @@ body.dunkel .fenster { background: color-mix(in srgb, var(--akzent) 9%, rgba(17,
 body.hell .fenster { background: color-mix(in srgb, var(--akzent) 6%, rgba(248,250,251,0.95)); }
 body.dunkel .startmenue, body.dunkel .kontrollzentrum, body.dunkel .menue { background: color-mix(in srgb, var(--akzent) 11%, rgba(19,21,26,0.9)); }
 body.hell .startmenue, body.hell .kontrollzentrum, body.hell .menue { background: color-mix(in srgb, var(--akzent) 7%, rgba(250,251,252,0.94)); }
+
+/* Netzplan */
+.np { height: 100%; overflow: auto; padding: 6px 22px 22px; }
+.np h3 { margin: 18px 0 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-sehr-leise); }
+.np h4 { margin: 0 0 6px; font-size: 12.5px; }
+.np-reihe { display: flex; align-items: stretch; gap: 0; }
+.np-knoten { flex: 1 1 0; min-width: 0; position: relative; display: flex; flex-direction: column; justify-content: center; gap: 3px; padding: 14px; border-radius: 14px; background: var(--flaeche); box-shadow: inset 0 0 0 1px var(--haar); }
+.np-knoten b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .np-knoten span { font-size: 11.5px; color: var(--text-leise); line-height: 1.35; }
+.np-knoten.ich { background: color-mix(in srgb, var(--akzent) 16%, var(--flaeche)); }
+.np-knoten.akzent { background: linear-gradient(150deg, color-mix(in srgb, var(--akzent) 86%, #fff 6%), color-mix(in srgb, var(--akzent) 62%, #000)); color: #fff; box-shadow: 0 8px 22px color-mix(in srgb, var(--akzent) 35%, transparent); } .np-knoten.akzent span { color: rgba(255,255,255,0.85); }
+.np-knoten.gut { box-shadow: inset 0 0 0 1.5px var(--gruen); } .np-knoten.warn { box-shadow: inset 0 0 0 1.5px var(--orange); }
+.np-marke { position: absolute; top: -8px; left: 12px; padding: 1px 7px; border-radius: 99px; font-size: 10px; background: var(--glas-hell); color: var(--text-leise); box-shadow: inset 0 0 0 1px var(--haar); }
+.np-pfeil { flex: none; width: 92px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; }
+.np-pfeil i { width: 100%; height: 2px; background: linear-gradient(90deg, transparent, var(--akzent) 30%, var(--akzent) 70%, transparent); background-size: 200% 100%; animation: np-fluss calc(1.4s / max(var(--tempo), 0.3)) linear infinite; }
+.np-pfeil small { font-size: 10.5px; color: var(--text-sehr-leise); text-align: center; line-height: 1.2; }
+@keyframes np-fluss { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+.np-klein { margin: 8px 2px 0; font-size: 11.5px; color: var(--text-sehr-leise); line-height: 1.45; }
+.np-hinweis { margin-top: 14px; padding: 10px 14px; border-radius: 12px; font-size: 12.5px; background: color-mix(in srgb, var(--gelb) 16%, var(--flaeche)); }
+.np-geraete { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; } .np-geraete > div { padding: 14px; border-radius: 14px; background: var(--flaeche); box-shadow: inset 0 0 0 1px var(--haar); min-width: 0; }
+.np-geraet { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; column-gap: 9px; padding: 5px 0; font-size: 12.5px; }
+.np-geraet i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-sehr-leise); } .np-geraet i.an { background: var(--gruen); }
+.np-geraet b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .np-geraet span { grid-column: 2; font-size: 11px; color: var(--text-sehr-leise); } .np-geraet small { grid-row: 1; grid-column: 3; font-size: 11px; color: var(--text-leise); }

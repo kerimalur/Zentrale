@@ -73,7 +73,7 @@ const STANDARD = {
   // --- Schreibtisch: Symbole und Widgets, frei anzuordnen ---
   schreibtisch: {
     raster: 110,              // Rasterweite in Pixeln, an der eingerastet wird
-    einrasten: true,
+    einrasten: false,         // false = Symbole und Widgets frei platzieren und frei in der Grösse ziehen
     symbole: [
       { app: 'finder', x: 0, y: 0 },
       { app: 'zentrale:Übersicht', x: 0, y: 1 },

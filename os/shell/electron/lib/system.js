@@ -134,6 +134,17 @@ async function tailscale() {
     return { ok: true, zustand: j.BackendState, angemeldet: j.BackendState === 'Running', selbst: j.Self ? { name: j.Self.HostName, ip: (j.Self.TailscaleIPs || [])[0] } : null, geraete: peers, anmeldeUrl: j.AuthURL || '' };
   } catch { return { ok: true, zustand: 'Gestoppt', angemeldet: false, geraete: [], fehler: r.fehler }; }
 }
+// Wie geht der Verkehr dieses Rechners ins Internet? (Schnittstelle, Router, DNS, Tailscale-Einstellungen)
+async function netzweg() {
+  const [weg, dns, prefs] = await Promise.all([lauf('ip', ['-j', 'route', 'get', '1.1.1.1']), lauf('resolvectl', ['dns'], { timeout: 5000 }), lauf('tailscale', ['debug', 'prefs'], { timeout: 6000 })]);
+  let r = {}; try { r = JSON.parse(weg.aus)[0] || {}; } catch {}
+  let server = [...dns.aus.matchAll(/:\s*(.+)$/gm)].flatMap((m) => m[1].trim().split(/\s+/)).filter(Boolean);
+  if (!server.length) server = [...lies('/etc/resolv.conf').matchAll(/^nameserver\s+(\S+)/gm)].map((m) => m[1]);
+  let p = null; try { p = JSON.parse(prefs.aus); } catch {}
+  return { ok: true, schnittstelle: r.dev || '', router: r.gateway || '', adresse: r.prefsrc || '', dns: [...new Set(server)].filter((x) => x !== '127.0.0.53'),
+    tailscale: p ? { dnsAn: !!p.CorpDNS, exit: !!(p.ExitNodeID || p.ExitNodeIP), lanErlaubt: !!p.ExitNodeAllowLANAccess } : null };
+}
+const tailscaleDns = (an) => lauf('tailscale', ['set', '--accept-dns=' + (an ? 'true' : 'false')], { timeout: 15000 });
 const tailscaleExit = (ip) => lauf('tailscale', ['set', '--exit-node=' + (ip || '')], { timeout: 15000 });
 
 // ---------- Ton, Helligkeit, Anzeige, Energie ----------
@@ -335,7 +346,7 @@ async function bildschirmfoto(bereich) {
 
 module.exports = {
   lauf, alsRoot, rootVergessen, info, prozesse, beenden, geraete, dienste,
-  wlan, wlanSchalten, wlanVerbinden, wlanTrennen, bluetooth, bluetoothSchalten, tailscale, tailscaleExit,
+  wlan, wlanSchalten, wlanVerbinden, wlanTrennen, bluetooth, bluetoothSchalten, tailscale, tailscaleExit, netzweg, tailscaleDns,
   ton, tonSetzen, tonStumm, tonAusgabe, helligkeit, helligkeitSetzen, anzeige, anzeigeSetzen, bildschirmStrom, energie, energieSetzen,
   zeit, zeitzonen, tastatur, firewallLesen, firewallSetzen, firewallText,
   programme, programmStarten, befehlStarten, webAppAnlegen, eigenesProgrammEntfernen, fremdeFenster, fensterFokus, fensterZu, alleMinimieren,
