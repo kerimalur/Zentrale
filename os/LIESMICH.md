@@ -97,6 +97,7 @@ der VM geprüft ist davon nur das Starten bis zum Sperrbildschirm (siehe Tabelle
 | Finder: Rechner + «Pi», kopieren in beide Richtungen, Teilen-Link | ja | nur Demo |
 | Steuerung (PC, TV, Szenen, Lüfter …) | Shell | nur Demo |
 | Fernsteuerung vom Pi (sperren), kein Entsperren aus der Ferne | Shell | nur Demo |
+| Anmeldung und Terminal per echter Tastatureingabe (Schweizer Layout) | ja | Teil 1 von `testen.sh` |
 | Terminal (echte Shell, `sudo` nur mit Passwort) | ja | Tabs fehlen, mehrere Fenster stattdessen |
 | Aktivitätsanzeige (Prozesse, CPU/RAM/Netz, beenden) | ja (Liste) | «Beenden» nicht ausgelöst |
 | Launchpad, Spotlight (Programme, Rechner, Befehle) | ja | Spotlight sucht keine Dateien |
@@ -115,15 +116,17 @@ der VM geprüft ist davon nur das Starten bis zum Sperrbildschirm (siehe Tabelle
 | Tastatur Schweiz als Standard | ja | Layoutwechsel nein |
 | Benutzerpasswort ändern, Hostname, SSH an/aus, Auto-Updates | **nein** | gebaut |
 | Systemupdates (apt) über die Oberfläche | **nein** | gebaut; kein Rollback |
-| Software: Flathub-Suche / Installieren / Entfernen | siehe MORGENBERICHT | lokal ohne Internet in der VM |
+| Software: Flathub-Suche | ja | 44 Treffer im CI-Lauf |
+| Software: Installieren / Entfernen (Flatpak) | **nein** | gebaut |
 | Web-Apps anlegen | **nein** | gebaut |
-| Tailscale (Anmelden, Exit-Node) | **nein** | braucht dein Konto |
+| Tailscale installiert, Dienst läuft | ja | Zustand «NeedsLogin» |
+| Tailscale anmelden, Exit-Node | **nein** | braucht dein Konto |
 | Sperren zeigt Anmeldebildschirm; gesperrt keine Root-Aktion, kein Terminal | ja | Sperre ist app-seitig, siehe ENTSCHEIDUNGEN 6 |
 | Bildschirm aus beim Sperren | **nein** | |
 | Bildschirmfoto | **nein** | |
 | Installation auf Platte, LUKS | **nein** | Calamares nur beigelegt |
 | MetaTrader 5 / Wine-Assistent | **nein** | siehe MT5-BERICHT.md |
-| Start unter 25 Sekunden | **nicht messbar** | siehe MORGENBERICHT |
+| Start unter 25 Sekunden | **nicht belegt** | 9,6 s in der KVM-VM, kein Wert für echte Hardware |
 | 60 fps der Animationen | **nicht gemessen** | VM ohne Grafikkarte |
 
 ## Nicht gebaut (aus dem Auftrag)

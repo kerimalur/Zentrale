@@ -67,3 +67,14 @@ Nicht gebaut: Erststart-Assistent, Mission Control, Spaces in der Shell, Hot Cor
 Bildschirmschoner, Browser/Texteditor/Vorschau/Notizen/Rechner/Uhr/Wetter/Kalender/Laufwerke als eigene
 Programme (Browser = Chromium-Fenster, Editor/Vorschau = die aus Version 1 im Finder), Rollback, Gesperrter
 Modus, AppArmor-Profil für die Shell, Klänge, Widgets-Galerie über Version 1 hinaus, Profil-Sicherung auf dem Pi.
+
+## 11. Testmodus im ISO
+Um die Oberfläche im gebooteten System automatisch zu bedienen, öffnet die Shell ihre DevTools-Schnittstelle –
+aber nur, wenn das System in einer VM läuft **und** der Kernel-Parameter `zos.test` gesetzt ist (kein
+Bootmenü-Eintrag setzt ihn). Dann leitet ein Dienst Port 9223 weiter und gibt ihn in der Firewall frei. Auf
+echter Hardware ist der Dienst wirkungslos. Sauberer wäre ein eigenes Test-Abbild; dafür fehlte die Zeit.
+
+## 12. Compositor in VMs ohne OpenGL
+labwc stürzte in QEMU mit Software-OpenGL (llvmpipe) ab, sobald die Shell ihr Fenster öffnete. In VMs und im
+«sicheren Grafikmodus» läuft er darum mit `WLR_RENDERER=pixman`. Auf echter Hardware bleibt OpenGL an –
+**dieser Weg ist ungetestet**. Stürzt er dort ab, startet die Sitzung einmal ohne OpenGL neu.
