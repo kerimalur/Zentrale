@@ -261,7 +261,7 @@ function ipcEinrichten() {
     const z = await pi.angemeldet();
     return { ok: true, ...z, ...anmeldung.zustand() };
   }));
-  ipcMain.handle('anmeldung:pinSetzen', sicher(async (_e, pin) => anmeldung.pinSetzen(pin)));
+  ipcMain.handle('anmeldung:pinSetzen', sicher(async (_e, pin) => { const r = await anmeldung.pinSetzen(pin); if (r.ok) einstellungen.setzen({ anmeldung: { eigenerCode: true } }); return r; }));
   ipcMain.handle('anmeldung:pinEntfernen', sicher(async () => anmeldung.pinEntfernen()));
   ipcMain.handle('anmeldung:koppeln', sicher(async () => anmeldung.koppeln()));
   ipcMain.handle('anmeldung:geraete', sicher(async () => pi.geraeteListe()));
@@ -472,6 +472,15 @@ function systemIpc() {
 app.whenReady().then(async () => {
   einstellungen.laden();
   const e = einstellungen.alle();
+
+  // Erster Start nach der Installation: den dort gewählten Code für die Sperre übernehmen.
+  try {
+    const erst = path.join(app.getPath('userData'), 'erststart.json');
+    if (fs.existsSync(erst)) {
+      const d = JSON.parse(fs.readFileSync(erst, 'utf8')); fs.rmSync(erst, { force: true });
+      if (d.pin && (await anmeldung.pinSetzen(String(d.pin))).ok) einstellungen.setzen({ anmeldung: { eigenerCode: true, ...(d.name ? { benutzerName: String(d.name).slice(0, 40) } : {}) } });
+    }
+  } catch (f) { console.error('[erststart]', f.message); }
 
   // Demo-Modus: lokaler Server mit Testdaten spielt den Pi (siehe lib/demo.js).
   if (ARG.includes('--demo') || e.demo) {

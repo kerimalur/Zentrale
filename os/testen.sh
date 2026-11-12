@@ -69,6 +69,11 @@ if [ "$(cat "$AUS/installiert" 2>/dev/null)" = ja ]; then
   pruefe "Installiert: Compositor und Shell laufen"          'diag "prozesse:" | grep -q labwc && diag "prozesse:" | grep -q electron'
   pruefe "Installiert: Sitzung gehört dem neuen Benutzer"    'diag "sitzungen:" | grep -q kerim'
   pruefe "Installiert: kein Dienst fehlgeschlagen"           '[ -z "$(diag "fehlgeschlagen:" | sed "s/.*fehlgeschlagen: *//")" ]'
+  echo "== Anmelden mit dem bei der Installation gewählten Code (4711) =="
+  Q taste ctrl; warte 2; Q tippe 4711; warte 6; foto 31-installiert-schreibtisch; Q taste ctrl-alt-t; warte 5
+  Q tippe "id -un > /tmp/zos-terminal; ls ~/.config/ZentraleOS/erststart.json >> /tmp/zos-terminal 2>&1
+"; warte 3; aufDiagnose
+  pruefe "Installiert: eigener Code entsperrt, Terminal läuft als neuer Benutzer" 'diag "terminaltest:" | grep -q kerim'
   pruefe "Installiert: Bildschirm zeigt etwas"               '[ $(stat -c %s "$AUS/30-installiert.png") -gt 20000 ]'
 else
   echo "Teil 3 (Start von der Platte) übersprungen: Installation lief nicht durch" | tee -a "$ERG"

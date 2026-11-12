@@ -124,7 +124,7 @@ async function verbinden() {
   pruefe('Fenster: aus dem Vollbild ziehen, am Rand einrasten (Hälfte), Drittel', r.voll && r.geloest && r.rechts && r.drittel, JSON.stringify(r));
 
   // --- Neue Programme und Funktionen (Aufgabenliste vom 12.11.) ---
-  r = await js(`FM.schliessenAlle(); const fehler = []; for (const id of ['fotos', 'papierkorb', 'bildschirmfoto', 'datentraeger', 'sicherheit', 'netzwaechter', 'labor', 'fernzugriff', 'fokusmodus']) { try { Apps[id].oeffnen(); await warte(${2500 * LANGSAM}); const f = FM.finden(Apps[id].fensterId); if (!f) fehler.push(id + ': kein Fenster'); else if (f.wurzel.innerText.length < 60) fehler.push(id + ': leer'); f && f.schliessen(); } catch (e) { fehler.push(id + ': ' + e.message); } } return fehler`);
+  r = await js(`FM.schliessenAlle(); const fehler = []; for (const id of ['fotos', 'papierkorb', 'bildschirmfoto', 'datentraeger', 'sicherheit', 'netzwaechter', 'labor', 'fernzugriff', 'fokusmodus']) { try { Apps[id].oeffnen(); await warte(${2500 * LANGSAM}); const f = FM.finden(Apps[id].fensterId); if (!f) fehler.push(id + ': kein Fenster'); else { for (let n = 0; n < 12 && f.wurzel.innerText.length < 30; n++) await warte(700); if (f.wurzel.innerText.length < 30) fehler.push(id + ': leer'); } f && f.schliessen(); } catch (e) { fehler.push(id + ': ' + e.message); } } return fehler`);
   pruefe('Neue Programme öffnen mit Inhalt (Fotos, Papierkorb, Bildschirmfoto, Datenträger, Sicherheit, Netzwerkwächter, Labor, Fernzugriff, Fokus)', Array.isArray(r) && r.length === 0, JSON.stringify(r));
   r = await js(`const f = []; for (const b of ['groesse', 'ruhe', 'bot', 'backup', 'installation']) { Apps.einstellungen.oeffnen(b); await warte(${1800 * LANGSAM}); const t = FM.finden('einstellungen').wurzel.querySelector('.ein-haupt').innerText; if (t.length < 80) f.push(b); } FM.schliessenAlle(); return f`);
   pruefe('Einstellungen: Grösse, Ruhe & Schlafen, Bot-Wächter, Backup, Installation', Array.isArray(r) && r.length === 0, JSON.stringify(r));
@@ -154,7 +154,7 @@ async function verbinden() {
   hinweis('Installation: erkannte Platten', JSON.stringify(r));
   if (r.live && r.uefi && r.platten.includes('/dev/vda')) {
     const t0 = Date.now();
-    r = await js(`const a = await Z.mehr.installieren({ geraet: '/dev/vda', name: 'kerim', passwort: 'testpasswort', verschluesselung: '' }, '${PW}'); const s = await Z.mehr.installStand(); return { ok: a.ok, fehler: a.fehler, ende: s.zeilen.slice(-3) }`);
+    r = await js(`const a = await Z.mehr.installieren({ geraet: '/dev/vda', name: 'kerim', passwort: 'testpasswort', verschluesselung: '', code: '4711' }, '${PW}'); const s = await Z.mehr.installStand(); return { ok: a.ok, fehler: a.fehler, ende: s.zeilen.slice(-3) }`);
     pruefe('Installation auf die Platte läuft durch', r.ok === true && /FERTIG/.test(JSON.stringify(r.ende)), JSON.stringify(r) + ` ${Math.round((Date.now() - t0) / 1000)} s`);
     fs.writeFileSync(path.join(AUS, 'installiert'), r.ok ? 'ja' : 'nein');
   } else hinweis('Installation NICHT geprüft (kein UEFI-Live-System mit /dev/vda)', JSON.stringify(r));

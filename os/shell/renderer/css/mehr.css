@@ -76,3 +76,5 @@ button.dt-zeile:hover { background: var(--flaeche-hover); }
 .fokus-gross b { font-size: 76px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -2px; }
 .fokus-gross small { text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-leise); }
 .fokus-gross .unter { max-width: 380px; }
+
+body.demo.eigener-code .sperre::after { content: 'Demo-Modus: Testdaten statt Pi · es gilt dein eigener Code'; }

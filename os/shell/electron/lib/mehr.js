@@ -103,7 +103,8 @@ async function datentraeger() {
 }
 async function ordnerAnalyse(pfad) {
   const p = path.resolve(String(pfad || HEIM));
-  const r = await lauf('du', ['-x', '-B1', '-d1', p], { timeout: 120000 });
+  // Kein -x: im Live-System (Overlay) liegen Dateien auf einem anderen Gerät als ihr Ordner und würden sonst nicht gezählt.
+  const r = await lauf('du', ['-B1', '-d1', ...(p === '/' ? ['--exclude=/proc', '--exclude=/sys', '--exclude=/dev', '--exclude=/run', '--exclude=/mnt', '--exclude=/media'] : []), p], { timeout: 180000 });
   const zeilen = (r.aus || '').split('\n').filter(Boolean).map((z) => { const i = z.indexOf('\t'); return { groesse: Number(z.slice(0, i)), pfad: z.slice(i + 1) }; });
   const gesamt = (zeilen.find((z) => z.pfad === p) || {}).groesse || 0;
   const liste = zeilen.filter((z) => z.pfad !== p).sort((a, b) => b.groesse - a.groesse).slice(0, 60).map((z) => ({ ...z, name: path.basename(z.pfad) }));
@@ -278,7 +279,7 @@ async function installPlatten() {
 }
 function installieren(k, pw) {
   const z = (x) => String(x ?? '').replace(/[\r\n]/g, '');
-  return system.alsRoot('installieren', [], { passwort: pw, eingabe: [z(k.geraet), z(k.name), z(k.passwort), z(k.verschluesselung)].join('\n') + '\n', timeout: 90 * 60_000 });
+  return system.alsRoot('installieren', [], { passwort: pw, eingabe: [z(k.geraet), z(k.name), z(k.passwort), z(k.verschluesselung), z(k.code)].join('\n') + '\n', timeout: 90 * 60_000 });
 }
 const installStand = () => ({ ok: true, zeilen: lies('/run/zos-installation.log').split('\n').filter(Boolean).slice(-12) });
 

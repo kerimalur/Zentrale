@@ -1,14 +1,14 @@
 #!/bin/bash
 # Installiert ZentraleOS aus dem Live-System fest auf eine Platte (UEFI, GPT).
 # Läuft als Root über den Helfer. Eingabe (Standardeingabe), je eine Zeile:
-#   Gerät (z. B. /dev/sda) · Benutzername · Passwort · Verschlüsselungs-Passwort (leer = keine)
+#   Gerät (z. B. /dev/sda) · Benutzername · Passwort · Verschlüsselungs-Passwort (leer = keine) · Code für die Sperre (leer = später setzen)
 # DIE GEWÄHLTE PLATTE WIRD VOLLSTÄNDIG GELÖSCHT.
 set -euo pipefail
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 PROT=/run/zos-installation.log; : > "$PROT"; chmod 644 "$PROT"
 sag() { echo "$*" | tee -a "$PROT"; }
 ende() { sag "FEHLER: $*"; exit 1; }
-IFS= read -r GERAET; IFS= read -r NAME; IFS= read -r PW; IFS= read -r LUKS || LUKS=""
+IFS= read -r GERAET; IFS= read -r NAME; IFS= read -r PW; IFS= read -r LUKS || LUKS=""; IFS= read -r CODE || CODE=""
 exec 2>>"$PROT"
 
 grep -qw boot=live /proc/cmdline || ende "Die Installation geht nur aus dem Live-System (vom Stick gestartet)."
@@ -87,6 +87,13 @@ if [ "$NAME" != zentrale ]; then
   im groupmod -n "$NAME" zentrale
 fi
 printf '%s:%s\n' "$NAME" "$PW" | im chpasswd
+if echo "$CODE" | grep -Eq '^[0-9A-Za-z]{4,12}$'; then
+  # Die Oberfläche übernimmt den Code beim ersten Start und löscht diese Datei.
+  mkdir -p "$ZIEL/home/$NAME/.config/ZentraleOS"
+  printf '{"pin":"%s","name":"%s"}\n' "$CODE" "$NAME" > "$ZIEL/home/$NAME/.config/ZentraleOS/erststart.json"
+  chmod 700 "$ZIEL/home/$NAME/.config" "$ZIEL/home/$NAME/.config/ZentraleOS"; chmod 600 "$ZIEL/home/$NAME/.config/ZentraleOS/erststart.json"
+  im chown -R "$NAME:$NAME" "/home/$NAME/.config"
+fi
 
 sag "6/7 Live-Teile entfernen, Startabbild bauen"
 im apt-get -y -q purge live-boot live-boot-initramfs-tools live-config live-config-systemd live-tools >>"$PROT" 2>&1 || sag "Hinweis: Live-Pakete liessen sich nicht alle entfernen."

@@ -389,25 +389,26 @@ Object.assign(E, {
     if (!r.live) return i.append(this.block(null, this.karte(this.reihe('Schon installiert', 'Dieses System läuft von der Platte. Die Installation gibt es nur im Live-System vom Stick.', this.wert('✓')))));
     if (!r.uefi) return i.append(this.block(null, this.karte(this.reihe('Nicht möglich', 'Der Rechner wurde nicht im UEFI-Modus gestartet.', null))));
     const ziele = r.platten.filter((p) => !p.live && p.groesse >= 15e9);
-    const k = { geraet: ziele[0]?.pfad || '', name: 'kerim', passwort: '', passwort2: '', verschluesselung: '', luks: false };
+    const k = { geraet: ziele[0]?.pfad || '', name: 'kerim', passwort: '', passwort2: '', verschluesselung: '', luks: false, code: '' };
     const feld = (typ, platz, setzen) => { const f = el('input', { klasse: 'feld', type: typ, placeholder: platz, stil: { width: '230px' } }); f.addEventListener('input', () => setzen(f.value)); return f; };
     const nameFeld = feld('text', 'benutzername', (v) => { k.name = v.trim(); }); nameFeld.value = k.name;
     const luksFeld = feld('password', 'Passwort für die Verschlüsselung', (v) => { k.verschluesselung = v; }); const luksReihe = this.reihe('Verschlüsselungs-Passwort', 'Wird bei JEDEM Start am Gerät abgefragt. Nach einem Stromausfall startet der Rechner dann nicht allein durch – für einen Bot-Rechner darum besser aus lassen.', luksFeld); luksReihe.hidden = true;
     const stand = el('pre', { klasse: 'dt-smart', hidden: true });
     i.append(this.block('Ziel', el('div', { klasse: 'ein-karte' }, ziele.length ? ziele.map((p, n) => { const radio = el('input', { type: 'radio', name: 'inst-platte', checked: n === 0 }); radio.addEventListener('change', () => { k.geraet = p.pfad; }); return this.reihe(`${p.modell} · ${groesse(p.groesse)}`, `${p.pfad}${p.bus ? ' · ' + p.bus.toUpperCase() : ''}${p.wechsel ? ' · Wechselmedium' : ''}${p.inhalt ? ' · enthält: ' + p.inhalt : ' · leer'}`, radio); }) : [this.reihe('Keine passende Platte gefunden', 'Es braucht eine Platte mit mindestens 15 GB, die nicht der Start-Stick ist.', null)])),
-      this.block('Benutzer', this.karte(this.reihe('Benutzername', 'Kleinbuchstaben, Ziffern, Bindestrich.', nameFeld), this.reihe('Passwort', 'Das Administrator-Passwort des neuen Systems. Mindestens 4 Zeichen.', feld('password', 'Passwort', (v) => { k.passwort = v; })), this.reihe('Passwort wiederholen', null, feld('password', 'Passwort', (v) => { k.passwort2 = v; })))),
+      this.block('Benutzer', this.karte(this.reihe('Benutzername', 'Kleinbuchstaben, Ziffern, Bindestrich.', nameFeld), this.reihe('Passwort', 'Das Administrator-Passwort des neuen Systems. Mindestens 4 Zeichen.', feld('password', 'Passwort', (v) => { k.passwort = v; })), this.reihe('Passwort wiederholen', null, feld('password', 'Passwort', (v) => { k.passwort2 = v; })), this.reihe('Code für die Sperre', 'Den gibst du ein, wenn der Bildschirm gesperrt ist. 4 bis 12 Ziffern oder Buchstaben. Später änderbar unter Anmeldung & Sperre.', feld('password', 'Code', (v) => { k.code = v.trim(); })))),
       this.block('Verschlüsselung', this.karte(this.reihe('Platte verschlüsseln', 'Schützt die Daten, wenn jemand den Rechner mitnimmt.', this.schalter(false, (x) => { k.luks = x; luksReihe.hidden = !x; })), luksReihe)),
       this.block(null, this.karte(this.reihe('Installieren', 'Die gewählte Platte wird VOLLSTÄNDIG GELÖSCHT – auch Windows und alle Daten darauf.', el('button', { klasse: 'knopf gefahr', id: 'inst-start', text: 'Installieren …', disabled: !ziele.length, onclick: async (ev) => {
         if (!/^[a-z][a-z0-9-]{0,30}$/.test(k.name)) return hinweis('Benutzername: Kleinbuchstaben, Ziffern, Bindestrich', 'fehler');
         if (k.passwort.length < 4) return hinweis('Das Passwort braucht mindestens 4 Zeichen', 'fehler'); if (k.passwort !== k.passwort2) return hinweis('Die Passwörter sind nicht gleich', 'fehler');
+        if (!/^[0-9A-Za-z]{4,12}$/.test(k.code)) return hinweis('Der Code braucht 4 bis 12 Ziffern oder Buchstaben', 'fehler');
         if (k.luks && k.verschluesselung.length < 8) return hinweis('Das Verschlüsselungs-Passwort braucht mindestens 8 Zeichen', 'fehler');
         const p = ziele.find((x) => x.pfad === k.geraet); const a = await dialog({ titel: 'Platte wirklich löschen?', text: `«${p.modell}» (${groesse(p.groesse)}, ${p.pfad}) wird vollständig gelöscht${p.inhalt ? ' – samt ' + p.inhalt : ''}. Das lässt sich nicht rückgängig machen.\n\nZum Bestätigen LÖSCHEN eintippen.`, felder: [{ platzhalter: 'LÖSCHEN' }], okText: 'Löschen und installieren', gefahr: true });
         if (!a || a[0] !== 'LÖSCHEN') return a && hinweis('Nicht bestätigt – nichts geändert', 'info');
         ev.target.disabled = true; stand.hidden = false; stand.textContent = 'Startet …';
         const t = setInterval(async () => { const s = await M.installStand(); if (s.zeilen.length) stand.textContent = s.zeilen.join('\n'); }, 2000);
-        const e = await mitAdmin((pw) => M.installieren({ geraet: k.geraet, name: k.name, passwort: k.passwort, verschluesselung: k.luks ? k.verschluesselung : '' }, pw), 'Die Installation braucht das Administrator-Passwort des Live-Systems (zentrale).');
+        const e = await mitAdmin((pw) => M.installieren({ geraet: k.geraet, name: k.name, passwort: k.passwort, verschluesselung: k.luks ? k.verschluesselung : '', code: k.code }, pw), 'Die Installation braucht das Administrator-Passwort des Live-Systems (zentrale).');
         clearInterval(t); const s = await M.installStand(); if (s.zeilen.length) stand.textContent = s.zeilen.join('\n'); ev.target.disabled = false;
-        if (e.ok) await melden('Installation fertig', 'ZentraleOS ist installiert. Fahre den Rechner herunter, zieh den Stick ab und schalte wieder ein. Anmelden mit dem neuen Benutzer; der Code für die Oberfläche wird beim ersten Start gesetzt.'); else e.abgebrochen || hinweis('Installation fehlgeschlagen: ' + (e.fehler || 'siehe Protokoll'), 'fehler');
+        if (e.ok) await melden('Installation fertig', 'ZentraleOS ist installiert. Fahre den Rechner herunter, zieh den Stick ab und schalte wieder ein. Am Sperrbildschirm gilt dein neuer Code. Das System startet im Demo-Modus (Testdaten); ausschalten unter Einstellungen → Zentrale.'); else e.abgebrochen || hinweis('Installation fehlgeschlagen: ' + (e.fehler || 'siehe Protokoll'), 'fehler');
       } })), stand)));
   },
 });
@@ -463,7 +464,7 @@ Schreibtisch.ausschaltenMenue = function (knopf) {
 
 { // Grössen anwenden
   const alt = Schreibtisch.aussehenAnwenden;
-  Schreibtisch.aussehenAnwenden = function () { alt.call(this); const a = Einst.daten.aussehen || {}; const w = document.documentElement.style; w.setProperty('--symbol-gr', String(a.symbolGroesse ?? 1.15)); w.setProperty('--widget-gr', String(a.widgetGroesse ?? 1)); };
+  Schreibtisch.aussehenAnwenden = function () { alt.call(this); const a = Einst.daten.aussehen || {}; const w = document.documentElement.style; w.setProperty('--symbol-gr', String(a.symbolGroesse ?? 1.15)); w.setProperty('--widget-gr', String(a.widgetGroesse ?? 1)); document.body.classList.toggle('eigener-code', !!(Einst.daten.anmeldung || {}).eigenerCode); };
 }
 
 window.addEventListener('DOMContentLoaded', () => {

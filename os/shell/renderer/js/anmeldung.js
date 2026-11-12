@@ -145,9 +145,10 @@ const Sperre = {
       const r = await Z.lokal.url(e.hintergrund);
       if (r.ok) { hg.style.backgroundImage = `url("${r.url}")`; return; }
     }
-    hg.style.background = 'radial-gradient(1200px 820px at 20% 15%, #1e3a8a 0%, transparent 60%),'
-      + 'radial-gradient(1000px 700px at 82% 80%, #4c1d95 0%, transparent 62%),'
-      + 'linear-gradient(165deg, #050a14 0%, #0b1220 50%, #0a0f1c 100%)';
+    // Verlauf aus der Akzentfarbe, passend zum Schreibtisch
+    hg.style.background = 'radial-gradient(1200px 820px at 20% 15%, color-mix(in srgb, var(--akzent) 48%, #05100b) 0%, transparent 60%),'
+      + 'radial-gradient(1000px 700px at 82% 80%, color-mix(in srgb, var(--akzent) 24%, #04090a) 0%, transparent 62%),'
+      + 'linear-gradient(165deg, #040907 0%, #08130e 50%, #060d0a 100%)';
   },
 
   // Wichtig: sofort scharfstellen, nicht erst nach der Animation – sonst gehen
