@@ -117,6 +117,12 @@ async function verbinden() {
   r = await js(`Apps.netzplan.oeffnen(); await warte(${4000 * LANGSAM}); const a = document.querySelectorAll('.np-knoten').length; const t = document.querySelector('.np').innerText; return { knoten: a, router: /Router/.test(t), dns: /DNS/.test(t), schalter: document.querySelectorAll('.np .schalter, .np select').length }`);
   pruefe('Netzplan zeigt Weg, DNS und Schalter', r.knoten >= 6 && r.router && r.dns && r.schalter >= 2, JSON.stringify(r)); await foto('26-netzplan');
 
+  r = await js(`FM.schliessenAlle(); await warte(300); const k = document.querySelector('[data-symbol=finder]'); const b = k.getBoundingClientRect(); for (const t of ['mousedown', 'mouseup']) k.dispatchEvent(new MouseEvent(t, { bubbles: true, button: 0, clientX: b.left + 20, clientY: b.top + 20 })); await warte(${1200 * LANGSAM}); const f = FM.finden('finder'); if (!f) return { offen: false }; f.zoomen(); const voll = f.gezoomt; const l = f.leiste.getBoundingClientRect();
+    f.leiste.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: l.left + 300, clientY: l.top + 10 })); document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: l.left + 340, clientY: l.top + 90 })); const geloest = !f.gezoomt; document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: window.innerWidth - 3, clientY: 400 })); document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: window.innerWidth - 3, clientY: 400 })); await warte(300);
+    const rechts = f.eingerastet === 'rechts' && Math.abs(f.breite - window.innerWidth / 2) < 30; Einrasten.setzen(f, 'd2'); const drittel = Math.abs(f.breite - window.innerWidth / 3) < 30; return { offen: true, voll, geloest, rechts, drittel }`);
+  pruefe('Ein Klick auf ein Schreibtisch-Symbol öffnet das Programm', r.offen === true);
+  pruefe('Fenster: aus dem Vollbild ziehen, am Rand einrasten (Hälfte), Drittel', r.voll && r.geloest && r.rechts && r.drittel, JSON.stringify(r));
+
   // --- Fremdes Programm als echtes Fenster ---
   r = await js(`FM.schliessenAlle(); const s = await Z.sys.programmStarten('foot'); await warte(${5000 * LANGSAM}); const w = await Z.sys.fremdeFenster(); await warte(3000); return { s: s.ok, fenster: w.liste, dock: document.querySelectorAll('#dock .fremd').length }`);
   pruefe('Fremdes Programm (foot) startet als eigenes Fenster und erscheint im Dock', r.s && r.fenster.some((f) => f.app === 'foot') && r.dock >= 1, JSON.stringify(r));

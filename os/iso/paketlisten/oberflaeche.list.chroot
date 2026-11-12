@@ -9,6 +9,7 @@ slurp
 wl-clipboard
 swayidle
 brightnessctl
+ddcutil
 libgl1-mesa-dri
 libegl1
 libegl-mesa0

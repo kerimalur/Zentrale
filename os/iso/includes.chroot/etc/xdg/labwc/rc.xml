@@ -18,6 +18,7 @@
   </windowRules>
   <keyboard>
     <default/>
+    <keybind key="Super_L" onRelease="yes"><action name="Execute" command="zos start"/></keybind>
     <keybind key="W-l"><action name="Execute" command="zos sperren"/></keybind>
     <keybind key="W-space"><action name="Execute" command="zos spotlight"/></keybind>
     <keybind key="W-Return"><action name="Execute" command="foot"/></keybind>

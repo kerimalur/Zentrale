@@ -169,9 +169,19 @@ const tonAusgabe = (id) => lauf('wpctl', ['set-default', String(Number(id))]);
 async function helligkeit() {
   const r = await lauf('brightnessctl', ['-m'], { timeout: 4000 });
   const t = r.aus.trim().split(',');
-  return r.ok && t[3] ? { ok: true, vorhanden: true, prozent: parseInt(t[3], 10) } : { ok: true, vorhanden: false, prozent: 100 };
+  const ddc = fs.existsSync('/usr/bin/ddcutil');   // externer Bildschirm: Helligkeit über das Monitorkabel (DDC/CI)
+  return r.ok && t[3] ? { ok: true, vorhanden: true, prozent: parseInt(t[3], 10), ddc } : { ok: true, vorhanden: ddc, prozent: 100, ddc };
 }
-const helligkeitSetzen = (p) => lauf('brightnessctl', ['set', Math.max(3, Math.min(100, Number(p) || 50)) + '%']);
+let ddcLaeuft = false; let ddcWartet = null;
+function ddcSetzen(p) {   // ddcutil ist langsam: immer nur ein Aufruf, der letzte Wert gewinnt
+  if (ddcLaeuft) { ddcWartet = p; return; } ddcLaeuft = true;
+  lauf('ddcutil', ['setvcp', '10', String(p), '--noverify'], { timeout: 8000 }).then(() => { ddcLaeuft = false; if (ddcWartet !== null) { const n = ddcWartet; ddcWartet = null; ddcSetzen(n); } });
+}
+async function helligkeitSetzen(p) {
+  const wert = Math.max(3, Math.min(100, Number(p) || 50));
+  if (fs.existsSync('/usr/bin/ddcutil')) ddcSetzen(wert);
+  return lauf('brightnessctl', ['set', wert + '%']);
+}
 
 async function anzeige() {
   const r = await lauf('wlr-randr', ['--json'], { timeout: 5000 });

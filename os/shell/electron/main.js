@@ -360,7 +360,7 @@ function ipcEinrichten() {
 function befehlAusfuehren(b) {
   if (b === 'sperren') return sperren({ bildschirmAus: false });
   if (b === 'bildschirmfoto') return system.bildschirmfoto(false).then((r) => fenster && fenster.webContents.send('hinweis', r.ok ? { art: 'ok', text: 'Bildschirmfoto gespeichert: ' + r.pfad } : { art: 'fehler', text: r.fehler }));
-  if (['spotlight', 'schreibtisch', 'launchpad', 'kontrollzentrum'].includes(b)) {
+  if (['spotlight', 'schreibtisch', 'launchpad', 'kontrollzentrum', 'start'].includes(b)) {
     if (b !== 'schreibtisch') system.fensterFokus('zentraleos-shell').catch(() => {});
     else system.alleMinimieren().catch(() => {});
     if (fenster && !gesperrt) { fenster.focus(); fenster.webContents.send('befehl', b); }

@@ -174,3 +174,10 @@ body.hell .startmenue, body.hell .kontrollzentrum, body.hell .menue { background
 .np-geraet { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; column-gap: 9px; padding: 5px 0; font-size: 12.5px; }
 .np-geraet i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-sehr-leise); } .np-geraet i.an { background: var(--gruen); }
 .np-geraet b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .np-geraet span { grid-column: 2; font-size: 11px; color: var(--text-sehr-leise); } .np-geraet small { grid-row: 1; grid-column: 3; font-size: 11px; color: var(--text-leise); }
+
+/* Einrasten */
+.einrast-vorschau { position: absolute; z-index: 15; border-radius: 12px; background: color-mix(in srgb, var(--akzent) 22%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--akzent) 70%, transparent); backdrop-filter: blur(6px); pointer-events: none; transition: all calc(0.16s * var(--tempo)) var(--weich); animation: m-auf 0.14s var(--weich); }
+.einrast-auswahl { position: fixed; z-index: 9200; display: grid; grid-template-columns: repeat(4, 66px); gap: 8px; padding: 10px; border-radius: 14px; background: var(--glas-hell); box-shadow: var(--schatten); animation: m-auf 0.14s var(--weich); }
+.el-gruppe { position: relative; height: 44px; } .el-feld { position: absolute; border-radius: 5px; background: var(--flaeche-hover); box-shadow: inset 0 0 0 1px var(--haar); transition: background 0.1s; } .el-feld:hover { background: var(--akzent); }
+.fenster.voll { border-radius: 0; }
+.ein-reihe .text { min-width: 190px; }

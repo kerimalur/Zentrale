@@ -303,7 +303,7 @@ const Kontrollzentrum = {
     const exit = (ts.geraete || []).filter((g) => g.exitMoeglich);
     leeren(kz).append(...[
       el('div', { klasse: 'kz-gitter' },
-        kachel('WLAN', !w.ok ? 'nicht verfügbar' : !w.wlanGeraet ? (kabel ? 'Kabel verbunden' : 'kein WLAN-Gerät') : aktiv ? aktiv.ssid : w.an ? 'nicht verbunden' : 'aus', w.ok && w.an && w.wlanGeraet, 'wlan', async () => { if (w.wlanGeraet) await Z.sys.wlanSchalten(!w.an); this.neu(knopf); }, () => { this.schliessen(); Apps.einstellungen.oeffnen('wlan'); }),
+        kachel(aktiv || !kabel ? 'WLAN' : 'Netzwerk', !w.ok ? 'nicht verfügbar' : aktiv ? aktiv.ssid : kabel ? 'Kabel verbunden' : !w.wlanGeraet ? 'kein WLAN-Gerät' : w.an ? 'nicht verbunden' : 'aus', w.ok && (!!aktiv || !!kabel), 'wlan', async () => { if (w.wlanGeraet) await Z.sys.wlanSchalten(!w.an); this.neu(knopf); }, () => { this.schliessen(); Apps.einstellungen.oeffnen('wlan'); }),
         kachel('Bluetooth', !b.ok || !b.vorhanden ? 'kein Gerät' : b.an ? 'an' : 'aus', b.ok && b.an, 'bluetooth', async () => { if (b.vorhanden) await Z.sys.bluetoothSchalten(!b.an); this.neu(knopf); }),
         kachel('Tailscale', !ts.ok ? 'nicht installiert' : ts.angemeldet ? (exit.find((g) => g.exitAktiv)?.name ? 'über ' + exit.find((g) => g.exitAktiv).name : 'verbunden') : 'nicht angemeldet', ts.ok && ts.angemeldet, 'tailscale', () => { this.schliessen(); Apps.einstellungen.oeffnen('tailscale'); }),
         kachel('Dunkelmodus', Einst.daten.aussehen.hell ? 'aus' : 'an', !Einst.daten.aussehen.hell, 'mond', async () => { await Einst.setzenAsync({ aussehen: { hell: !Einst.daten.aussehen.hell } }); Schreibtisch.aussehenAnwenden(); this.neu(knopf); }),

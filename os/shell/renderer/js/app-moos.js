@@ -366,3 +366,95 @@ const Netzplan = {
 };
 Apps.netzplan = { name: 'Netzplan', symbol: 'netzplan', fensterId: 'netzplan', farbe: 'linear-gradient(160deg,#14b8a6,#0f766e)', oeffnen: () => { Zustand.abonnieren(() => {}); Netzplan.oeffnen(); } };
 Spotlight.BEFEHLE = ((alt) => () => [...alt(), { name: 'Netzplan', unter: 'Netz', tun: () => Apps.netzplan.oeffnen() }])(Spotlight.BEFEHLE);
+
+// ---------------------------------------------------------------- Fenster: aus dem Vollbild ziehen, einrasten, Layout-Auswahl
+const Einrasten = {
+  nutz() { const fl = FM.flaeche(); const dh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--dock-h')) || 0; const oben = document.body.classList.contains('tl-oben');
+    return { left: fl.left, top: fl.top + (oben ? dh : 0), width: fl.width, height: fl.height - dh }; },
+  ZONEN: { voll: [0, 0, 1, 1], links: [0, 0, 0.5, 1], rechts: [0.5, 0, 0.5, 1], ol: [0, 0, 0.5, 0.5], or: [0.5, 0, 0.5, 0.5], ul: [0, 0.5, 0.5, 0.5], ur: [0.5, 0.5, 0.5, 0.5],
+    d1: [0, 0, 1 / 3, 1], d2: [1 / 3, 0, 1 / 3, 1], d3: [2 / 3, 0, 1 / 3, 1], z1: [0, 0, 2 / 3, 1], z2: [2 / 3, 0, 1 / 3, 1] },
+  rechteck(zone) { const n = this.nutz(); const [x, y, b, h] = this.ZONEN[zone]; const voll = zone === 'voll'; const g = voll ? 0 : 5;
+    return { x: Math.round(n.left + x * n.width + g), y: Math.round(n.top + y * n.height + g), breite: Math.round(b * n.width - 2 * g), hoehe: Math.round(h * n.height - (voll ? 0 : 2 * g)) }; },
+  setzen(f, zone) {
+    if (!f.gezoomt && !f.eingerastet) f.vorZoom = { x: f.x, y: f.y, breite: f.breite, hoehe: f.hoehe };
+    Object.assign(f, this.rechteck(zone)); f.eingerastet = zone; f.gezoomt = zone === 'voll'; f.wurzel.classList.toggle('voll', zone === 'voll'); f.geometrieAnwenden();
+  },
+  loesen(f) { if (f.vorZoom) Object.assign(f, f.vorZoom); f.eingerastet = null; f.gezoomt = false; f.wurzel.classList.remove('voll'); f.geometrieAnwenden(); },
+  zoneBei(x, y) { const n = this.nutz(); const r = 14; const li = x < n.left + r; const re = x > n.left + n.width - r; const ob = y < n.top + r; const eckeO = y < n.top + n.height * 0.22; const eckeU = y > n.top + n.height * 0.78;
+    if (li) return eckeO ? 'ol' : eckeU ? 'ul' : 'links'; if (re) return eckeO ? 'or' : eckeU ? 'ur' : 'rechts'; if (ob) return 'voll'; return null; },
+  vorschau(zone) { let v = $('#einrast-vorschau'); if (!zone) { if (v) v.remove(); return; } if (!v) { v = el('div', { id: 'einrast-vorschau', klasse: 'einrast-vorschau' }); $('#fensterflaeche').append(v); }
+    const r = this.rechteck(zone); const fl = FM.flaeche(); Object.assign(v.style, { left: r.x - fl.left + 'px', top: r.y - fl.top + 'px', width: r.breite + 'px', height: r.hoehe + 'px' }); },
+  // Kleine Auswahl beim Zeigen auf den Maximieren-Knopf: Hälften, Drittel, zwei Drittel, Viertel
+  auswahl(f, knopf) {
+    this.auswahlZu(); const b = knopf.getBoundingClientRect();
+    const gruppe = (zonen) => el('div', { klasse: 'el-gruppe' }, zonen.map((z) => { const [x, y, w, h] = this.ZONEN[z]; return el('button', { klasse: 'el-feld', 'aria-label': 'Einrasten', stil: { left: x * 100 + '%', top: y * 100 + '%', width: `calc(${w * 100}% - 3px)`, height: `calc(${h * 100}% - 3px)` }, onclick: () => { this.auswahlZu(); f.fokus(); this.setzen(f, z); } }); }));
+    const m = el('div', { id: 'einrast-auswahl', klasse: 'einrast-auswahl' }, gruppe(['links', 'rechts']), gruppe(['d1', 'd2', 'd3']), gruppe(['z1', 'z2']), gruppe(['ol', 'or', 'ul', 'ur']));
+    $('#ebenen').append(m); m.style.left = Math.max(8, Math.min(window.innerWidth - 310, b.left + b.width / 2 - 150)) + 'px'; m.style.top = b.bottom + 6 + 'px';
+    m.addEventListener('mouseleave', () => this.auswahlZu());
+  },
+  auswahlZu() { const m = $('#einrast-auswahl'); if (m) m.remove(); clearTimeout(this.t); },
+};
+Fenster.prototype.zoomen = function () { if (this.gezoomt || this.eingerastet) Einrasten.loesen(this); else Einrasten.setzen(this, 'voll'); };
+Fenster.prototype.ziehenStart = function (e) {
+  if (e.button !== 0 || e.target.closest('button') || e.target.closest('input')) return;
+  e.preventDefault(); this.fokus(); Einrasten.auswahlZu();
+  const n = Einrasten.nutz(); const anfang = { x: e.clientX, y: e.clientY }; let startX = e.clientX - this.x; let startY = e.clientY - this.y; let zieht = false; let zone = null;
+  const bewegen = (ev) => {
+    if (!zieht) {
+      if (Math.abs(ev.clientX - anfang.x) + Math.abs(ev.clientY - anfang.y) < 6) return;
+      zieht = true; FM.ueberlagernAn();
+      if (this.gezoomt || this.eingerastet) {            // aus Vollbild oder Hälfte herausziehen: alte Grösse, der Zeiger bleibt an derselben Stelle der Titelleiste
+        const anteil = (anfang.x - this.x) / this.breite; Einrasten.loesen(this);
+        this.x = Math.round(ev.clientX - this.breite * anteil); this.y = Math.max(n.top, ev.clientY - 18); startX = ev.clientX - this.x; startY = ev.clientY - this.y;
+      }
+    }
+    this.x = Math.max(n.left - this.breite + 110, Math.min(ev.clientX - startX, n.left + n.width - 110));
+    this.y = Math.max(n.top, Math.min(ev.clientY - startY, n.top + n.height - 46));
+    this.geometrieAnwenden();
+    const neu = Einrasten.zoneBei(ev.clientX, ev.clientY); if (neu !== zone) { zone = neu; Einrasten.vorschau(zone); }
+  };
+  const fertig = () => {
+    document.removeEventListener('mousemove', bewegen); document.removeEventListener('mouseup', fertig);
+    if (!zieht) return; FM.ueberlagernAus(); Einrasten.vorschau(null);
+    if (zone) { this.x = Math.max(n.left, Math.min(this.x, n.left + n.width - this.breite)); Einrasten.setzen(this, zone); }
+  };
+  document.addEventListener('mousemove', bewegen); document.addEventListener('mouseup', fertig);
+};
+document.addEventListener('mouseover', (e) => {
+  const knopf = e.target.closest && e.target.closest('.f-ampel .max'); if (!knopf) return;
+  const f = FM.liste.find((x) => x.wurzel.contains(knopf)); if (!f) return;
+  clearTimeout(Einrasten.t); Einrasten.t = setTimeout(() => { if (knopf.matches(':hover')) Einrasten.auswahl(f, knopf); }, 450);
+});
+document.addEventListener('mouseout', (e) => { if (e.target.closest && e.target.closest('.f-ampel .max') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('#einrast-auswahl'))) setTimeout(() => { const m = $('#einrast-auswahl'); if (m && !m.matches(':hover')) Einrasten.auswahlZu(); }, 250); });
+// Ändert sich der Bildschirm oder die Taskleiste, eingerastete Fenster neu einpassen.
+window.addEventListener('resize', entprellen(() => { for (const f of FM.liste) if (f.eingerastet) Object.assign(f, Einrasten.rechteck(f.eingerastet)), f.geometrieAnwenden(); }, 120));
+
+// ---------------------------------------------------------------- Ein Klick öffnet: Symbole und Widgets auf dem Schreibtisch
+{ const altZiehbar = Schreibtischflaeche.ziehbar;
+  Schreibtischflaeche.ziehbar = function (knoten, fertig) {
+    let unten = null;
+    knoten.addEventListener('mousedown', (ev) => { unten = ev.button === 0 && !ev.target.closest('button:not(.fl-symbol), textarea, input, a, .w-griff') ? { x: ev.clientX, y: ev.clientY } : null; });
+    knoten.addEventListener('mouseup', (ev) => { if (unten && Math.abs(ev.clientX - unten.x) + Math.abs(ev.clientY - unten.y) < 4) knoten.dispatchEvent(new CustomEvent('zos-klick')); unten = null; });
+    altZiehbar.call(this, knoten, fertig);
+  };
+  const alt = Schreibtischflaeche.zeichnen;
+  Schreibtischflaeche.zeichnen = function () {
+    alt.call(this);
+    for (const s of this.e.symbole || []) { const k = this.wurzel.querySelector(`[data-symbol="${CSS.escape(s.app)}"]`); const app = Apps[s.app]; if (k && app) k.addEventListener('zos-klick', () => app.oeffnen()); }
+    for (const w of this.e.widgets || []) { const k = this.wurzel.querySelector(`[data-widget="${w.id}"]`); const def = WIDGETS[w.typ]; if (k && def && def.tun) { k.addEventListener('zos-klick', () => def.tun()); k.style.cursor = 'pointer'; } }
+  };
+}
+// Widgets ohne eigenes Ziel bekommen eines: Uhr → Datum & Uhrzeit, Bild → Bild wählen.
+if (WIDGETS.uhr && !WIDGETS.uhr.tun) WIDGETS.uhr.tun = () => Apps.einstellungen.oeffnen('datum');
+
+// ---------------------------------------------------------------- Super-Taste öffnet das Startmenü; Kabelverbindung anzeigen
+window.addEventListener('DOMContentLoaded', () => Z.auf('befehl', (b) => { if (b === 'start') Startmenue.oeffnen(); }));
+{ const alt = EinstellungenApp.wlan;
+  EinstellungenApp.wlan = async function (i) {
+    await alt.call(this, i); if (this.bereich !== 'wlan') return;
+    const r = await Z.sys.wlan(); const kabel = (r.geraete || []).filter((g) => g.typ === 'ethernet'); if (!kabel.length || this.bereich !== 'wlan') return;
+    const block = this.block('Kabel (LAN)', el('div', { klasse: 'ein-karte' }, kabel.map((g) => this.reihe(g.name, g.zustand === 'connected' ? 'Verbunden' + (g.verbindung ? ' · ' + g.verbindung : '') : 'Nicht verbunden (' + g.zustand + ')', this.wert(g.zustand === 'connected' ? '✓ verbunden' : '–')))));
+    const kopf = i.querySelector('.unter') || i.firstElementChild; kopf.after(block);
+  };
+  const b = EinstellungenApp.BEREICHE.find((x) => x.id === 'wlan'); if (b) b.name = 'WLAN & Kabel';
+}
