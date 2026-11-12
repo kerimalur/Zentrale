@@ -374,7 +374,7 @@ function systemIpc() {
   const nurOffen = (fn) => (...a) => (gesperrt ? { ok: false, fehler: 'Gesperrt' } : fn(...a));
   const klein = (r) => ({ ok: r.ok, fehler: r.fehler, aus: String(r.aus || '').slice(-6000), passwortNoetig: r.passwortNoetig, falsch: r.falsch });
 
-  h('info', system.info); h('prozesse', system.prozesse); h('beenden', nurOffen(system.beenden));
+  h('info', system.info); h('geraete', system.geraete); h('dienste', system.dienste); h('prozesse', system.prozesse); h('beenden', nurOffen(system.beenden));
   h('wlan', system.wlan); h('wlanSchalten', async (an) => klein(await system.wlanSchalten(an)));
   h('wlanVerbinden', nurOffen(async (ssid, pw) => klein(await system.wlanVerbinden(ssid, pw)))); h('wlanTrennen', async (g) => klein(await system.wlanTrennen(g)));
   h('bluetooth', system.bluetooth); h('bluetoothSchalten', async (an) => klein(await system.bluetoothSchalten(an)));

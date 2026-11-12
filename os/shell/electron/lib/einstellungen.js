@@ -29,16 +29,17 @@ const STANDARD = {
   aussehen: {
     hintergrund: '',                // Desktop-Hintergrundbild, leer = eingebauter Verlauf
     hintergrundArt: 'verlauf',
-    akzent: '#2457f5',
+    akzent: '#3fae6b',
     hell: false,                    // helles Thema
-    glas: 22,                       // Weichzeichner der Fenster und Leisten (px)
-    radius: 12,                     // Eckenradius der Fenster (px)
+    glas: 26,                       // Weichzeichner der Fenster und Leisten (px)
+    radius: 11,                     // Eckenradius der Fenster (px)
     tempo: 1,                       // Animationsgeschwindigkeit (0 = aus)
-    schrift: 14,                    // Schriftgrösse der Oberfläche (px)
-    verlauf: 'blau',                // eingebauter Hintergrund: blau | abend | wald | graphit
+    schrift: 13,                    // Schriftgrösse der Oberfläche (px)
+    verlauf: 'akzent',              // eingebauter Hintergrund: akzent | blau | abend | wald | graphit
     dockGroesse: 56,
     dockVergroessern: true,
-    menueleiste: true,
+    menueleiste: false,             // Menüleiste oben (zusätzlich zur Taskleiste)
+    knoepfe: 'rechts',              // Fensterknöpfe: rechts | links
   },
 
   // --- Verhalten ---
@@ -64,7 +65,10 @@ const STANDARD = {
   },
 
   // --- Dock --- (Kennungen: 'finder', 'steuerung', 'einstellungen' oder 'zentrale:<Tab>')
-  dock: ['launchpad', 'finder', 'zentrale:Übersicht', 'steuerung', 'zentrale:Trading', 'web', 'terminal', 'software', 'aktivitaet', 'einstellungen'],
+  dock: ['finder', 'zentrale:Übersicht', 'zentrale:Trading', 'steuerung', 'web', 'terminal', 'software', 'einstellungen'],
+
+  // --- Taskleiste ---
+  taskleiste: { position: 'unten', ausrichtung: 'mitte', schwebend: true, suche: true, hoehe: 52, uhrDatum: true },
 
   // --- Schreibtisch: Symbole und Widgets, frei anzuordnen ---
   schreibtisch: {
@@ -76,8 +80,9 @@ const STANDARD = {
       { app: 'steuerung', x: 0, y: 2 },
     ],
     widgets: [
-      { id: 'w1', typ: 'pi', x: 2, y: 0, breit: 3, hoch: 2 },
-      { id: 'w2', typ: 'haus', x: 5, y: 0, breit: 3, hoch: 2 },
+      { id: 'w0', typ: 'uhr', x: 8, y: 0, breit: 3, hoch: 1, stil: 'ohne' },
+      { id: 'w1', typ: 'pi', x: 8, y: 1, breit: 3, hoch: 2 },
+      { id: 'w2', typ: 'haus', x: 8, y: 3, breit: 3, hoch: 2 },
     ],
   },
 };

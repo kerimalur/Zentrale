@@ -76,7 +76,7 @@ contextBridge.exposeInMainWorld('zentrale', {
   },
 
   // Systemfunktionen von ZentraleOS (siehe electron/lib/system.js)
-  sys: Object.fromEntries(['info', 'prozesse', 'beenden', 'wlan', 'wlanSchalten', 'wlanVerbinden', 'wlanTrennen', 'bluetooth', 'bluetoothSchalten', 'tailscale', 'tailscaleExit',
+  sys: Object.fromEntries(['info', 'geraete', 'dienste', 'prozesse', 'beenden', 'wlan', 'wlanSchalten', 'wlanVerbinden', 'wlanTrennen', 'bluetooth', 'bluetoothSchalten', 'tailscale', 'tailscaleExit',
     'ton', 'tonSetzen', 'tonStumm', 'tonAusgabe', 'helligkeit', 'helligkeitSetzen', 'anzeige', 'anzeigeSetzen', 'energie', 'energieSetzen', 'zeit', 'zeitzonen', 'tastatur',
     'firewall', 'firewallSetzen', 'root', 'passwortAendern', 'rootVergessen', 'programme', 'programmStarten', 'webAppAnlegen', 'eigenesEntfernen', 'fremdeFenster', 'fensterFokus', 'fensterZu',
     'flatpakSuche', 'flatpakListe', 'flatpakInstallieren', 'flatpakEntfernen', 'flatpakAktualisieren', 'terminalStarten', 'terminalEingabe', 'terminalGroesse', 'terminalBeenden',

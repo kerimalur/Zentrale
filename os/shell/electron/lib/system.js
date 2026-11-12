@@ -74,6 +74,26 @@ function beenden(pid, hart) {
   catch (e) { return { ok: false, fehler: e.code === 'EPERM' ? 'Dieser Prozess gehört nicht dir (Systemprozess).' : 'Prozess nicht gefunden.' }; }
 }
 
+// ---------- Geräte-Manager, Dienste ----------
+async function geraete() {
+  const [pci, usb, blk] = await Promise.all([lauf('lspci', ['-mm']), lauf('lsusb'), lauf('lsblk', ['-J', '-o', 'NAME,MODEL,SIZE,TYPE,TRAN,MOUNTPOINT'])]);
+  const g = { Prozessor: [{ name: os.cpus()[0]?.model || 'unbekannt', info: os.cpus().length + ' Kerne' }], Arbeitsspeicher: [{ name: Math.round(os.totalmem() / 1073741824 * 10) / 10 + ' GB', info: '' }], Grafik: [], Netzwerk: [], Audio: [], 'Speicher-Controller': [], Laufwerke: [], USB: [], Eingabe: [], Sonstige: [] };
+  for (const z of pci.aus.split('\n').filter(Boolean)) {
+    const t = [...z.matchAll(/"([^"]*)"/g)].map((m) => m[1]); if (t.length < 3) continue;
+    const klasse = t[0]; const e = { name: (t[2] || 'Gerät').trim(), info: t[1] };
+    const ziel = /VGA|Display|3D/i.test(klasse) ? 'Grafik' : /Network|Ethernet/i.test(klasse) ? 'Netzwerk' : /Audio|Multimedia/i.test(klasse) ? 'Audio' : /SATA|NVM|Non-Volatile|SCSI|IDE|RAID/i.test(klasse) ? 'Speicher-Controller' : /USB/i.test(klasse) ? 'USB' : 'Sonstige';
+    g[ziel].push(ziel === 'Sonstige' ? { name: e.name, info: klasse } : e);
+  }
+  for (const z of usb.aus.split('\n').filter(Boolean)) { const m = z.match(/ID ([0-9a-f:]+) (.*)$/i); if (m && !/root hub/i.test(m[2])) g.USB.push({ name: m[2].trim() || 'USB-Gerät', info: m[1] }); }
+  try { for (const b of JSON.parse(blk.aus).blockdevices || []) if (b.type === 'disk' || b.type === 'rom') g.Laufwerke.push({ name: (b.model || b.name).trim(), info: [b.size, b.tran, '/dev/' + b.name].filter(Boolean).join(' · ') }); } catch {}
+  for (const b of lies('/proc/bus/input/devices').split('\n\n')) { const n = (b.match(/N: Name="([^"]+)"/) || [])[1]; if (n && !/Power Button|Sleep Button|Video Bus|PC Speaker|Lid Switch/i.test(n)) g.Eingabe.push({ name: n, info: '' }); }
+  return { ok: true, werkzeuge: { lspci: !pci.fehlt, lsusb: !usb.fehlt }, gruppen: Object.entries(g).filter(([, l]) => l.length).map(([name, liste]) => ({ name, liste })) };
+}
+async function dienste() {
+  const r = await lauf('systemctl', ['list-units', '--type=service', '--state=running', '--no-legend', '--plain', '--no-pager']);
+  return { ok: r.ok, fehler: r.fehler, liste: r.aus.split('\n').filter(Boolean).map((z) => { const t = z.trim().split(/\s+/); return { name: t[0].replace(/\.service$/, ''), text: t.slice(4).join(' ') }; }) };
+}
+
 // ---------- Netzwerk ----------
 const nmTeile = (z) => z.split(/(?<!\\):/).map((t) => t.replace(/\\:/g, ':'));
 async function wlan() {
@@ -314,7 +334,7 @@ async function bildschirmfoto(bereich) {
 }
 
 module.exports = {
-  lauf, alsRoot, rootVergessen, info, prozesse, beenden,
+  lauf, alsRoot, rootVergessen, info, prozesse, beenden, geraete, dienste,
   wlan, wlanSchalten, wlanVerbinden, wlanTrennen, bluetooth, bluetoothSchalten, tailscale, tailscaleExit,
   ton, tonSetzen, tonStumm, tonAusgabe, helligkeit, helligkeitSetzen, anzeige, anzeigeSetzen, bildschirmStrom, energie, energieSetzen,
   zeit, zeitzonen, tastatur, firewallLesen, firewallSetzen, firewallText,
