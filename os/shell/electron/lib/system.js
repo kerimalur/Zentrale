@@ -97,7 +97,7 @@ const wlanVerbinden = (ssid, passwort) => lauf('nmcli', ['device', 'wifi', 'conn
 const wlanTrennen = (geraet) => lauf('nmcli', ['device', 'disconnect', String(geraet)]);
 
 async function bluetooth() {
-  const s = await lauf('bluetoothctl', ['show'], { timeout: 6000 });
+  const s = await lauf('bluetoothctl', ['show'], { timeout: 2500 });   // ohne Bluetooth-Gerät antwortet bluetoothctl nicht von selbst
   if (s.fehlt) return { ok: false, fehler: s.fehler };
   if (!s.ok || /No default controller/i.test(s.aus + s.fehler)) return { ok: true, vorhanden: false, an: false, geraete: [] };
   const d = await lauf('bluetoothctl', ['devices'], { timeout: 6000 });

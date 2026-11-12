@@ -16,7 +16,8 @@ case "${1:-}" in
     nft -f "$NFT" || { cp -a "$NFT.vorher" "$NFT"; nft -f "$NFT"; exit 3; }
     systemctl stop zos-fw-ruecknahme.timer zos-fw-ruecknahme.service 2>/dev/null
     systemctl reset-failed zos-fw-ruecknahme.service 2>/dev/null
-    systemd-run --quiet --unit=zos-fw-ruecknahme --on-active="${2:-60}" /usr/libexec/zentraleos/helfer firewall-zuruecknehmen
+    # AccuracySec=1s: sonst darf systemd den Zeitpunkt um bis zu eine Minute verschieben
+    systemd-run --quiet --unit=zos-fw-ruecknahme --timer-property=AccuracySec=1s --on-active="${2:-60}" /usr/libexec/zentraleos/helfer firewall-zuruecknehmen
     echo angewendet ;;
   firewall-bestaetigen)
     systemctl stop zos-fw-ruecknahme.timer 2>/dev/null; rm -f "$NFT.vorher"; echo bestaetigt ;;
