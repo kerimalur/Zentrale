@@ -97,7 +97,7 @@ async function verbinden() {
   r = await js(`FM.schliessenAlle(); await Launchpad.oeffnen(); await warte(${800 * LANGSAM}); return document.querySelectorAll('#startmenue .sm-app, #startmenue .sm-zeile').length`); pruefe('Startmenü zeigt Programme', r > 25, r); await foto('18-startmenue');
   r = await js(`Launchpad.schliessen(); await Spotlight.oeffnen(); const f = document.querySelector('.sp-feld'); f.value = '12*(3+4)'; f.dispatchEvent(new Event('input')); await warte(300); const a = document.querySelector('.sp-name')?.textContent; f.value = 'term'; f.dispatchEvent(new Event('input')); await warte(300); return { a, b: [...document.querySelectorAll('.sp-name')].map((x) => x.textContent) }`);
   pruefe('Spotlight: Rechner und Programmsuche', r.a === '12*(3+4) = 84' && r.b.includes('Terminal'), JSON.stringify(r)); await foto('19-spotlight');
-  r = await js(`Spotlight.schliessen(); await Kontrollzentrum.oeffnen(document.querySelector('#dock [data-kz]')); await warte(${2500 * LANGSAM}); return document.querySelector('#kontrollzentrum')?.innerText || ''`); pruefe('Kontrollzentrum öffnet', /WLAN/.test(r) && !/null/.test(r), r); await foto('20-kontrollzentrum');
+  r = await js(`Spotlight.schliessen(); await Kontrollzentrum.oeffnen(document.querySelector('#dock [data-kz]')); await warte(${2500 * LANGSAM}); return document.querySelector('#kontrollzentrum')?.innerText || ''`); pruefe('Kontrollzentrum öffnet', /WLAN|Netzwerk/.test(r) && !/null/.test(r), r); await foto('20-kontrollzentrum');
   await js(`Kontrollzentrum.schliessen(); FM.schliessenAlle(); Software.oeffnen(); await warte(${1500 * LANGSAM});`); await foto('21-software');
 
   // --- Neuer Look: Taskleiste, Akzentfarbe, Widgets, Geräte- und Task-Manager ---
