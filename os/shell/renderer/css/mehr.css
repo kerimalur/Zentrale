@@ -1,5 +1,5 @@
 /* Weitere Programme: Wechsler, Schreibtische, Zwischenablage, Fotos, Datenträger, Sicherheit, Fokus */
-.fl-symbol > * { zoom: var(--symbol-gr, 1); }
+.fl-symbol { zoom: var(--symbol-gr, 1); }
 .fl-widget > * { zoom: var(--widget-gr, 1); }
 .fenster.anderer-desk { display: none !important; }
 .mehr-seite { height: 100%; overflow: auto; padding: 18px 22px 26px; }
@@ -78,3 +78,11 @@ button.dt-zeile:hover { background: var(--flaeche-hover); }
 .fokus-gross .unter { max-width: 380px; }
 
 body.demo.eigener-code .sperre::after { content: 'Demo-Modus: Testdaten statt Pi · es gilt dein eigener Code'; }
+
+/* Taskleiste: die Seiten behalten immer ihren Platz, die Mitte gibt nach */
+.dock.tl { grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr) !important; }
+body.tl-links .dock.tl { grid-template-columns: max-content minmax(0, 1fr) max-content !important; }
+.tl-mitte { overflow: hidden; }
+.tl-rechts > *, .tl-links > * { flex: none; }
+.tl-fokus, .tl-uhr, .tl-desks { white-space: nowrap; }
+@media (max-width: 1100px) { .dock.tl .dock-eintrag { width: 36px; } .tl-desks i { display: none; } .tl-desks b { margin-left: 0; } }

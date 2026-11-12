@@ -365,8 +365,10 @@ const Schreibtischflaeche = {
       knoten.classList.add('zieht');
       FM.ueberlagernAn();
       const bewegen = (e2) => {
-        const dx = e2.clientX - start.x;
-        const dy = e2.clientY - start.y;
+        // Vergrösserte Symbole (Einstellungen → Grösse): Mausweg auf die eigene Skala umrechnen
+        const g = knoten.classList.contains('fl-symbol') ? (parseFloat(getComputedStyle(knoten).zoom) || 1) : 1;
+        const dx = (e2.clientX - start.x) / g;
+        const dy = (e2.clientY - start.y) / g;
         if (!bewegt && Math.abs(dx) + Math.abs(dy) < 4) return;
         bewegt = true;
         knoten.style.left = Math.max(0, start.l + dx) + 'px';

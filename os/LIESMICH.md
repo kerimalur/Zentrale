@@ -38,10 +38,16 @@ im Tailscale-Netz sein (Einstellungen → Tailscale → «Link erzeugen»). **Ge
 
 ## Installieren auf die SSD
 
-**Nicht getestet – auf dem HP nicht ausführen, solange dort Windows mit dem Trading-Bot läuft.**
-Das Installationsprogramm (Calamares aus Debian) ist im ISO und über Einstellungen → Über → «Installieren»
-erreichbar. Ob eine Installation durchläuft, startet und sich anmelden lässt, habe ich nicht geprüft.
-Calamares bietet Laufwerkswahl und LUKS an; beides ungeprüft.
+**In der virtuellen Maschine getestet (installieren, von der Platte starten, anmelden). Auf dem HP noch nicht.**
+
+Einstellungen → Installation. Platte wählen, Benutzername, Passwort und Code für die Sperre eingeben, `LÖSCHEN` tippen.
+Gefragt wird nach dem Administrator-Passwort des Live-Systems: `zentrale`.
+
+- **Die gewählte Platte wird vollständig gelöscht**, auch Windows. Eine Installation neben Windows gibt es nicht.
+- Der Stick, von dem das System läuft, wird nicht als Ziel angeboten.
+- Nur UEFI. Dauer in der VM: rund zwei Minuten.
+- Verschlüsselung ist wählbar, aber **ungetestet**, und sie verlangt das Passwort bei jedem Start am Gerät.
+- Danach herunterfahren, Stick abziehen, einschalten. Das System startet im Demo-Modus; es gilt dein eigener Code.
 
 ## Wartung und Zurücksetzen
 
@@ -53,6 +59,7 @@ Calamares bietet Laufwerkswahl und LUKS an; beides ungeprüft.
 - **Firewall zurücksetzen:** `sudo cp /usr/share/doc/nftables/examples/workstation.nft /etc/nftables.conf` oder
   in den Einstellungen Firewall aus/an.
 - **System zurücksetzen:** neu installieren. Ein Rollback gibt es nicht.
+- **Oberfläche stürzt immer wieder ab:** nach sechs Abstürzen erscheint die Notfall-Sitzung (Passwort, dann Menü).
 
 ## Tastenkürzel
 

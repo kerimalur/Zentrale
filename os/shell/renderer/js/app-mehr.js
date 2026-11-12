@@ -54,14 +54,18 @@ const Arbeit = {
   },
   gehe0(n) { return this.gehe(Math.max(0, Math.min(this.anzahl - 1, n))); },
 };
+// Kein Fenster grösser als der Bildschirm oder ausserhalb davon (auch nach einer anderen Grösse der Oberfläche).
+function fensterEinpassen(f) {
+  if (f.gezoomt || f.eingerastet) return; const fl = FM.flaeche(); let g = false;
+  if (f.breite > fl.width - 12) { f.breite = Math.max(320, fl.width - 12); g = true; } if (f.hoehe > fl.height - 20) { f.hoehe = Math.max(240, fl.height - 20); g = true; }
+  if (f.x + f.breite > fl.left + fl.width) { f.x = Math.max(fl.left + 4, fl.left + fl.width - f.breite - 6); g = true; } if (f.y + f.hoehe > fl.top + fl.height) { f.y = Math.max(fl.top + 2, fl.top + fl.height - f.hoehe - 10); g = true; }
+  if (f.x < fl.left) { f.x = fl.left + 4; g = true; } if (f.y < fl.top) { f.y = fl.top + 2; g = true; }
+  if (g) f.geometrieAnwenden();
+}
+window.addEventListener('resize', entprellen(() => FM.liste.forEach(fensterEinpassen), 200));
 { const alt = FM.oeffnen; FM.oeffnen = function (opt) { const neuFenster = !this.finden(opt.id); const f = alt.call(this, opt); if (f) {
-    if (neuFenster) { // nie grösser als der Bildschirm, nie ausserhalb
-      const fl = FM.flaeche(); let g = false;
-      if (f.breite > fl.width - 12) { f.breite = Math.max(320, fl.width - 12); g = true; } if (f.hoehe > fl.height - 20) { f.hoehe = Math.max(240, fl.height - 20); g = true; }
-      if (f.x + f.breite > fl.left + fl.width) { f.x = Math.max(fl.left + 4, fl.left + fl.width - f.breite - 6); g = true; } if (f.y + f.hoehe > fl.top + fl.height) { f.y = Math.max(fl.top + 2, fl.top + fl.height - f.hoehe - 10); g = true; }
-      if (f.x < fl.left) { f.x = fl.left + 4; g = true; } if (f.y < fl.top) { f.y = fl.top + 2; g = true; }
-      if (g && !f.gezoomt) f.geometrieAnwenden();
-    } if (f.desk !== Arbeit.aktuell) { f.desk = Arbeit.aktuell; f.wurzel.classList.remove('anderer-desk'); } } return f; };
+    if (neuFenster) fensterEinpassen(f);
+    if (f.desk !== Arbeit.aktuell) { f.desk = Arbeit.aktuell; f.wurzel.classList.remove('anderer-desk'); } } return f; };
   const altBauen = Dock.bauen; Dock.bauen = function () { altBauen.call(this); Arbeit.zeichnen(); Fokus.zeichnen(); }; }
 
 // ---------------------------------------------------------------- Fensterwechsel (Alt + Tab) und Übersicht (Super + Tab)
@@ -457,7 +461,7 @@ Schreibtisch.ausschaltenMenue = function (knopf) {
 { // Symbole und Widgets nie ausserhalb des Bildschirms (z. B. nach einer anderen Grösse der Oberfläche)
   const alt = Schreibtischflaeche.zeichnen;
   const einpassen = () => { const w = $('#flaeche'); if (!w) return; const B = w.clientWidth; const H = w.clientHeight; if (!B || !H) return;
-    for (const k of w.children) { if (k.offsetLeft + k.offsetWidth > B) k.style.left = Math.max(0, B - k.offsetWidth - 8) + 'px'; if (k.offsetTop + k.offsetHeight > H) k.style.top = Math.max(0, H - k.offsetHeight - 8) + 'px'; } };
+    for (const k of w.children) { if (k.classList.contains('fl-symbol')) continue; if (k.offsetLeft + k.offsetWidth > B) k.style.left = Math.max(0, B - k.offsetWidth - 8) + 'px'; if (k.offsetTop + k.offsetHeight > H) k.style.top = Math.max(0, H - k.offsetHeight - 8) + 'px'; } };
   Schreibtischflaeche.zeichnen = function (...a) { const r = alt.apply(this, a); requestAnimationFrame(einpassen); return r; };
   window.addEventListener('resize', entprellen(einpassen, 150));
 }

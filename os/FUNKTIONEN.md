@@ -86,3 +86,34 @@ Adresse) · Finder · Geteilte Links · Verhalten (Profil sichern) · Über (Sys
 Installation auf die Festplatte · MetaTrader 5 · Betrieb mit dem echten Pi · WLAN, Bluetooth, Helligkeit auf
 dem HP · echte Sitzungssperre · Erststart-Assistent · Papierkorb auf dem Schreibtisch · Bildschirmfoto-Werkzeug
 · Zwischenablage-Verlauf · Datenträgerverwaltung · Autostart · Rollback nach Updates.
+
+
+## Neu am 12.11. abends
+
+Stand und Teststatus jeder Zeile: `AUFGABEN.md`.
+
+- **Installation** auf die Platte (Einstellungen → Installation), wahlweise verschlüsselt.
+- **Sperre und Ruhe:** Bildschirm aus nach Leerlauf, Wecken verlangt den Code, «Schlafen gehen» beendet alles ausser den Ausnahmen, nach Neustart der Oberfläche immer gesperrt, Notfall-Sitzung.
+- **Grösse & Schrift:** ganze Oberfläche, Symbole, Widget-Inhalt, Taskleiste, Schrift – einzeln.
+- **Fenster:** Alt+Tab, Übersicht (Super+Tab), vier Schreibtische (Strg+Super+Pfeil).
+- **Neue Programme:** Fotos, Papierkorb, Bildschirmfoto, Datenträger, Sicherheit, Netzwerkwächter, Sicherheitslabor, Fernzugriff, Fokus.
+- **Zwischenablage-Verlauf** (Super+V).
+- **Einstellungen neu:** Grösse & Schrift, Ruhe & Schlafen, Bot-Wächter, Backup, Installation; Wartungsfenster unter Software-Updates.
+- **Vorinstalliert:** Brave (Standard für «Web»), nmap. **Empfohlen:** Anki, Bitwarden, Obsidian, RustDesk, Wireshark, KeePassXC.
+- **Kein Schlüsselbund-Fenster** mehr; Neustart und Ausschalten ohne Passwort.
+
+### Tastenkürzel
+
+| Taste | Wirkung |
+|-------|---------|
+| Super | Startmenü |
+| Alt+Tab / Umschalt+Alt+Tab | Fenster wechseln |
+| Super+Tab | Übersicht aller Fenster und Schreibtische |
+| Strg+Super+Pfeil links/rechts | Schreibtisch wechseln |
+| Super+V | Zwischenablage-Verlauf |
+| Druck / Umschalt+Druck | Bildschirmfoto ganz / Bereich |
+| Super+L | Sperren |
+| Super+Leertaste | Suchen |
+| Strg+Alt+T oder Super+Eingabe | Terminal |
+| Super+Q oder Alt+F4 | Fenster schliessen |
+| Super+Pfeile | Fenster links, rechts, maximieren, minimieren |
