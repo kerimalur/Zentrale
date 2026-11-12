@@ -37,6 +37,8 @@ flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.f
 if curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg; then
   echo "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/debian trixie main" > /etc/apt/sources.list.d/tailscale.list
   apt-get update -q && apt-get install -y -q tailscale && systemctl enable tailscaled.service || echo "WARNUNG: Tailscale nicht installiert"
+else
+  echo "WARNUNG: Tailscale-Paketquelle nicht erreichbar – Tailscale fehlt in diesem Abbild"
 fi
 
 # Automatische Sicherheitsupdates an (abschaltbar in den Einstellungen)

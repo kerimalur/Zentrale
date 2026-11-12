@@ -17,6 +17,7 @@ pruefe() { if eval "$2"; then echo "OK      $1" | tee -a "$ERG"; else echo "FEHL
 diag() { tr -d "\r" < "$VM/seriell.log" | grep -a "$1" | tail -1; }
 aufDiagnose() { local n; n=$(grep -ac "ZOS-DIAGNOSE" "$VM/seriell.log"); for _ in $(seq 1 $(( 16 * LANGSAM ))); do sleep 5; [ "$(grep -ac "=== ENDE" "$VM/seriell.log")" -gt "$n" ] && return 0; done; return 1; }
 
+if [ "${ZOS_NUR_TEIL2:-0}" != 1 ]; then
 echo "== VM starten ($([ $LANGSAM = 1 ] && echo KVM || echo 'ohne KVM – langsam')) =="
 START=$(date +%s)
 tests/vm.sh "$ISO" "$VM" || exit 3
@@ -35,7 +36,7 @@ pruefe "Firewall-Regeln geladen"                    '[ "$(diag "nft:" | sed "s/.
 pruefe "sudo ohne Passwort wird abgelehnt"          'diag "sudo-ohne-passwort" | grep -qi "password\|passwort"'
 
 echo "== Anmelden per PIN =="
-Q taste spc; warte 2; Q tippe 1234; warte 6; foto 02-schreibtisch
+Q taste ctrl; warte 2; Q tippe 1234; warte 6; foto 02-schreibtisch
 echo "== Terminal: Befehl ausführen =="
 Q taste ctrl-alt-t; warte 5
 Q tippe "echo terminal-geht > /tmp/zos-terminal; python3 -m http.server 8099 >/dev/null 2>&1 &
@@ -50,8 +51,10 @@ aufDiagnose
 pruefe "Terminal-Befehl wurde ausgeführt"           'diag "terminaltest:" | grep -q terminal-geht'
 pruefe "Bildschirmfotos nicht leer"                 '[ $(stat -c %s "$AUS/02-schreibtisch.png") -gt 20000 ]'
 
+fi
 echo "== Teil 2: Systemtests im laufenden System (Testmodus, Kernel direkt gestartet) =="
-kill "$(cat "$VM/qemu.pid")" 2>/dev/null; sleep 3; cp "$VM/seriell.log" "$AUS/seriell-teil1.log"; rm -f "$VM/platte.qcow2"
+kill "$(cat "$VM/qemu.pid" 2>/dev/null)" 2>/dev/null; sleep 3; cp "$VM/seriell.log" "$AUS/seriell-teil1.log" 2>/dev/null; rm -f "$VM/platte.qcow2"
+trap 'cp "$VM/seriell.log" "$AUS/seriell.log" 2>/dev/null; kill $(cat "$VM/qemu.pid" 2>/dev/null) 2>/dev/null' EXIT
 ZOS_VM_DIREKT=1 tests/vm.sh "$ISO" "$VM" || exit 3
 for _ in $(seq 1 $(( 40 * LANGSAM ))); do sleep 5; diag "prozesse:" | grep -q electron && break; done; warte 3
 LANGSAM=$([ $LANGSAM = 1 ] && echo 1 || echo 3) node tests/systemtest.cjs "$AUS" 2>&1 | tee "$AUS/systemtest-ausgabe.txt"

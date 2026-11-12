@@ -27,7 +27,7 @@ async function alsRoot(aktion, args = [], { passwort = null, eingabe = '', timeo
   const pw = passwort || (Date.now() < rootPwBis ? rootPw : null);
   if (!pw) return { ok: false, passwortNoetig: true, fehler: 'Administrator-Passwort nötig' };
   // -k: nie eine alte sudo-Freigabe wiederverwenden; -S: Passwort über die Standardeingabe.
-  const r = await lauf('sudo', ['-k', '-S', '-p', '', HELFER, aktion, ...args.map(String)], { eingabe: pw + '\n' + eingabe, timeout });
+  const r = await lauf('sudo', ['-k', '-S', '-p', '', HELFER, aktion, ...args.map(String)], { eingabe: pw + '\n' + eingabe, timeout, env: { LC_ALL: 'C' } });   // englische sudo-Meldungen, damit «falsches Passwort» sicher erkannt wird
   if (!r.ok && /incorrect password|Sorry, try again|falsches Passwort|no password was provided|a password is required/i.test(r.fehler)) {
     rootVergessen();
     return { ok: false, passwortNoetig: true, falsch: !!passwort, fehler: 'Falsches Administrator-Passwort' };

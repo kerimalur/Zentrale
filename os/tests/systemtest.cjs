@@ -29,6 +29,8 @@ async function verbinden() {
   const foto = async (name) => { await warte(900); const b = await ruf('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(AUS, name + '.png'), Buffer.from(b.data, 'base64')); };
 
   // --- Anmeldung ---
+  for (let n = 0; n < 40; n++) { const bereit = await js(`return typeof Schreibtisch !== 'undefined' && !!Schreibtisch.zustand.version && !!document.querySelector('#menueleiste').children.length`); if (bereit === true) break; await warte(1500); }
+  await warte(1500);
   let r = await js(`return { gesperrt: !document.querySelector('#sperre').hidden, demo: Schreibtisch.zustand.demo }`);
   pruefe('Nach dem Start gesperrt (Anmeldebildschirm)', r.gesperrt === true); await foto('10-sperrbildschirm');
   r = await js(`const a = await Z.anmelden('0000', null, 'pin'); const b = await Z.anmelden('1234', null, 'pin'); await warte(2500); return { falsch: a.ok, richtig: b.ok, gesperrt: !document.querySelector('#sperre').hidden }`);
@@ -84,7 +86,7 @@ async function verbinden() {
   pruefe('Erscheinungsbild wirkt live (Akzentfarbe, Eckenradius)', r.akzent === '#e11d48' && r.radius === '18px', JSON.stringify(r));
 
   // --- Bereiche der Einstellungen zeichnen ohne Fehler ---
-  r = await js(`const aus = []; Apps.einstellungen.oeffnen('wlan'); for (const b of EinstellungenApp.BEREICHE) { EinstellungenApp.bereich = b.id; EinstellungenApp.zeichnen(); await warte(${900 * LANGSAM}); const t = document.querySelector('.ein-haupt').innerText; aus.push(b.id + ':' + t.length + (/\\bnull\\b|undefined/.test(t) ? '!' : '')); } return aus`);
+  const b_warte = "['bluetooth','tailscale','wlan'].includes(b.id) ? " + 9000 * LANGSAM + " : " + 1200 * LANGSAM; r = await js(`const aus = []; Apps.einstellungen.oeffnen('wlan'); for (const b of EinstellungenApp.BEREICHE) { EinstellungenApp.bereich = b.id; EinstellungenApp.zeichnen(); await warte(${b_warte}); const t = document.querySelector('.ein-haupt').innerText; aus.push(b.id + ':' + t.length + (/\\bnull\\b|undefined/.test(t) ? '!' : '')); } return aus`);
   pruefe('Alle 21 Bereiche der Einstellungen zeichnen Inhalt', Array.isArray(r) && r.length === 21 && r.every((x) => Number(x.split(':')[1]) > 40 && !x.endsWith('!')), JSON.stringify(r));
   for (const b of ['wlan', 'anzeige', 'ueber', 'aussehen']) { await js(`EinstellungenApp.bereich = '${b}'; EinstellungenApp.zeichnen(); await warte(${1500 * LANGSAM});`); await foto('15-einstellungen-' + b); }
 

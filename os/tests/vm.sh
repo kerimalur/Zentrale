@@ -11,8 +11,9 @@ BESCHL="-accel tcg,thread=multi -cpu max"; [ -w /dev/kvm ] && BESCHL="-accel kvm
 # ZOS_VM_DIREKT=1: Kernel direkt starten (ohne Bootmenü), um Kernel-Parameter für den Testmodus zu setzen.
 DIREKT=()
 if [ "${ZOS_VM_DIREKT:-0}" = 1 ]; then
-  mkdir -p "$ORT/iso"; mountpoint -q "$ORT/iso" || mount -o loop,ro "$ISO" "$ORT/iso" 2>/dev/null || sudo mount -o loop,ro "$ISO" "$ORT/iso"
-  cp "$ORT"/iso/live/vmlinuz* "$ORT/vmlinuz"; cp "$ORT"/iso/live/initrd* "$ORT/initrd"; umount "$ORT/iso" 2>/dev/null || sudo umount "$ORT/iso"
+  # Kernel und Startabbild aus dem ISO holen (xorriso braucht keine Root-Rechte)
+  xorriso -osirrox on -indev "$ISO" -extract /live "$ORT/live" >/dev/null 2>&1
+  cp "$(ls "$ORT"/live/vmlinuz* | head -1)" "$ORT/vmlinuz"; cp "$(ls "$ORT"/live/initrd* | head -1)" "$ORT/initrd"; chmod -R u+w "$ORT/live"; rm -rf "$ORT/live"
   DIREKT=(-kernel "$ORT/vmlinuz" -initrd "$ORT/initrd" -append "boot=live components quiet locales=de_CH.UTF-8 keyboard-layouts=ch timezone=Europe/Zurich hostname=zentraleos username=zentrale noautologin live-config.nocomponents=user-setup,sudo,policykit,xinit console=tty0 ${ZOS_VM_PARAMETER:-zos.test}")
 fi
 exec qemu-system-x86_64 $BESCHL "${DIREKT[@]}" -machine q35 -smp "${ZOS_VM_CPUS:-2}" -m "${ZOS_VM_RAM:-3072}" \
