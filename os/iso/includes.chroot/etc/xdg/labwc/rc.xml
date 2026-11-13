@@ -11,8 +11,12 @@
   <snapping><range>12</range><topMaximize>yes</topMaximize></snapping>
   <desktops number="4"><prefix>Schreibtisch</prefix></desktops>
   <windowRules>
-    <windowRule identifier="zentraleos-shell" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes" fixedPosition="yes">
+    <windowRule identifier="zentraleos-shell" title="ZentraleOS" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes" fixedPosition="yes">
       <action name="ToggleAlwaysOnBottom"/><action name="ToggleOmnipresent"/>
+    </windowRule>
+    <!-- Ebene über allen Programmen (Startmenü, Suche, Alt+Tab …) -->
+    <windowRule title="ZOS-Ebene" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes" fixedPosition="yes">
+      <action name="ToggleAlwaysOnTop"/><action name="ToggleOmnipresent"/>
     </windowRule>
     <windowRule title="ZentraleOS" serverDecoration="no" skipTaskbar="yes" skipWindowSwitcher="yes" fixedPosition="yes"/>
   </windowRules>

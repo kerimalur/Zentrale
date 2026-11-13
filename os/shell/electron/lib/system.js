@@ -222,19 +222,33 @@ function firewallLesen() {
   return { ok: true, ...k, profile: PROFILE, ausstehend: fs.existsSync(NFT_DATEI + '.vorher') };
 }
 function firewallText(k) {
-  const sauber = { an: !!k.an, profil: PROFILE[k.profil] ? k.profil : 'zuhause', regeln: (k.regeln || []).map((r) => ({
+  const sauber = { an: !!k.an, profil: PROFILE[k.profil] ? k.profil : 'zuhause', killswitch: !!k.killswitch, regeln: (k.regeln || []).map((r) => ({
     port: String(r.port || '').replace(/[^0-9-]/g, '').slice(0, 11), protokoll: r.protokoll === 'udp' ? 'udp' : 'tcp',
-    quelle: /^[0-9a-fA-F:.\/]{0,43}$/.test(String(r.quelle || '')) ? String(r.quelle || '') : '', aktion: r.aktion === 'verwerfen' ? 'verwerfen' : 'erlauben', name: String(r.name || '').replace(/[^\w äöüÄÖÜ.-]/g, '').slice(0, 40) })).filter((r) => r.port) };
+    quelle: /^[0-9a-fA-F:.\/]{0,43}$/.test(String(r.quelle || '')) ? String(r.quelle || '') : '', aktion: r.aktion === 'verwerfen' ? 'verwerfen' : 'erlauben', name: String(r.name || '').replace(/[^\w äöüÄÖÜß.-]/g, '').slice(0, 40) })).filter((r) => /^\d{1,5}(-\d{1,5})?$/.test(r.port)) };
   const z = ['#!/usr/sbin/nft -f', '# Von ZentraleOS erzeugt. Änderungen über Einstellungen → Firewall.', '# ZOS-KONFIG ' + JSON.stringify(sauber), 'flush ruleset'];
   if (!sauber.an) return { text: z.join('\n') + '\n', sauber };
   const regel = (r) => `    ${r.quelle ? (r.quelle.includes(':') ? 'ip6' : 'ip') + ' saddr ' + r.quelle + ' ' : ''}${r.protokoll} dport ${r.port} ${r.aktion === 'erlauben' ? 'accept' : 'drop'}`;
-  z.push('table inet zentraleos {', '  chain eingang {', '    type filter hook input priority 0; policy drop;', '    iif lo accept', '    ct state established,related accept', '    ct state invalid drop');
+  z.push('table inet zentraleos {',
+    // Vom Wächter automatisch gesperrte Adressen (z. B. nach einem Portscan), verfallen nach Ablauf von selbst
+    '  set gesperrt4 { type ipv4_addr; flags timeout; }', '  set gesperrt6 { type ipv6_addr; flags timeout; }',
+    '  chain eingang {', '    type filter hook input priority 0; policy drop;', '    iif lo accept',
+    '    ip saddr @gesperrt4 drop', '    ip6 saddr @gesperrt6 drop', '    ct state established,related accept', '    ct state invalid drop');
   z.push(...sauber.regeln.filter((r) => r.aktion === 'verwerfen').map(regel));
   if (sauber.profil !== 'strikt') z.push('    iifname "tailscale0" accept', '    udp dport 41641 accept');
   z.push('    meta l4proto { icmp, ipv6-icmp } ' + (sauber.profil === 'zuhause' ? 'accept' : 'limit rate 2/second accept'), '    udp dport { 68, 546 } accept');
   if (sauber.profil === 'zuhause') z.push('    udp dport 5353 accept');
   z.push(...sauber.regeln.filter((r) => r.aktion === 'erlauben').map(regel));
-  z.push('    limit rate 10/second log prefix "ZOS-VERWORFEN " level info', '  }', '  chain weiter { type filter hook forward priority 0; policy drop; }', '  chain ausgang { type filter hook output priority 0; policy accept; }', '}');
+  z.push('    limit rate 10/second log prefix "ZOS-VERWORFEN " level info', '  }', '  chain weiter { type filter hook forward priority 0; policy drop; }');
+  if (!sauber.killswitch) z.push('  chain ausgang { type filter hook output priority 0; policy accept; }');
+  else z.push(
+    // Kill-Switch: ins Internet nur durch Tailscale (Exit-Node pi-proton). Fällt der Tunnel weg, geht nichts hinaus.
+    // Erlaubt bleiben das Heimnetz (ohne DNS), Tailscale selbst (läuft als root) und DHCP.
+    '  chain ausgang {', '    type filter hook output priority 0; policy drop;', '    oif lo accept', '    ct state established,related accept',
+    '    oifname "tailscale0" accept', '    meta skuid 0 accept', '    udp dport { 67, 68, 546, 547 } accept',
+    '    meta l4proto { tcp, udp } th dport 53 drop',
+    '    ip daddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16 } accept', '    ip6 daddr { fe80::/10, fc00::/7 } accept',
+    '    limit rate 5/second log prefix "ZOS-KILLSWITCH " level info', '  }');
+  z.push('}');
   return { text: z.join('\n') + '\n', sauber };
 }
 const firewallSetzen = (k, opt) => alsRoot('firewall-anwenden', ['60'], { ...opt, eingabe: firewallText(k).text });

@@ -30,6 +30,9 @@ protokoll.schemaAnmelden();
 if (!app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
 
 let fenster = null;          // Haupt-BrowserWindow (die ganze Oberfläche)
+let ebene = null;            // durchsichtiges Fenster ÜBER allen Programmen: Startmenü, Suche, Alt+Tab usw.
+let ebeneOffen = false;
+let ebeneSeit = 0;
 let gesperrt = true;
 let bildschirmAus = false;
 let sperrTimer = null;
@@ -39,10 +42,38 @@ let sperrWache = null;        // hält fremde Fenster unten, solange gesperrt is
 // ---------------------------------------------------------------- Fenster
 
 function skalaAnwenden() {
-  if (!fenster || fenster.isDestroyed()) return;
   const s = Math.max(0.8, Math.min(2.5, Number(einstellungen.alle().aussehen.skala) || 1));
-  fenster.webContents.setZoomFactor(s);
+  for (const w of [fenster, ebene]) if (w && !w.isDestroyed()) w.webContents.setZoomFactor(s);
 }
+
+// ---------------------------------------------------------------- Ebene über allen Programmen
+// Die Oberfläche selbst liegt immer UNTER fremden Programmen (sonst würde sie Brave & Co. verdecken).
+// Startmenü, Suche, Alt+Tab, Übersicht und Zwischenablage brauchen aber den Platz ganz oben. Dafür gibt es ein
+// zweites, durchsichtiges Fenster mit dem Titel «ZOS-Ebene»; labwc legt es per Fensterregel über alles.
+// Es lädt dieselbe Oberfläche im Modus ?ebene=1 und zeigt nur das Gewünschte.
+function ebeneBauen() {
+  if (process.platform !== 'linux' || !process.env.WAYLAND_DISPLAY) return;   // nur unter labwc nötig
+  const { width, height } = screen.getPrimaryDisplay().size;
+  ebene = new BrowserWindow({
+    x: 0, y: 0, width, height, show: false, frame: false, transparent: true, backgroundColor: '#00000000', resizable: false,
+    skipTaskbar: true, title: 'ZOS-Ebene', hasShadow: false,
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), partition: pi.PARTITION, contextIsolation: true, nodeIntegration: false, sandbox: false, spellcheck: false, backgroundThrottling: false },
+  });
+  ebene.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'), { search: 'ebene=1' });
+  ebene.webContents.on('did-finish-load', skalaAnwenden);
+  ebene.on('page-title-updated', (ev) => ev.preventDefault());
+  ebene.on('closed', () => { ebene = null; ebeneOffen = false; });
+  // Verliert die Ebene den Fokus an ein anderes Programm (z. B. eben aus dem Startmenü gestartet), schliesst sie sich.
+  // Kurz nach dem Zeigen nicht – da wechselt der Fokus manchmal noch hin und her.
+  ebene.on('blur', () => { if (ebeneOffen && ebene && Date.now() - ebeneSeit > 800) ebene.webContents.send('ebene', { art: 'blur' }); });
+}
+function ebeneZeigen(art, daten = null) {
+  if (!ebene || ebene.isDestroyed() || gesperrt) return false;
+  ebene.webContents.send('ebene', { art, daten });
+  if (!ebeneOffen) { ebeneOffen = true; ebeneSeit = Date.now(); ebene.show(); ebene.focus(); }
+  return true;
+}
+function ebeneVerstecken() { if (ebene && ebeneOffen) { ebeneOffen = false; ebene.hide(); } }
 
 function fensterBauen() {
   const e = einstellungen.alle();
@@ -77,6 +108,7 @@ function fensterBauen() {
   fenster.once('ready-to-show', () => {
     fenster.show();
     fenster.focus();
+    setTimeout(ebeneBauen, 1500);
   });
 
   // Fehler aus der Oberfläche im Protokoll sichtbar machen (hilft beim Suchen).
@@ -129,6 +161,8 @@ function einbettenErlauben() {
 async function sperren({ bildschirmAus: schirmAus = null } = {}) {
   const e = einstellungen.alle();
   gesperrt = true;
+  setTimeout(zustandMelden, 50);
+  ebeneVerstecken();
   system.alleMinimieren().catch(() => {});   // fremde Fenster dürfen nicht über der Sperre liegen
   sperrWacheStarten();
   if (fenster) {
@@ -138,7 +172,7 @@ async function sperren({ bildschirmAus: schirmAus = null } = {}) {
   const aus = schirmAus === null ? e.verhalten.bildschirmAusBeiSperre : schirmAus;
   if (aus) {
     const r = await strom.bildschirmAus();
-    bildschirmAus = !!r.ok; ausSeit = Date.now();
+    bildschirmAus = !!r.ok; ausSeit = Date.now(); zustandMelden();
     if (!r.ok && fenster) fenster.webContents.send('hinweis', { art: 'warnung', text: 'Monitor liess sich nicht abschalten: ' + (r.fehler || '') });
   }
   return { ok: true };
@@ -164,8 +198,26 @@ async function schlafen() {
   return r;
 }
 
+// ---------------------------------------------------------------- Wächter (eigener Systemdienst)
+// Die Oberfläche legt dem Wächter ab: Sperrzustand, Weg zur Zentrale (Adresse + Gerätetoken), eigene Meldungen.
+const LAUFZEIT = process.env.XDG_RUNTIME_DIR || '';
+function fuerWaechter(name, daten, modus = 0o600) {
+  if (process.platform !== 'linux' || !LAUFZEIT) return;
+  try { const p = path.join(LAUFZEIT, name); fs.writeFileSync(p + '.tmp', JSON.stringify(daten), { mode: modus }); fs.renameSync(p + '.tmp', p); } catch {}
+}
+function waechterMelden(art, text, extra = {}) {
+  if (process.platform !== 'linux' || !LAUFZEIT) return;
+  try { const o = path.join(LAUFZEIT, 'zos-meldungen'); fs.mkdirSync(o, { recursive: true, mode: 0o700 }); fs.writeFileSync(path.join(o, `${Date.now()}-${Math.random().toString(36).slice(2, 7)}.json`), JSON.stringify({ art, quelle: 'oberflaeche', text, ...extra })); } catch {}
+}
+function zustandMelden() { fuerWaechter('zos-zustand.json', { gesperrt, bildschirmAus, zeit: Date.now() }); }
+function piFuerWaechter() { const token = anmeldung.tokenLesen(); fuerWaechter('zos-pi.json', { basis: pi.basis() || '', token: token || '' }); }
+let codeFehler = 0;
+
 function entsperren() {
   gesperrt = false;
+  codeFehler = 0;
+  setTimeout(zustandMelden, 50);
+  if (new Date().getHours() < 5) waechterMelden('warnung', 'Der Rechner wurde mitten in der Nacht entsperrt.', { schluessel: 'nacht-entsperrt' });
   if (sperrWache) { clearInterval(sperrWache); sperrWache = null; }
   bildschirmAus = false;
   if (fenster) fenster.webContents.send('sperre:zustand', { gesperrt: false });
@@ -250,6 +302,7 @@ function ipcEinrichten() {
   // --- Anmeldung ---
   ipcMain.handle('anmeldung:anmelden', sicher(async (_e, eingabe, code, modus) => {
     const r = await anmeldung.anmelden(eingabe, code, modus || 'pin');
+    if (!r.ok && !r.codeNoetig) { codeFehler++; if (codeFehler % 3 === 0) waechterMelden(codeFehler >= 6 ? 'alarm' : 'warnung', `${codeFehler} falsche Eingaben am Sperrbildschirm.`, { schluessel: 'code-falsch' }); }
     if (r.ok) {
       entsperren();
       if (r.pi && fenster) fenster.webContents.send('zentrale:neuLaden');
@@ -397,6 +450,7 @@ function befehlAusfuehren(b) {
   if (b === 'bildschirmAn') return wecken();
   if (b === 'schlafen') return schlafen();
   if (b === 'bildschirmfoto-bereich') { if (!gesperrt) system.bildschirmfoto(true).then((r) => fenster && r && fenster.webContents.send('hinweis', r.ok ? { art: 'ok', text: 'Bildschirmfoto gespeichert: ' + r.pfad } : { art: 'fehler', text: r.fehler || 'Abgebrochen' })); return null; }
+  if (ebeneOffen && ['wechsler', 'wechsler-zurueck', 'uebersicht', 'zwischenablage', 'start', 'spotlight'].includes(b)) { ebene.webContents.send('befehl', b); return null; }
   if (['wechsler', 'wechsler-zurueck', 'uebersicht', 'zwischenablage', 'terminal', 'desktop-rechts', 'desktop-links'].includes(b)) {
     if (fenster && !gesperrt) { if (!b.startsWith('desktop') && !b.startsWith('wechsler')) { system.fensterFokus('zentraleos-shell').catch(() => {}); fenster.focus(); } fenster.webContents.send('befehl', b); }
     return null;
@@ -445,6 +499,13 @@ function systemIpc() {
   h('bildschirmfoto', nurOffen(system.bildschirmfoto));
   h('browser', nurOffen(async (url) => system.befehlStarten((fs.existsSync('/usr/bin/brave-browser') ? 'brave-browser --password-store=basic' : 'chromium') + (/^https?:\/\/[^\s"'`$\\]+$/i.test(String(url || '')) ? ` '${url}'` : ''))));
   h('symbolUrl', async (p) => ({ ok: true, url: protokoll.lokalUrl(p) }));
+  h('alleMinimieren', nurOffen(async () => klein(await system.alleMinimieren())));
+
+  // --- Ebene über allen Programmen ---
+  ipcMain.handle('ebene:zeigen', sicher(async (_e, art, daten) => ({ ok: ebeneZeigen(String(art), daten) })));
+  ipcMain.handle('ebene:fertig', sicher(async () => { ebeneVerstecken(); return { ok: true }; }));
+  // Aus der Ebene heraus ein Programm der Oberfläche öffnen: das macht das Hauptfenster.
+  ipcMain.handle('ebene:app', sicher(async (_e, id, arg) => { ebeneVerstecken(); if (fenster && !gesperrt) fenster.webContents.send('ebene', { art: 'app', daten: { id: String(id), arg: arg ?? null } }); return { ok: true }; }));
 
   // --- Weitere Systemfunktionen (lib/mehr.js) ---
   const m = (kanal, fn) => ipcMain.handle('mehr:' + kanal, sicher(async (_e, ...a) => fn(...a)));
@@ -520,6 +581,7 @@ app.whenReady().then(async () => {
   setInterval(sitzungPflegen, 30 * 60_000);
 
   abholenStarten();
+  zustandMelden(); piFuerWaechter(); setInterval(piFuerWaechter, 60_000);
 
 });
 

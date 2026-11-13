@@ -41,7 +41,7 @@ const Startmenue = {
       const angeheftet = ['finder', 'web', 'terminal', 'software', 'einstellungen', 'aktivitaet', 'geraete', 'netzplan', 'steuerung', 'zentrale:Übersicht', 'zentrale:Trading', 'zentrale:Heute'].filter((id) => Apps[id]);
       koerper.append(el('div', { klasse: 'sm-titel', text: 'Angeheftet' }), el('div', { klasse: 'sm-gitter' }, angeheftet.map((id) => this.appKnopf(id, Apps[id]))),
         el('div', { klasse: 'sm-titel', text: 'Zentrale · vorinstalliert' }), el('div', { klasse: 'sm-chips' }, ZENTRALE_TABS.map((x) => el('button', { klasse: 'sm-chip', text: x.name, onclick: () => { this.schliessen(); ZentraleFenster.oeffnen(x.id); } }))),
-        el('div', { klasse: 'sm-titel', text: 'Alle Programme' }), el('div', { klasse: 'sm-alle' }, alle().sort((a, b) => a.name.localeCompare(b.name, 'de')).map((a) => this.appKnopf(a.id, a, 'sm-zeile'))));
+        el('div', { klasse: 'sm-titel', text: 'Alle Programme' }), el('div', { klasse: 'sm-alle' }, alle().filter((a) => !a.id.startsWith('zentrale:')).sort((a, b) => a.name.localeCompare(b.name, 'de')).map((a) => this.appKnopf(a.id, a, 'sm-zeile'))));
     };
     feld.addEventListener('input', zeichnen);
     feld.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.schliessen(); if (e.key === 'Enter') { const k = koerper.querySelector('.sm-zeile, .sm-app'); k && k.click(); } });

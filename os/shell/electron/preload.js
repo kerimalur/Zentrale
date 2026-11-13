@@ -80,7 +80,10 @@ contextBridge.exposeInMainWorld('zentrale', {
     'ton', 'tonSetzen', 'tonStumm', 'tonAusgabe', 'helligkeit', 'helligkeitSetzen', 'anzeige', 'anzeigeSetzen', 'energie', 'energieSetzen', 'zeit', 'zeitzonen', 'tastatur',
     'firewall', 'firewallSetzen', 'root', 'passwortAendern', 'rootVergessen', 'programme', 'programmStarten', 'webAppAnlegen', 'eigenesEntfernen', 'fremdeFenster', 'fensterFokus', 'fensterZu',
     'flatpakSuche', 'flatpakListe', 'flatpakInstallieren', 'flatpakEntfernen', 'flatpakAktualisieren', 'terminalStarten', 'terminalEingabe', 'terminalGroesse', 'terminalBeenden',
-    'bildschirmfoto', 'browser', 'symbolUrl'].map((name) => [name, (...args) => r('sys:' + name, ...args)])),
+    'bildschirmfoto', 'browser', 'symbolUrl', 'alleMinimieren'].map((name) => [name, (...args) => r('sys:' + name, ...args)])),
+
+  // Ebene über allen Programmen (Startmenü, Suche, Alt+Tab …)
+  ebene: { zeigen: (art, daten) => r('ebene:zeigen', art, daten), fertig: () => r('ebene:fertig'), app: (id, arg) => r('ebene:app', id, arg) },
 
   // Weitere Systemfunktionen (siehe electron/lib/mehr.js)
   mehr: Object.fromEntries(['ablageListe', 'ablageNehmen', 'ablageLeeren', 'papierkorb', 'papierkorbZurueck', 'papierkorbLeeren', 'fotos', 'datentraeger', 'ordnerAnalyse', 'einhaengen', 'aushaengen', 'smart',
@@ -99,7 +102,7 @@ contextBridge.exposeInMainWorld('zentrale', {
 
   // Nachrichten aus dem Hauptprozess
   auf: (name, fn) => {
-    const erlaubt = ['sperre:zustand', 'zentrale:fehler', 'zentrale:neuLaden', 'fenster:groesse', 'hinweis', 'befehl', 'terminal:daten'];
+    const erlaubt = ['sperre:zustand', 'zentrale:fehler', 'zentrale:neuLaden', 'fenster:groesse', 'hinweis', 'befehl', 'terminal:daten', 'ebene'];
     if (!erlaubt.includes(name)) return () => {};
     const h = (_e, daten) => fn(daten);
     ipcRenderer.on(name, h);

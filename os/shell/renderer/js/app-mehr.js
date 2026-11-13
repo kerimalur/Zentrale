@@ -493,3 +493,96 @@ window.addEventListener('DOMContentLoaded', () => {
   for (const art of ['mousemove', 'mousedown', 'keydown', 'wheel', 'touchstart']) document.addEventListener(art, wecken, true);
   setTimeout(() => { Schreibtisch.aussehenAnwenden(); Arbeit.zeichnen(); Fokus.holen(); }, 300);
 });
+
+// ---------------------------------------------------------------- Ziehen ohne Ruckeln
+// Beim Ziehen und Grössern: eingebettete Seiten bekommen keine Mausereignisse (sonst «verschluckt» die Zentrale-Seite
+// die Bewegung und das Fenster ruckelt), der Glas-Weichzeichner pausiert, und die Lage wird höchstens einmal pro Bild gesetzt.
+{
+  const umhuellen = (name) => { const alt = Fenster.prototype[name]; Fenster.prototype[name] = function (e, ...rest) {
+    if (e.button !== 0) return alt.call(this, e, ...rest);
+    document.body.classList.add('zieht-fenster');
+    const ende = () => { document.removeEventListener('mouseup', ende, true); document.body.classList.remove('zieht-fenster'); FM.melden('geometrie'); };
+    document.addEventListener('mouseup', ende, true);
+    return alt.call(this, e, ...rest);
+  }; };
+  umhuellen('ziehenStart'); umhuellen('groessernStart');
+  const altGeo = Fenster.prototype.geometrieAnwenden;
+  Fenster.prototype.geometrieAnwenden = function () {
+    if (!document.body.classList.contains('zieht-fenster')) return altGeo.call(this);
+    if (this._bild) return; this._bild = requestAnimationFrame(() => {
+      this._bild = 0; const s = this.wurzel.style; s.left = this.x + 'px'; s.top = this.y + 'px'; s.width = this.breite + 'px'; s.height = this.hoehe + 'px';
+      if (this.beimAendern) this.beimAendern(this);
+    });
+  };
+}
+
+// ---------------------------------------------------------------- Keine doppelten Einträge
+// «Web» startet den Browser (Brave, sonst Chromium) – deren eigene Einträge wären doppelt.
+// Fokus der Zentrale (Handy-Sperre über den Pi) und die Fokuszeit dieses Rechners heissen verschieden.
+Apps.fokusmodus.name = 'Fokuszeit';
+{
+  const alt = Launchpad.eintragen;
+  Launchpad.eintragen = function () {
+    alt.call(this);
+    const ids = (this.liste || []).map((p) => p.id);
+    const brave = ids.find((id) => /brave/i.test(id));
+    for (const id of ids) if (/^(brave-browser|com\.brave\.Browser|chromium|org\.chromium\.Chromium)$/i.test(id)) delete Apps['prog:' + id];
+    Apps.web.name = brave ? 'Brave' : 'Web';
+  };
+}
+
+// ---------------------------------------------------------------- Ohne Akku: Netzbetrieb anzeigen
+let akkuDa = null;
+async function akkuPruefen() { if (akkuDa === null) { const r = await Z.sys.energie().catch(() => ({})); akkuDa = !!(r && r.akku); } return akkuDa; }
+{
+  const alt = Dock.bauen;
+  Dock.bauen = function () { alt.call(this); akkuPruefen().then((da) => { if (da) return; const kz = $('#dock .tl-kz'); if (kz && kz.children[2]) kz.children[2].remove(); if (kz) kz.title = 'Kontrollzentrum: Netzwerk, Ton, Helligkeit'; }); };
+  const altE = E.energie;
+  E.energie = async function (i) {
+    await altE.call(this, i); if (this.bereich !== 'energie') return;
+    const da = await akkuPruefen(); if (da) return;
+    const zeile = [...i.querySelectorAll('.ein-reihe')].find((r) => /^Akku/.test(r.querySelector('.t')?.textContent || ''));
+    if (zeile) zeile.replaceWith(this.reihe('Stromversorgung', 'Netzteil, kein Akku. Der Rechner läuft im Dauerbetrieb und geht nie von selbst in den Ruhezustand.', this.wert('Netzbetrieb')));
+  };
+  const altR = E.ruhe;
+  E.ruhe = async function (i) {
+    altR.call(this, i); const da = await akkuPruefen(); if (this.bereich !== 'ruhe') return;
+    for (const u of i.querySelectorAll('.u')) if (/Zuklappen/.test(u.textContent)) u.textContent = da ? u.textContent : 'Ist fest ausgeschaltet: der Rechner schläft nie von selbst ein. Stromversorgung: Netzteil, kein Akku.';
+  };
+}
+
+// ---------------------------------------------------------------- Einstellungen durchsuchen
+// Sucht in den Namen der Bereiche und in Stichwörtern zu allem, was darin einstellbar ist.
+const EIN_STICHWORTE = {
+  wlan: 'wifi internet netzwerk kabel lan ethernet verbinden passwort', bluetooth: 'kopfhörer maus tastatur koppeln', netzwerk: 'ip dns adresse proxy router gateway',
+  tailscale: 'vpn exit node pi proton anonym fernzugriff', anzeige: 'bildschirm auflösung skalierung helligkeit monitor hz nachtlicht blaulicht drehen',
+  ton: 'lautstärke lautsprecher mikrofon audio ausgabe stumm programm', energie: 'strom akku netzteil ausschalten neu starten profil leistung sparen',
+  tastatur: 'layout kürzel shortcut schweiz tasten', datum: 'uhrzeit zeitzone ntp uhr kalender', benutzer: 'passwort konto admin name',
+  firewall: 'sicherheit ports schutz eingehend regeln profil', updates: 'aktualisieren software pakete wartungsfenster automatisch',
+  speicherplatz: 'festplatte ssd platz belegt aufräumen', aussehen: 'hintergrund farbe akzent hell dunkel glas design thema personalisierung',
+  groesse: 'schrift schriftgrösse symbole icons zoom skalierung gross klein taskleiste widgets', dock: 'taskleiste schreibtisch widgets symbole start position',
+  taskleiste: 'taskleiste start suche uhr position', anmeldung: 'sperre code pin sperrbildschirm automatisch sperren hintergrund',
+  verbindung: 'zentrale pi demo modus adresse 2fa koppeln', finder: 'dateien ordner versteckte ansicht', freigaben: 'teilen links',
+  ruhe: 'schlafen bildschirm aus sperre bot ausnahmen dauerbetrieb stromausfall firmware', bot: 'metatrader mt5 trading überwachen meldung handy telegram ntfy positionen',
+  backup: 'sicherung pi rsync kopie zeitplan', installation: 'ssd installieren platte verschlüsselung tpm', verhalten: 'start autostart verhalten zurücksetzen',
+  ueber: 'version system info kernel installieren', schnappschuesse: 'zeitmaschine wiederherstellen zurück timeshift snapshot',
+  standardapps: 'öffnen mit standardprogramm browser dateityp', rechte: 'datenschutz kamera mikrofon dateien flatpak berechtigung',
+  sicherheitsstufe: 'usb usbguard kern härtung lockdown sperre schutz', anonym: 'anonymität proton tor kill switch leck dns ip',
+};
+{
+  const alt = E.zeichnen;
+  E.zeichnen = function () {
+    alt.call(this);
+    if (!this.seite) return;
+    const feld = el('input', { klasse: 'feld ein-suche', type: 'search', placeholder: 'Einstellungen durchsuchen', value: this.suche || '' });
+    const filtern = () => {
+      const t = feld.value.trim().toLowerCase(); this.suche = feld.value;
+      const knoepfe = [...this.seite.querySelectorAll('.f-ort')];
+      this.BEREICHE.forEach((b, n) => { const k = knoepfe[n]; if (!k) return; const treffer = !t || b.name.toLowerCase().includes(t) || (EIN_STICHWORTE[b.id] || '').includes(t); k.hidden = !treffer; });
+    };
+    feld.addEventListener('input', filtern);
+    feld.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const k = [...this.seite.querySelectorAll('.f-ort')].find((x) => !x.hidden); if (k) { k.click(); } } if (e.key === 'Escape') { feld.value = ''; filtern(); } });
+    this.seite.prepend(feld); filtern();
+    if (this.suche) requestAnimationFrame(() => { feld.focus(); feld.setSelectionRange(feld.value.length, feld.value.length); });
+  };
+}

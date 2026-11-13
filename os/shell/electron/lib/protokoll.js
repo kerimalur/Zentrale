@@ -8,7 +8,7 @@
 // springt man in Videos und PDFs nicht.
 const fs = require('node:fs');
 const { Readable } = require('node:stream');
-const { protocol, net } = require('electron');
+const { protocol, net, session } = require('electron');
 const pi = require('./pi');
 
 const SCHEMA = 'zdatei';
@@ -30,8 +30,10 @@ const MIME = {
 };
 const mimeVon = (p) => MIME[String(p).split('.').pop().toLowerCase()] || 'application/octet-stream';
 
+// Die Oberfläche läuft in der Sitzung der Zentrale (Partition). Ein Schema gilt immer nur für EINE Sitzung –
+// darum für beide anmelden. (Vorher nur für die Standardsitzung: Bilder, Fotos und Hintergründe blieben schwarz.)
 function handhaben() {
-  protocol.handle(SCHEMA, async (req) => {
+  const behandler = async (req) => {
     let u;
     try { u = new URL(req.url); } catch { return new Response('Ungültige Adresse', { status: 400 }); }
     const bereich = req.headers.get('Range') || '';
@@ -76,7 +78,9 @@ function handhaben() {
     }
 
     return new Response('Unbekannte Quelle', { status: 404 });
-  });
+  };
+  protocol.handle(SCHEMA, behandler);
+  try { session.fromPartition(pi.PARTITION).protocol.handle(SCHEMA, behandler); } catch (e) { console.error('[zdatei]', e.message); }
 }
 
 // Adressen für die Oberfläche bauen.

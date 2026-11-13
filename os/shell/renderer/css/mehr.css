@@ -86,3 +86,11 @@ body.tl-links .dock.tl { grid-template-columns: max-content minmax(0, 1fr) max-c
 .tl-rechts > *, .tl-links > * { flex: none; }
 .tl-fokus, .tl-uhr, .tl-desks { white-space: nowrap; }
 @media (max-width: 1100px) { .dock.tl .dock-eintrag { width: 36px; } .tl-desks i { display: none; } .tl-desks b { margin-left: 0; } }
+/* Ziehen ohne Ruckeln */
+body.zieht-fenster iframe, body.zieht-fenster webview, body.zieht-fenster embed { pointer-events: none !important; }
+body.zieht-fenster .fenster { backdrop-filter: none !important; transition: none !important; will-change: left, top, width, height; }
+body.zieht-fenster .fenster * { animation-play-state: paused !important; }
+/* Ebene über allen Programmen: nur Startmenü, Suche usw., alles andere durchsichtig */
+html.ebene, html.ebene body, body.ebene { background: transparent !important; }
+html.ebene #schreibtisch > :not(#hinweise), html.ebene #sperre { display: none !important; }
+.ein-suche { width: calc(100% - 8px); margin: 0 4px 8px; height: 32px; box-sizing: border-box; }
