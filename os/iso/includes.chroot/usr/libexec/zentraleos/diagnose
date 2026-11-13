@@ -3,6 +3,10 @@
 # Schnittstelle, damit automatische Tests sehen, was beim Start passiert ist.
 systemd-detect-virt -q --vm || exit 0
 [ -c /dev/ttyS0 ] || exit 0
+# Nur im Test: im installierten System einmal einen Schnappschuss anlegen, damit der Test sieht, dass Timeshift geht
+if ! grep -qw boot=live /proc/cmdline && [ -f /etc/timeshift/timeshift.json ] && [ ! -e /var/lib/zentraleos/test-schnappschuss ]; then
+  mkdir -p /var/lib/zentraleos; touch /var/lib/zentraleos/test-schnappschuss; timeshift --create --comments Test --tags O --scripted >/dev/null 2>&1
+fi
 {
   echo "=== ZOS-DIAGNOSE $(date -Is) ${1:-} ==="
   echo "start: $(systemd-analyze 2>/dev/null | head -1)"

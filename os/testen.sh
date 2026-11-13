@@ -93,6 +93,8 @@ if [ "$(cat "$AUS/installiert" 2>/dev/null)" = ja ]; then
   ZOS_VM_PLATTE=1 tests/vm.sh "$ISO" "$VM" || exit 3
   for _ in $(seq 1 $(( 40 * LANGSAM ))); do sleep 5; diag "prozesse:" | grep -q electron && break; done; foto 32-tpm-neustart
   pruefe "Installiert: TPM entsperrt beim Neustart ohne Passwort" 'diag "prozesse:" | grep -q electron'
+  aufDiagnose; diag "sicherheit:" | tee -a "$ERG"
+  pruefe "Installiert: Schnappschuss (Timeshift, Btrfs) angelegt" 'diag "sicherheit:" | grep -qE "schnapp=[1-9]"'
 else
   echo "Teil 3 (Start von der Platte) übersprungen: Installation lief nicht durch" | tee -a "$ERG"
 fi

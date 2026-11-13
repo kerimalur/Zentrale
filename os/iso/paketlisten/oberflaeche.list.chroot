@@ -76,3 +76,4 @@ apparmor-profiles
 apparmor-profiles-extra
 pipewire-bin
 openssh-client
+apparmor-utils
