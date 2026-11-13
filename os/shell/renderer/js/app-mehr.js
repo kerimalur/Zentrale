@@ -393,14 +393,14 @@ Object.assign(E, {
     if (!r.live) return i.append(this.block(null, this.karte(this.reihe('Schon installiert', 'Dieses System läuft von der Platte. Die Installation gibt es nur im Live-System vom Stick.', this.wert('✓')))));
     if (!r.uefi) return i.append(this.block(null, this.karte(this.reihe('Nicht möglich', 'Der Rechner wurde nicht im UEFI-Modus gestartet.', null))));
     const ziele = r.platten.filter((p) => !p.live && p.groesse >= 15e9);
-    const k = { geraet: ziele[0]?.pfad || '', name: 'kerim', passwort: '', passwort2: '', verschluesselung: '', luks: false, code: '' };
+    const k = { geraet: ziele[0]?.pfad || '', name: 'kerim', passwort: '', passwort2: '', verschluesselung: '', luks: !!r.tpm, code: '' };
     const feld = (typ, platz, setzen) => { const f = el('input', { klasse: 'feld', type: typ, placeholder: platz, stil: { width: '230px' } }); f.addEventListener('input', () => setzen(f.value)); return f; };
     const nameFeld = feld('text', 'benutzername', (v) => { k.name = v.trim(); }); nameFeld.value = k.name;
-    const luksFeld = feld('password', 'Passwort für die Verschlüsselung', (v) => { k.verschluesselung = v; }); const luksReihe = this.reihe('Verschlüsselungs-Passwort', 'Wird bei JEDEM Start am Gerät abgefragt. Nach einem Stromausfall startet der Rechner dann nicht allein durch – für einen Bot-Rechner darum besser aus lassen.', luksFeld); luksReihe.hidden = true;
+    const luksFeld = feld('password', 'Passwort für die Verschlüsselung', (v) => { k.verschluesselung = v; }); const luksReihe = this.reihe('Verschlüsselungs-Passwort', r.tpm ? 'Wiederherstellungs-Passwort: Normal entsperrt der TPM-Chip die Platte beim Start von selbst (auch nach Stromausfall). Das Passwort brauchst du nur, wenn sich an Firmware oder Secure Boot etwas ändert. Gut aufbewahren (z. B. in Vaultwarden)!' : 'Dieser Rechner hat keinen TPM-Chip: das Passwort wird bei JEDEM Start am Gerät abgefragt. Nach einem Stromausfall startet der Bot dann nicht von selbst.', luksFeld); luksReihe.hidden = !k.luks;
     const stand = el('pre', { klasse: 'dt-smart', hidden: true });
     i.append(this.block('Ziel', el('div', { klasse: 'ein-karte' }, ziele.length ? ziele.map((p, n) => { const radio = el('input', { type: 'radio', name: 'inst-platte', checked: n === 0 }); radio.addEventListener('change', () => { k.geraet = p.pfad; }); return this.reihe(`${p.modell} · ${groesse(p.groesse)}`, `${p.pfad}${p.bus ? ' · ' + p.bus.toUpperCase() : ''}${p.wechsel ? ' · Wechselmedium' : ''}${p.inhalt ? ' · enthält: ' + p.inhalt : ' · leer'}`, radio); }) : [this.reihe('Keine passende Platte gefunden', 'Es braucht eine Platte mit mindestens 15 GB, die nicht der Start-Stick ist.', null)])),
       this.block('Benutzer', this.karte(this.reihe('Benutzername', 'Kleinbuchstaben, Ziffern, Bindestrich.', nameFeld), this.reihe('Passwort', 'Das Administrator-Passwort des neuen Systems. Mindestens 4 Zeichen.', feld('password', 'Passwort', (v) => { k.passwort = v; })), this.reihe('Passwort wiederholen', null, feld('password', 'Passwort', (v) => { k.passwort2 = v; })), this.reihe('Code für die Sperre', 'Den gibst du ein, wenn der Bildschirm gesperrt ist. 4 bis 12 Ziffern oder Buchstaben. Später änderbar unter Anmeldung & Sperre.', feld('password', 'Code', (v) => { k.code = v.trim(); })))),
-      this.block('Verschlüsselung', this.karte(this.reihe('Platte verschlüsseln', 'Schützt die Daten, wenn jemand den Rechner mitnimmt.', this.schalter(false, (x) => { k.luks = x; luksReihe.hidden = !x; })), luksReihe)),
+      this.block('Verschlüsselung', this.karte(this.reihe('Platte verschlüsseln', r.tpm ? 'Empfohlen. Schützt die Daten, wenn jemand den Rechner oder die SSD mitnimmt. Der TPM-Chip entsperrt beim Start automatisch.' : 'Schützt die Daten, wenn jemand den Rechner mitnimmt.', this.schalter(k.luks, (x) => { k.luks = x; luksReihe.hidden = !x; })), luksReihe)),
       this.block(null, this.karte(this.reihe('Installieren', 'Die gewählte Platte wird VOLLSTÄNDIG GELÖSCHT – auch Windows und alle Daten darauf.', el('button', { klasse: 'knopf gefahr', id: 'inst-start', text: 'Installieren …', disabled: !ziele.length, onclick: async (ev) => {
         if (!/^[a-z][a-z0-9-]{0,30}$/.test(k.name)) return hinweis('Benutzername: Kleinbuchstaben, Ziffern, Bindestrich', 'fehler');
         if (k.passwort.length < 4) return hinweis('Das Passwort braucht mindestens 4 Zeichen', 'fehler'); if (k.passwort !== k.passwort2) return hinweis('Die Passwörter sind nicht gleich', 'fehler');
@@ -412,7 +412,7 @@ Object.assign(E, {
         const t = setInterval(async () => { const s = await M.installStand(); if (s.zeilen.length) stand.textContent = s.zeilen.join('\n'); }, 2000);
         const e = await mitAdmin((pw) => M.installieren({ geraet: k.geraet, name: k.name, passwort: k.passwort, verschluesselung: k.luks ? k.verschluesselung : '', code: k.code }, pw), 'Die Installation braucht das Administrator-Passwort des Live-Systems (zentrale).');
         clearInterval(t); const s = await M.installStand(); if (s.zeilen.length) stand.textContent = s.zeilen.join('\n'); ev.target.disabled = false;
-        if (e.ok) await melden('Installation fertig', 'ZentraleOS ist installiert. Fahre den Rechner herunter, zieh den Stick ab und schalte wieder ein. Am Sperrbildschirm gilt dein neuer Code. Das System startet im Demo-Modus (Testdaten); ausschalten unter Einstellungen → Zentrale.'); else e.abgebrochen || hinweis('Installation fehlgeschlagen: ' + (e.fehler || 'siehe Protokoll'), 'fehler');
+        if (e.ok) await melden('Installation fertig', 'ZentraleOS ist installiert. Fahre den Rechner herunter, zieh den Stick ab und schalte wieder ein. Am Sperrbildschirm gilt dein neuer Code. Das System startet im Demo-Modus (Testdaten); ausschalten unter Einstellungen → Zentrale.\n\nDanach in der Firmware (HP: beim Start F10): BIOS-Passwort setzen, Start von USB ausschalten, Secure Boot an, «After Power Loss: Power On».'); else e.abgebrochen || hinweis('Installation fehlgeschlagen: ' + (e.fehler || 'siehe Protokoll'), 'fehler');
       } })), stand)));
   },
 });
@@ -578,7 +578,7 @@ const EIN_STICHWORTE = {
     const filtern = () => {
       const t = feld.value.trim().toLowerCase(); this.suche = feld.value;
       const knoepfe = [...this.seite.querySelectorAll('.f-ort')];
-      this.BEREICHE.forEach((b, n) => { const k = knoepfe[n]; if (!k) return; const treffer = !t || b.name.toLowerCase().includes(t) || (EIN_STICHWORTE[b.id] || '').includes(t); k.hidden = !treffer; });
+      this.BEREICHE.forEach((b, n) => { const k = knoepfe[n]; if (!k) return; const treffer = !t || b.name.toLowerCase().includes(t) || (EIN_STICHWORTE[b.id] || '').includes(t); k.hidden = !treffer; k.style.display = treffer ? '' : 'none'; });
     };
     feld.addEventListener('input', filtern);
     feld.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const k = [...this.seite.querySelectorAll('.f-ort')].find((x) => !x.hidden); if (k) { k.click(); } } if (e.key === 'Escape') { feld.value = ''; filtern(); } });

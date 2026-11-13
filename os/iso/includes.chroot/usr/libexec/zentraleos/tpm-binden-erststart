@@ -1,0 +1,11 @@
+#!/bin/sh
+# Bindet die verschlüsselte Systemplatte an den TPM-Chip (PCR 7) und löscht danach das hinterlegte Passwort.
+K=/var/lib/zentraleos/tpm-binden
+M=/var/lib/zentraleos/meldungen; mkdir -p "$M"
+dev="$(awk '!/^#/ && NF {print $2; exit}' /etc/crypttab)"; dev="/dev/disk/by-uuid/${dev#UUID=}"
+if clevis luks bind -y -k "$K" -d "$dev" tpm2 '{"pcr_bank":"sha256","pcr_ids":"7"}' && update-initramfs -u >/dev/null 2>&1; then
+  printf '{"art":"info","quelle":"system","text":"Die verschlüsselte Platte ist an den TPM-Chip gebunden. Ab jetzt startet der Rechner ohne Passwort."}' > "$M/tpm.json"
+else
+  printf '{"art":"warnung","quelle":"system","text":"An den TPM-Chip binden ging nicht – beim Start wird weiter nach dem Passwort gefragt. Unter Sicherheit nochmals versuchen."}' > "$M/tpm.json"
+fi
+shred -u "$K" 2>/dev/null || rm -f "$K"

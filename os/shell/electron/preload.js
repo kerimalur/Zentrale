@@ -88,7 +88,8 @@ contextBridge.exposeInMainWorld('zentrale', {
   // Weitere Systemfunktionen (siehe electron/lib/mehr.js)
   mehr: Object.fromEntries(['ablageListe', 'ablageNehmen', 'ablageLeeren', 'papierkorb', 'papierkorbZurueck', 'papierkorbLeeren', 'fotos', 'datentraeger', 'ordnerAnalyse', 'einhaengen', 'aushaengen', 'smart',
     'sicherheit', 'netz', 'netzVergessen', 'botStand', 'botPruefen', 'meldeTest', 'backupSchluessel', 'backupJetzt', 'schlafen', 'fokusStart', 'fokusEnde', 'fokusStand',
-    'installPlatten', 'installieren', 'installStand', 'energie', 'fernzugriff', 'rootMehr', 'desktopTaste', 'fensterKlein'].map((name) => [name, (...args) => r('mehr:' + name, ...args)])),
+    'installPlatten', 'installieren', 'installStand', 'energie', 'fernzugriff', 'rootMehr', 'desktopTaste', 'fensterKlein', 'tpmBinden',
+    'meldungen', 'waechterStand', 'nachtlicht', 'standardApps', 'standardAppSetzen', 'appRechte', 'appRechtSetzen', 'tonProgramme', 'tonProgrammSetzen', 'anonymCheck', 'metadatenWeg'].map((name) => [name, (...args) => r('mehr:' + name, ...args)])),
 
   // System
   system: {

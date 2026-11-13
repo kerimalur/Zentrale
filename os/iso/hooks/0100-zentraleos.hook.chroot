@@ -10,13 +10,21 @@ echo zentraleos > /etc/hostname
 
 # Benutzer der Live-Sitzung. Kein Root ohne Passwort: sudo fragt immer nach.
 if ! id zentrale >/dev/null 2>&1; then
-  useradd -m -s /bin/bash -c "ZentraleOS" -G sudo,audio,video,netdev,plugdev,bluetooth,input zentrale
+  useradd -m -s /bin/bash -c "ZentraleOS" -G sudo,audio,video,netdev,plugdev,bluetooth,input,adm,systemd-journal zentrale
   echo 'zentrale:zentrale' | chpasswd
 fi
 passwd -l root
 
 # Dienste
 systemctl enable zentraleos-testmodus.service zentraleos-diagnose.timer greetd.service zentraleos-greetd-einrichten.service nftables.service NetworkManager.service bluetooth.service apparmor.service
+# Sicherheit und Dauerbetrieb
+systemctl enable zentraleos-waechter.service zentraleos-usb-regeln.service usbguard.service earlyoom.service zentraleos-pruefung.timer zentraleos-schnappschuss.timer fstrim.timer
+# Timeshift soll nicht selbst per cron planen (das macht zentraleos-schnappschuss.timer)
+# Mitgelieferte Zeitpläne, die ohne Vorbereitung fehlschlagen würden: macht die Wochenprüfung bzw. der Knopf in den Einstellungen
+systemctl disable dailyaidecheck.timer fwupd-refresh.timer 2>/dev/null || true
+rm -f /etc/cron.d/timeshift-hourly /etc/cron.d/timeshift-boot 2>/dev/null || true
+# AppArmor: mitgelieferte Profile scharf schalten, soweit sie nicht stören
+for pr in /etc/apparmor.d/usr.bin.man /etc/apparmor.d/usr.sbin.tcpdump; do [ -f "$pr" ] && aa-enforce "$pr" >/dev/null 2>&1 || true; done
 systemctl disable ssh.service 2>/dev/null || true
 # smartd nur auf Abruf (in VMs findet er keine Platte und gilt dann als fehlgeschlagen)
 systemctl disable smartmontools.service smartd.service 2>/dev/null || true

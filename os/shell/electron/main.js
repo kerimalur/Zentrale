@@ -523,7 +523,14 @@ function systemIpc() {
   m('fokusStart', nurOffen(async (pw) => { const r = await mehr.fokusStart(pw); return r.ok ? r : klein(r); })); m('fokusEnde', nurOffen(async (pw) => { const r = await mehr.fokusEnde(pw); return r.ok ? r : klein(r); })); m('fokusStand', mehr.fokusStand);
   m('installPlatten', mehr.installPlatten); m('installieren', nurOffen(async (k, pw) => klein(await mehr.installieren(k || {}, pw)))); m('installStand', mehr.installStand);
   m('energie', nurOffen(mehr.energie)); m('fernzugriff', mehr.fernzugriff);
-  m('rootMehr', nurOffen(async (aktion, args, pw) => (['ssh-fern', 'update-fenster'].includes(aktion) ? klein(await system.alsRoot(aktion, args || [], { passwort: pw, timeout: 60000 })) : { ok: false, fehler: 'Nicht erlaubt' })));
+  m('meldungen', mehr.meldungen); m('waechterStand', mehr.waechterStand);
+  m('nachtlicht', async (teil) => { if (teil) einstellungen.setzen({ nachtlicht: teil }); return mehr.nachtlicht(); });
+  m('standardApps', mehr.standardApps); m('standardAppSetzen', nurOffen(mehr.standardAppSetzen));
+  m('appRechte', mehr.appRechte); m('appRechtSetzen', nurOffen(async (id, r, an) => klein(await mehr.appRechtSetzen(id, r, an))));
+  m('tonProgramme', mehr.tonProgramme); m('tonProgrammSetzen', async (id, p) => klein(await mehr.tonProgrammSetzen(id, p)));
+  m('anonymCheck', nurOffen(mehr.anonymCheck)); m('metadatenWeg', nurOffen(mehr.metadatenWeg));
+  m('rootMehr', nurOffen(async (aktion, args, pw) => (['ssh-fern', 'update-fenster', 'usb-erlauben', 'usb-sperren', 'schnappschuss-liste', 'schnappschuss-erstellen', 'schnappschuss-loeschen', 'schnappschuss-zurueck', 'firmware-suchen', 'firmware-einspielen', 'aufraeumen', 'pruefung-jetzt', 'ip-entsperren'].includes(aktion) ? klein(await system.alsRoot(aktion, args || [], { passwort: pw, timeout: 30 * 60_000 })) : { ok: false, fehler: 'Nicht erlaubt' })));
+  m('tpmBinden', nurOffen(async (wiederherstellung, pw) => klein(await system.alsRoot('tpm-binden', [], { passwort: pw, eingabe: String(wiederherstellung || ''), timeout: 5 * 60_000 }))));
   m('desktopTaste', nurOffen(async (richtung) => klein(await system.lauf('wtype', ['-M', 'ctrl', '-M', 'logo', '-k', richtung === 'links' ? 'Left' : 'Right'], { timeout: 4000 }))));
   m('fensterKlein', async (a) => klein(await system.lauf('wlrctl', ['toplevel', 'minimize', `app_id:${String(a)}`], { timeout: 4000 })));
 }

@@ -3,7 +3,7 @@
 const http = require('http'); const fs = require('fs');
 const port = process.env.CDP_PORT || 9333;
 http.get(`http://127.0.0.1:${port}/json`, (r) => { let t = ''; r.on('data', (c) => t += c); r.on('end', async () => {
-  const ziel = JSON.parse(t).find((x) => x.type === 'page' && x.url.includes('index.html'));
+  const ziel = JSON.parse(t).find((x) => x.type === 'page' && x.url.includes('index.html') && !x.url.includes('ebene=1'));
   const ws = new WebSocket(ziel.webSocketDebuggerUrl); let nr = 0; const offen = new Map();
   const ruf = (method, params = {}) => new Promise((ok) => { const id = ++nr; offen.set(id, ok); ws.send(JSON.stringify({ id, method, params })); });
   ws.onmessage = (m) => { const d = JSON.parse(m.data); if (offen.has(d.id)) { offen.get(d.id)(d.result || d.error); offen.delete(d.id); } };

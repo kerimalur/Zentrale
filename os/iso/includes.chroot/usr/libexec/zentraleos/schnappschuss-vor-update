@@ -1,0 +1,10 @@
+#!/bin/sh
+# Vor jedem Update ein Schnappschuss (höchstens alle 6 Stunden; die ältesten «vor Update» werden aufgeräumt).
+[ -f /etc/timeshift/timeshift.json ] || exit 0
+grep -qw boot=live /proc/cmdline && exit 0
+marke=/var/lib/zentraleos/letzter-update-schnappschuss
+[ -f "$marke" ] && [ $(( $(date +%s) - $(stat -c %Y "$marke") )) -lt 21600 ] && exit 0
+timeshift --create --comments "vor Update" --tags O --scripted >/dev/null 2>&1 && touch "$marke"
+alt=$(timeshift --list --scripted 2>/dev/null | grep "vor Update" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}' | sort | head -n -5)
+for s in $alt; do timeshift --delete --snapshot "$s" --scripted >/dev/null 2>&1; done
+exit 0

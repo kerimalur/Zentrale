@@ -1,0 +1,3 @@
+# Notfall-Sperre von ZentraleOS: der Code der Oberfläche oder das Benutzer-Passwort
+auth sufficient pam_exec.so quiet expose_authtok /usr/libexec/zentraleos/pin-pruefen
+@include common-auth

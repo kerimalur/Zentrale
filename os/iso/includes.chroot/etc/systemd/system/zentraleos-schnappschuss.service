@@ -1,0 +1,9 @@
+[Unit]
+Description=ZentraleOS: geplante Schnappschüsse (Timeshift)
+ConditionKernelCommandLine=!boot=live
+ConditionPathExists=/etc/timeshift/timeshift.json
+
+[Service]
+Type=oneshot
+Nice=10
+ExecStart=/usr/bin/timeshift --check --scripted

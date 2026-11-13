@@ -1,0 +1,11 @@
+[Unit]
+Description=ZentraleOS: verschlüsselte Platte beim ersten Start an den TPM-Chip binden
+ConditionPathExists=/var/lib/zentraleos/tpm-binden
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/zentraleos/tpm-binden-erststart
+
+[Install]
+WantedBy=multi-user.target

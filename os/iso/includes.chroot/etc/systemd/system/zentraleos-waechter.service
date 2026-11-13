@@ -1,0 +1,17 @@
+[Unit]
+Description=ZentraleOS-Wächter (meldet Portscans, neue Geräte, USB, Fehlversuche, Bot-Ausfälle)
+After=network-online.target nftables.service usbguard.service
+Wants=network-online.target
+
+[Service]
+Environment=ELECTRON_RUN_AS_NODE=1
+ExecStart=/opt/zentraleos/shell/node_modules/electron/dist/electron /opt/zentraleos/shell/waechter/waechter.js
+Restart=always
+RestartSec=5
+Nice=5
+StateDirectory=zentraleos
+RuntimeDirectory=zentraleos
+RuntimeDirectoryPreserve=yes
+
+[Install]
+WantedBy=multi-user.target

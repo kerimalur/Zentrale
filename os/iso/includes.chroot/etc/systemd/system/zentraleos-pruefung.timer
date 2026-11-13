@@ -1,0 +1,10 @@
+[Unit]
+Description=ZentraleOS: Sicherheitsprüfung jeden Sonntag
+
+[Timer]
+OnCalendar=Sun *-*-* 04:30
+Persistent=true
+RandomizedDelaySec=20min
+
+[Install]
+WantedBy=timers.target

@@ -64,7 +64,14 @@ if [ "$(cat "$AUS/installiert" 2>/dev/null)" = ja ]; then
   echo "== Teil 3: Start von der installierten Platte (ohne ISO) =="
   kill "$(cat "$VM/qemu.pid" 2>/dev/null)" 2>/dev/null; sleep 4; cp "$VM/seriell.log" "$AUS/seriell-teil2.log" 2>/dev/null; : > "$VM/seriell.log"
   ZOS_VM_PLATTE=1 tests/vm.sh "$ISO" "$VM" || exit 3
-  for _ in $(seq 1 $(( 40 * LANGSAM ))); do sleep 5; diag "prozesse:" | grep -q electron && break; done; warte 4; foto 30-installiert
+  for _ in $(seq 1 $(( 40 * LANGSAM ))); do sleep 5; diag "prozesse:" | grep -q electron && break; done
+  # Erster Start: einmal das Verschlüsselungs-Passwort (danach bindet das System die Platte an den TPM-Chip)
+  if ! diag "prozesse:" | grep -q electron; then
+    foto 29-passwortabfrage; echo "Erster Start: tippe das Verschlüsselungs-Passwort" | tee -a "$ERG"
+    Q tippe "wiederherstellung-123
+"; for _ in $(seq 1 $(( 30 * LANGSAM ))); do sleep 5; diag "prozesse:" | grep -q electron && break; done
+  fi
+  warte 4; foto 30-installiert
   pruefe "Installiert: System startet von der Platte"        'grep -aq "=== ENDE" "$VM/seriell.log"'
   pruefe "Installiert: Compositor und Shell laufen"          'diag "prozesse:" | grep -q labwc && diag "prozesse:" | grep -q electron'
   pruefe "Installiert: Sitzung gehört dem neuen Benutzer"    'diag "sitzungen:" | grep -q kerim'
@@ -74,7 +81,18 @@ if [ "$(cat "$AUS/installiert" 2>/dev/null)" = ja ]; then
   Q tippe "id -un > /tmp/zos-terminal; ls ~/.config/ZentraleOS/erststart.json >> /tmp/zos-terminal 2>&1
 "; warte 3; aufDiagnose
   pruefe "Installiert: eigener Code entsperrt, Terminal läuft als neuer Benutzer" 'diag "terminaltest:" | grep -q kerim'
+  pruefe "Installiert: Platte verschlüsselt (LUKS), Wurzel Btrfs"   'diag "sicherheit:" | grep -q "wurzel=btrfs luks=1"'
+  pruefe "Installiert: Wächter, USBGuard, Speicher-Notbremse laufen" 'diag "sicherheit:" | grep -q "waechter=active usbguard=active earlyoom=active"'
+  pruefe "Installiert: Kern-Lockdown aktiv"                        'diag "sicherheit:" | grep -q "lockdown=\[integrity\]"'
+  diag "sicherheit:" | tee -a "$ERG"
   pruefe "Installiert: Bildschirm zeigt etwas"               '[ $(stat -c %s "$AUS/30-installiert.png") -gt 20000 ]'
+  echo "== Teil 4: Neustart – jetzt muss der TPM-Chip die Platte ohne Passwort entsperren =="
+  for _ in $(seq 1 $(( 12 * LANGSAM ))); do diag "sicherheit:" | grep -q "tpm=1" && break; aufDiagnose; done
+  pruefe "Installiert: beim ersten Start an den TPM-Chip gebunden" 'diag "sicherheit:" | grep -q "tpm=1"'
+  kill "$(cat "$VM/qemu.pid" 2>/dev/null)" 2>/dev/null; sleep 4; cp "$VM/seriell.log" "$AUS/seriell-teil3.log" 2>/dev/null; : > "$VM/seriell.log"
+  ZOS_VM_PLATTE=1 tests/vm.sh "$ISO" "$VM" || exit 3
+  for _ in $(seq 1 $(( 40 * LANGSAM ))); do sleep 5; diag "prozesse:" | grep -q electron && break; done; foto 32-tpm-neustart
+  pruefe "Installiert: TPM entsperrt beim Neustart ohne Passwort" 'diag "prozesse:" | grep -q electron'
 else
   echo "Teil 3 (Start von der Platte) übersprungen: Installation lief nicht durch" | tee -a "$ERG"
 fi

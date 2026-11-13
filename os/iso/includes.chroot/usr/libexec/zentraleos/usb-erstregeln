@@ -1,0 +1,15 @@
+#!/bin/sh
+# Erlaubt alles, was jetzt angeschlossen ist (Tastatur, Maus, eingebaute Geräte), und reine Speichersticks.
+# Alles andere Neue bleibt gesperrt, bis es in Sicherheit → USB-Geräte erlaubt wird.
+set -e
+gen="$(usbguard generate-policy --no-hashes 2>/dev/null || true)"
+# Sicherheitsnetz: konnte nichts erzeugt werden, nicht alles sperren (sonst ginge keine Tastatur mehr)
+[ -n "$gen" ] || gen='allow'
+{
+  echo '# Von ZentraleOS beim ersten Start erzeugt'
+  printf '%s\n' "$gen"
+  echo '# Reine Speichersticks und -platten (nur Massenspeicher-Schnittstellen)'
+  echo 'allow with-interface all-of { 08:*:* }'
+} > /etc/usbguard/rules.conf.neu
+install -m 0600 /etc/usbguard/rules.conf.neu /etc/usbguard/rules.conf; rm -f /etc/usbguard/rules.conf.neu
+touch /etc/usbguard/.zos-eingerichtet

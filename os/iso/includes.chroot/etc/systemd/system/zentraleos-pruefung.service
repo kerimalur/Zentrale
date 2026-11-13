@@ -1,0 +1,9 @@
+[Unit]
+Description=ZentraleOS: wöchentliche Sicherheitsprüfung (Lynis, rkhunter, AIDE)
+ConditionKernelCommandLine=!boot=live
+
+[Service]
+Type=oneshot
+Nice=15
+IOSchedulingClass=idle
+ExecStart=/usr/libexec/zentraleos/pruefen-woche

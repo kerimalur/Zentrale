@@ -1,0 +1,11 @@
+[Unit]
+Description=ZentraleOS: USB-Regeln beim ersten Start aus den angeschlossenen Geräten erzeugen
+Before=usbguard.service
+ConditionPathExists=!/etc/usbguard/.zos-eingerichtet
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/zentraleos/usb-erstregeln
+
+[Install]
+WantedBy=multi-user.target

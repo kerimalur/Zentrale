@@ -8,6 +8,10 @@ systemd-detect-virt -q --vm || exit 0
 grep -qw zos.test /proc/cmdline || exit 0
 ( while true; do
     nft list chain inet zentraleos eingang 2>/dev/null | grep -q 'dport 9223' || nft insert rule inet zentraleos eingang tcp dport 9223 accept 2>/dev/null
+    # Test des Wächters: legt der Test /tmp/zos-test-portscan an, steht im Kernel-Protokoll ein Portscan von 192.0.2.77
+    if [ -e /tmp/zos-test-portscan ]; then rm -f /tmp/zos-test-portscan
+      for p in 21 22 23 25 80 110 139 443 445 3389; do echo "<6>ZOS-VERWORFEN IN=eth0 OUT= SRC=192.0.2.77 DST=10.0.2.15 LEN=44 PROTO=TCP SPT=40000 DPT=$p WINDOW=1024 SYN" > /dev/kmsg; done
+    fi
     sleep 3
   done ) &
 exec python3 -c '

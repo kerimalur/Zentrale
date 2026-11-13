@@ -24,6 +24,8 @@ cp -a /quelle/erweiterungen config/includes.chroot/opt/zentraleos/erweiterungen 
 # Eigenes Bootmenü (Start, sicherer Grafikmodus, Wartung)
 cp -a /usr/share/live/build/bootloaders config/
 cp /quelle/iso/grub.cfg config/bootloaders/grub-pc/grub.cfg
+# Härtung des Kerns (gleich wie im installierten System, siehe usr/libexec/zentraleos/installieren)
+sed -i 's|@HAERTUNG@|lockdown=integrity init_on_alloc=1 slab_nomerge page_alloc.shuffle=1 randomize_kstack_offset=on vsyscall=none debugfs=off|g' config/bootloaders/grub-pc/grub.cfg
 cp /quelle/iso/splash.svg config/bootloaders/splash.svg
 sed -i 's/title-text: .*/title-text: ""/' config/bootloaders/grub-pc/live-theme/theme.txt
 apt-get install -y -q --no-install-recommends librsvg2-bin fonts-dejavu-core >/dev/null

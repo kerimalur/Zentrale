@@ -1,8 +1,15 @@
 #!/bin/bash
 # Installiert ZentraleOS aus dem Live-System fest auf eine Platte (UEFI, GPT).
 # Läuft als Root über den Helfer. Eingabe (Standardeingabe), je eine Zeile:
-#   Gerät (z. B. /dev/sda) · Benutzername · Passwort · Verschlüsselungs-Passwort (leer = keine) · Code für die Sperre (leer = später setzen)
+#   Gerät (z. B. /dev/sda) · Benutzername · Passwort · Verschlüsselungs-Passwort (leer = keine) · Code für die Sperre
 # DIE GEWÄHLTE PLATTE WIRD VOLLSTÄNDIG GELÖSCHT.
+#
+# Aufbau der Platte:
+#   1  EFI     512 MB  FAT32
+#   2  boot    1 GB    ext4 (Kernel, Startabbild – unverschlüsselt, damit GRUB es lesen kann)
+#   3  System  Rest    Btrfs (Teilbände @ und @home, für Schnappschüsse), wahlweise in LUKS2
+# Mit Verschlüsselung und TPM-Chip: Entsperren beim Start automatisch über den TPM (clevis, PCR 7),
+# das Verschlüsselungs-Passwort bleibt als Wiederherstellung gültig.
 set -euo pipefail
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 PROT=/run/zos-installation.log; : > "$PROT"; chmod 644 "$PROT"
@@ -20,53 +27,60 @@ echo "$NAME" | grep -Eq '^[a-z][a-z0-9-]{0,30}$' || ende "Benutzername: nur Klei
 MEDIUM="$(findmnt -no SOURCE /run/live/medium 2>/dev/null || true)"
 if [ -n "$MEDIUM" ]; then
   ELTERN="$(lsblk -no PKNAME "$MEDIUM" 2>/dev/null | head -1)"
-  [ "/dev/$ELTERN" = "$GERAET" ] || [ "$MEDIUM" = "$GERAET" ] && ende "Das ist der Stick, von dem das System gerade läuft."
+  { [ "/dev/$ELTERN" = "$GERAET" ] || [ "$MEDIUM" = "$GERAET" ]; } && ende "Das ist der Stick, von dem das System gerade läuft."
 fi
 [ "$(blockdev --getsize64 "$GERAET")" -ge 15000000000 ] || ende "Die Platte ist kleiner als 15 GB."
 QUELLE=/run/live/rootfs/filesystem.squashfs; [ -d "$QUELLE/usr" ] || ende "Live-Dateisystem nicht gefunden."
 case "$GERAET" in *nvme*|*mmcblk*) P="${GERAET}p";; *) P="$GERAET";; esac
 ZIEL=/mnt/zos-ziel
+TPM=0; { [ -e /dev/tpmrm0 ] || [ -e /dev/tpm0 ]; } && TPM=1
 
 aufraeumen() { umount -R "$ZIEL" 2>/dev/null || true; cryptsetup close zos-root 2>/dev/null || true; }
 trap aufraeumen EXIT
 
-sag "1/7 Platte vorbereiten ($GERAET)"
+sag "1/8 Platte vorbereiten ($GERAET)"
 swapoff -a 2>/dev/null || true
 for t in $(lsblk -lno NAME "$GERAET" | tail -n +2); do umount -f "/dev/$t" 2>/dev/null || true; done
 wipefs -af "$GERAET" >/dev/null
 sgdisk --zap-all "$GERAET" >/dev/null
-if [ -n "$LUKS" ]; then
-  sgdisk -n1:0:+512M -t1:ef00 -c1:EFI -n2:0:+1G -t2:8300 -c2:zos-boot -n3:0:0 -t3:8309 -c3:ZentraleOS "$GERAET" >/dev/null
-else
-  sgdisk -n1:0:+512M -t1:ef00 -c1:EFI -n2:0:0 -t2:8300 -c2:ZentraleOS "$GERAET" >/dev/null
-fi
+sgdisk -n1:0:+512M -t1:ef00 -c1:EFI -n2:0:+1G -t2:8300 -c2:zos-boot -n3:0:0 -t3:8300 -c3:ZentraleOS "$GERAET" >/dev/null
+[ -n "$LUKS" ] && sgdisk -t3:8309 "$GERAET" >/dev/null
 partprobe "$GERAET"; udevadm settle; sleep 1
 mkfs.vfat -F32 -n EFI "${P}1" >/dev/null
+mkfs.ext4 -qF -L zos-boot "${P}2"
 if [ -n "$LUKS" ]; then
-  sag "2/7 Verschlüsselung einrichten"
-  mkfs.ext4 -qF -L zos-boot "${P}2"
-  printf '%s' "$LUKS" | cryptsetup luksFormat --batch-mode --key-file - "${P}3"
+  sag "2/8 Verschlüsselung einrichten (LUKS2)"
+  printf '%s' "$LUKS" | cryptsetup luksFormat --type luks2 --batch-mode --key-file - "${P}3"
   printf '%s' "$LUKS" | cryptsetup open --key-file - "${P}3" zos-root
   WURZEL=/dev/mapper/zos-root
 else
-  sag "2/7 Ohne Verschlüsselung"
-  WURZEL="${P}2"
+  sag "2/8 Ohne Verschlüsselung"
+  WURZEL="${P}3"
 fi
-mkfs.ext4 -qF -L ZentraleOS "$WURZEL"
-mkdir -p "$ZIEL"; mount "$WURZEL" "$ZIEL"
-if [ -n "$LUKS" ]; then mkdir -p "$ZIEL/boot"; mount "${P}2" "$ZIEL/boot"; fi
-mkdir -p "$ZIEL/boot/efi"; mount "${P}1" "$ZIEL/boot/efi"
 
-sag "3/7 System kopieren (dauert einige Minuten)"
+sag "3/8 Dateisystem (Btrfs mit Teilbänden für Schnappschüsse)"
+mkfs.btrfs -qf -L ZentraleOS "$WURZEL"
+mkdir -p "$ZIEL"; mount "$WURZEL" "$ZIEL"
+btrfs subvolume create "$ZIEL/@" >/dev/null; btrfs subvolume create "$ZIEL/@home" >/dev/null
+umount "$ZIEL"
+OPT="compress=zstd:1,noatime"
+mount -o "subvol=@,$OPT" "$WURZEL" "$ZIEL"
+mkdir -p "$ZIEL/home" "$ZIEL/boot"; mount -o "subvol=@home,$OPT" "$WURZEL" "$ZIEL/home"
+mount "${P}2" "$ZIEL/boot"; mkdir -p "$ZIEL/boot/efi"; mount "${P}1" "$ZIEL/boot/efi"
+
+sag "4/8 System kopieren (dauert einige Minuten)"
 rsync -aHAX "$QUELLE/" "$ZIEL/"
 
-sag "4/7 Einrichten"
+sag "5/8 Einrichten"
+FSUUID="$(blkid -s UUID -o value "$WURZEL")"
 {
-  echo "UUID=$(blkid -s UUID -o value "$WURZEL") / ext4 errors=remount-ro,noatime 0 1"
-  [ -n "$LUKS" ] && echo "UUID=$(blkid -s UUID -o value "${P}2") /boot ext4 defaults,noatime 0 2"
+  echo "UUID=$FSUUID / btrfs subvol=@,$OPT 0 0"
+  echo "UUID=$FSUUID /home btrfs subvol=@home,$OPT 0 0"
+  echo "UUID=$(blkid -s UUID -o value "${P}2") /boot ext4 defaults,noatime 0 2"
   echo "UUID=$(blkid -s UUID -o value "${P}1") /boot/efi vfat umask=0077 0 2"
 } > "$ZIEL/etc/fstab"
-[ -n "$LUKS" ] && echo "zos-root UUID=$(blkid -s UUID -o value "${P}3") none luks,discard" > "$ZIEL/etc/crypttab"
+LUKSUUID=""
+if [ -n "$LUKS" ]; then LUKSUUID="$(blkid -s UUID -o value "${P}3")"; echo "zos-root UUID=$LUKSUUID none luks,discard" > "$ZIEL/etc/crypttab"; else : > "$ZIEL/etc/crypttab"; fi
 : > "$ZIEL/etc/machine-id"; rm -f "$ZIEL/var/lib/dbus/machine-id"
 printf 'XKBMODEL="pc105"\nXKBLAYOUT="ch"\nXKBVARIANT=""\nXKBOPTIONS=""\nBACKSPACE="guess"\n' > "$ZIEL/etc/default/keyboard"
 cat > "$ZIEL/etc/default/grub" <<'GRUB'
@@ -74,14 +88,40 @@ GRUB_DEFAULT=0
 GRUB_TIMEOUT=2
 GRUB_DISTRIBUTOR="ZentraleOS"
 GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
-GRUB_CMDLINE_LINUX=""
+GRUB_CMDLINE_LINUX="lockdown=integrity init_on_alloc=1 slab_nomerge page_alloc.shuffle=1 randomize_kstack_offset=on vsyscall=none debugfs=off"
 GRUB_DISABLE_OS_PROBER=true
 GRUB
+# Schnappschüsse: Timeshift im Btrfs-Modus (nur das System, der persönliche Ordner bleibt beim Zurücksetzen unberührt)
+mkdir -p "$ZIEL/etc/timeshift"
+cat > "$ZIEL/etc/timeshift/timeshift.json" <<TS
+{
+  "backup_device_uuid" : "$FSUUID",
+  "parent_device_uuid" : "$LUKSUUID",
+  "do_first_run" : "false",
+  "btrfs_mode" : "true",
+  "include_btrfs_home_for_backup" : "false",
+  "include_btrfs_home_for_restore" : "false",
+  "stop_cron_emails" : "true",
+  "schedule_monthly" : "false",
+  "schedule_weekly" : "true",
+  "schedule_daily" : "true",
+  "schedule_hourly" : "false",
+  "schedule_boot" : "false",
+  "count_monthly" : "2",
+  "count_weekly" : "3",
+  "count_daily" : "5",
+  "count_hourly" : "6",
+  "count_boot" : "5",
+  "date_format" : "%Y-%m-%d %H:%M:%S",
+  "exclude" : [],
+  "exclude-apps" : []
+}
+TS
 for d in dev dev/pts proc sys run; do mount --bind "/$d" "$ZIEL/$d"; done
 mount -t efivarfs efivarfs "$ZIEL/sys/firmware/efi/efivars" 2>/dev/null || true
 im() { chroot "$ZIEL" /usr/bin/env PATH=/usr/sbin:/usr/bin:/sbin:/bin DEBIAN_FRONTEND=noninteractive "$@"; }
 
-sag "5/7 Benutzer «$NAME»"
+sag "6/8 Benutzer «$NAME»"
 if [ "$NAME" != zentrale ]; then
   im usermod -l "$NAME" -d "/home/$NAME" -m zentrale
   im groupmod -n "$NAME" zentrale
@@ -95,14 +135,26 @@ if echo "$CODE" | grep -Eq '^[0-9A-Za-z]{4,12}$'; then
   im chown -R "$NAME:$NAME" "/home/$NAME/.config"
 fi
 
-sag "6/7 Live-Teile entfernen, Startabbild bauen"
+sag "7/8 Live-Teile entfernen, Startabbild bauen"
 im apt-get -y -q purge live-boot live-boot-initramfs-tools live-config live-config-systemd live-tools >>"$PROT" 2>&1 || sag "Hinweis: Live-Pakete liessen sich nicht alle entfernen."
+rm -f "$ZIEL/etc/usbguard/.zos-eingerichtet"     # USB-Regeln beim ersten Start neu aus den angeschlossenen Geräten
+TPMTEXT=""
+if [ -n "$LUKS" ] && [ "$TPM" = 1 ]; then
+  # An den TPM-Chip wird erst beim ersten Start des installierten Systems gebunden: nur dann stimmen die Messwerte
+  # (PCR 7) mit dem späteren Start überein. Das Passwort liegt bis dahin nur root-lesbar INNERHALB der verschlüsselten Platte.
+  install -d -m 0700 "$ZIEL/var/lib/zentraleos"
+  ( umask 077; printf '%s' "$LUKS" > "$ZIEL/var/lib/zentraleos/tpm-binden" )
+  im systemctl enable zentraleos-tpm-binden.service >>"$PROT" 2>&1
+  TPMTEXT=" · beim ersten Start einmal das Verschlüsselungs-Passwort eingeben, danach entsperrt der TPM-Chip von selbst"
+fi
+# Schweizer Tastatur schon bei der Passwortabfrage beim Start (sonst wären z, y, - usw. vertauscht)
+sed -i 's/^#\?KEYMAP=.*/KEYMAP=y/' "$ZIEL/etc/initramfs-tools/initramfs.conf" 2>/dev/null || true
 im update-initramfs -u -k all >>"$PROT" 2>&1
 
-sag "7/7 Startprogramm (GRUB)"
-im grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ZentraleOS --recheck >>"$PROT" 2>&1 || sag "Hinweis: Eintrag in der Firmware nicht möglich, nutze den Standardpfad."
-im grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable --no-nvram >>"$PROT" 2>&1
+sag "8/8 Startprogramm (GRUB, Secure Boot)"
+im grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ZentraleOS --uefi-secure-boot --recheck >>"$PROT" 2>&1 || sag "Hinweis: Eintrag in der Firmware nicht möglich, nutze den Standardpfad."
+im grub-install --target=x86_64-efi --efi-directory=/boot/efi --uefi-secure-boot --removable --no-nvram >>"$PROT" 2>&1
 im update-grub >>"$PROT" 2>&1
 sync
 umount -R "$ZIEL"; trap - EXIT; cryptsetup close zos-root 2>/dev/null || true
-sag "FERTIG. Stick abziehen und neu starten."
+sag "FERTIG${LUKS:+ · verschlüsselt}${TPMTEXT}. Stick abziehen und neu starten."

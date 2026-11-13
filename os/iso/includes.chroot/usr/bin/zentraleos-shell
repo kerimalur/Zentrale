@@ -13,7 +13,10 @@ while true; do
     [ $? -eq 0 ] && exit 0
     # Lief sie länger als zwei Minuten, zählt der Absturz neu.
     jetzt=$(date +%s); [ $((jetzt - anfang)) -gt 120 ] && n=0; anfang=$jetzt
-    n=$((n+1)); sleep 1
+    n=$((n+1))
+    # Abgestürzt: sofort eine echte Sperre (ext-session-lock) über alles legen, bevor die Oberfläche neu startet –
+    # sonst lägen fremde Fenster für einen Moment offen. Entsperren mit dem Code der Oberfläche oder dem Passwort.
+    command -v swaylock >/dev/null && swaylock -e -F -c 08130e --indicator-radius 80 2>/dev/null || sleep 1
   done
   foot --fullscreen -e /usr/libexec/zentraleos/notfall || sleep 5
 done

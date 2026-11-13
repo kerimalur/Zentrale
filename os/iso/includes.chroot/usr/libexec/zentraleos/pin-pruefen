@@ -1,0 +1,12 @@
+#!/usr/bin/python3 -I
+# Prüft für die Notfall-Sperre (swaylock) den Code der Oberfläche. Aufruf über pam_exec mit expose_authtok.
+import hashlib, hmac, json, os, pwd, sys
+try:
+    code = sys.stdin.readline().rstrip('\x00\n')
+    heim = pwd.getpwnam(os.environ.get('PAM_USER', '')).pw_dir
+    d = json.load(open(os.path.join(heim, '.config/ZentraleOS/anmeldung.json')))
+    p = d['pin']
+    h = hashlib.scrypt(code.encode(), salt=p['salz'].encode(), n=16384, r=8, p=1, dklen=64, maxmem=64 * 1024 * 1024).hex()
+    sys.exit(0 if hmac.compare_digest(h, p['hash']) else 1)
+except Exception:
+    sys.exit(1)

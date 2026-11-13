@@ -136,7 +136,7 @@ async function sicherheit(extra = {}) {
   const auto = /Unattended-Upgrade "1"/.test(lies('/etc/apt/apt.conf.d/20auto-upgrades'));
   p('auto', 'Automatische Sicherheitsupdates', auto ? 'gut' : 'warnung', auto ? 'An. Sie laufen im Wartungsfenster und nie bei offenen Positionen.' : 'Aus.', 'updates');
   const live = /boot=live/.test(lies('/proc/cmdline')); const krypt = /crypt/.test(blk.aus || '');
-  p('platte', 'Plattenverschlüsselung', live ? 'info' : krypt ? 'gut' : 'warnung', live ? 'Live-System vom Stick: nichts wird dauerhaft gespeichert.' : krypt ? 'Die Systemplatte ist verschlüsselt.' : 'Die Systemplatte ist nicht verschlüsselt. Wer den Rechner mitnimmt, kann die Daten lesen.', 'datentraeger');
+  if (live || !waechter()) p('platte', 'Plattenverschlüsselung', live ? 'info' : krypt ? 'gut' : 'warnung', live ? 'Live-System vom Stick: nichts wird dauerhaft gespeichert.' : krypt ? 'Die Systemplatte ist verschlüsselt.' : 'Die Systemplatte ist nicht verschlüsselt. Wer den Rechner mitnimmt, kann die Daten lesen.', 'datentraeger');
   p('pin', 'Sperre', extra.pinGesetzt ? 'gut' : 'schlecht', extra.pinGesetzt ? 'Ein Code ist gesetzt. Ohne ihn kommt niemand an die Oberfläche.' : 'Es ist kein Code gesetzt.', 'anmeldung');
   const aus = Number(e.ruhe?.bildschirmAusMin) || 0; const sperr = Number(e.anmeldung?.autoSperrenMin) || 0;
   p('auto-sperre', 'Automatisch sperren', aus || sperr ? 'gut' : 'warnung', aus || sperr ? `Nach ${Math.min(...[aus, sperr].filter(Boolean))} Minuten ohne Eingabe.` : 'Der Rechner sperrt sich nie von selbst.', 'ruhe');
@@ -145,6 +145,21 @@ async function sicherheit(extra = {}) {
   p('secureboot', 'Secure Boot', sb ? 'gut' : 'info', sb === null ? 'Nicht feststellbar.' : sb ? 'An.' : 'Aus. Für den Betrieb nicht nötig; es schützt gegen veränderte Startprogramme.', null);
   const sudoFrei = (await lauf('sudo', ['-n', 'true'], { timeout: 4000 })).ok;
   p('root', 'Administrator-Rechte', sudoFrei ? 'schlecht' : 'gut', sudoFrei ? 'Root-Rechte sind ohne Passwort möglich.' : 'Nur mit Passwort.', null);
+  const w = waechter(); const sy = (w && w.system) || {};
+  p('waechter', 'Wächter', w ? 'gut' : 'schlecht', w ? 'Läuft als eigener Dienst: meldet Portscans, neue Geräte, USB, Fehlversuche, Köder-Datei und Bot-Ausfälle aufs Handy.' : 'Der Wächter-Dienst läuft nicht.', null);
+  if (w) {
+    p('usb', 'USB-Schutz', sy.usbguard ? 'gut' : 'warnung', sy.usbguard ? 'Unbekannte USB-Geräte bleiben gesperrt, bis du sie erlaubst (Speichersticks sind erlaubt).' : 'USBGuard läuft nicht.', 'usb');
+    p('oom', 'Speicher-Notbremse', sy.earlyoom ? 'gut' : 'warnung', sy.earlyoom ? 'Ist der Arbeitsspeicher voll, wird zuerst der Browser beendet – nie der Bot.' : 'earlyoom läuft nicht.', null);
+    p('kern', 'Kern gehärtet', sy.lockdown && sy.lockdown !== 'none' ? 'gut' : 'warnung', sy.lockdown && sy.lockdown !== 'none' ? `Lockdown «${sy.lockdown}», AppArmor ${sy.apparmor ? 'an' : 'aus'}.` : 'Kernel-Lockdown ist aus.', null);
+    if (!sy.live) {
+      p('platte', 'Plattenverschlüsselung', sy.verschluesselt ? (sy.tpm ? 'gut' : 'warnung') : 'warnung', sy.verschluesselt ? (sy.tpm ? 'Verschlüsselt, entsperrt sich beim Start über den TPM-Chip. Ausgebaut ist die Platte unlesbar.' : 'Verschlüsselt, aber nicht an den TPM-Chip gebunden: jeder Start braucht das Passwort.') : 'Nicht verschlüsselt.', sy.verschluesselt && !sy.tpm && sy.tpmChip ? 'tpm' : 'datentraeger');
+      p('schnapp', 'Schnappschüsse', sy.schnappschuesse && sy.schnappschuesse.anzahl ? 'gut' : 'warnung', sy.schnappschuesse ? (sy.schnappschuesse.anzahl ? `${sy.schnappschuesse.anzahl} vorhanden, letzter ${sy.schnappschuesse.letzter.replace('_', ' ').replace(/-(\d\d)-(\d\d)$/, ':$1')}.` : 'Noch keiner.') : 'Nicht eingerichtet.', 'schnappschuesse');
+    }
+    if (sy.secureBoot !== undefined) { const i = punkte.findIndex((x) => x.id === 'secureboot'); if (i >= 0) punkte.splice(i, 1); p('secureboot', 'Secure Boot', sy.secureBoot ? 'gut' : 'info', sy.secureBoot === null ? 'Nicht feststellbar.' : sy.secureBoot ? 'An.' : 'Aus. Einschalten in der Firmware (HP: F10) – schützt gegen veränderte Startprogramme.', null); }
+  }
+  const fw2 = Promise.resolve().then(() => system.firewallLesen()).catch(() => ({}));
+  const ks = (await fw2).killswitch;
+  p('anonym', 'Anonymität', ks ? 'gut' : 'info', ks ? 'Kill-Switch an: ins Internet nur durch Tailscale (Exit-Node).' : 'Kill-Switch aus. Unter Anonymität einstellbar.', 'anonym');
   const note = punkte.filter((x) => x.zustand === 'schlecht').length ? 'schlecht' : punkte.filter((x) => x.zustand === 'warnung').length ? 'warnung' : 'gut';
   return { ok: true, punkte, note };
 }
@@ -175,7 +190,10 @@ async function netzPruefen() {
   if (lauscherVorher) for (const x of jetzt) if (!lauscherVorher.has(x)) { netzEreignis('dienst', `Neuer lauschender Dienst: ${x}`); sag(`Neuer Dienst hört im Netz: ${x}`, 'warnung'); }
   lauscherVorher = jetzt;
 }
-const netz = async () => ({ ...(await netzStand()), ereignisse: netzEreignisse.slice(0, 80), bekannt: Object.keys(bekannt || {}).length });
+const netz = async () => {
+  const w = waechter(); const aus = meldungen().liste.filter((e) => ['netz', 'firewall', 'usb', 'anmeldung'].includes(e.quelle)).map((e) => ({ zeit: e.zeit, art: e.art, text: e.text }));
+  return { ...(await netzStand()), ereignisse: [...aus, ...netzEreignisse].sort((a, b) => b.zeit - a.zeit).slice(0, 80), bekannt: w ? w.netz.bekannt : Object.keys(bekannt || {}).length, gesperrt: w ? (w.gesperrt || []).filter((x) => x.bis > Date.now()) : [], ziele: w ? w.ziele || {} : {} };
+};
 function netzVergessen() { bekannt = {}; try { fs.rmSync(netzDatei(), { force: true }); } catch {} return { ok: true }; }
 
 // ---------- Bot-Wächter ----------
@@ -199,7 +217,7 @@ async function botPruefen() {
   if (bot.neustarts.length >= 5) { if (!bot.aufgegeben) { bot.aufgegeben = true; botNotiz('Fünf Startversuche in einer Stunde – ich warte.'); melden(`${b.name}: fünf Startversuche ohne Erfolg.`); } return; }
   bot.aufgegeben = false; bot.neustarts.push(Date.now()); botNotiz(`Starte ${b.name} neu.`); system.befehlStarten(String(b.start));
 }
-const botStand = () => ({ ok: true, laeuft: bot.laeuft, geprueft: bot.geprueft, neustarts: bot.neustarts.length, protokoll: bot.protokoll.slice(0, 40), positionenOffen: fs.existsSync(path.join(app.getPath('userData'), 'positionen-offen')) || fs.existsSync('/run/zentraleos/positionen-offen') });
+const botStand = () => { const w = waechter(); const q = w && w.bot && (w.bot.geprueft || 0) > (bot.geprueft || 0) ? { laeuft: w.bot.laeuft, geprueft: w.bot.geprueft, neustarts: w.bot.neustarts || 0, protokoll: w.bot.protokoll || [] } : { laeuft: bot.laeuft, geprueft: bot.geprueft, neustarts: bot.neustarts.length, protokoll: bot.protokoll.slice(0, 40) }; return { ok: true, ...q, waechter: !!w, positionenOffen: fs.existsSync(path.join(app.getPath('userData'), 'positionen-offen')) || fs.existsSync('/run/zentraleos/positionen-offen') }; };
 
 // ---------- Backup auf den Pi ----------
 let backupLaeuft = false;
@@ -275,7 +293,7 @@ async function installPlatten() {
   const teile = await lauf('lsblk', ['-rno', 'PKNAME,FSTYPE,LABEL']);
   const platten = (d.blockdevices || []).filter((x) => x.type === 'disk' && !/^(loop|ram|zram|sr)/.test(x.name)).map((x) => ({ pfad: x.path, groesse: Number(x.size), modell: (x.model || '').trim() || x.name, bus: x.tran || '', wechsel: !!x.rm, live: x.name === live,
     inhalt: [...new Set((teile.aus || '').split('\n').map((z) => z.split(' ')).filter((t) => t[0] === x.name && t[1]).map((t) => (t[1] === 'ntfs' ? 'Windows (NTFS)' : t[1])))].join(', ') }));
-  return { ok: true, platten, live: /boot=live/.test(lies('/proc/cmdline')), uefi: fs.existsSync('/sys/firmware/efi') };
+  return { ok: true, platten, live: /boot=live/.test(lies('/proc/cmdline')), uefi: fs.existsSync('/sys/firmware/efi'), tpm: fs.existsSync('/dev/tpmrm0') || fs.existsSync('/dev/tpm0') };
 }
 function installieren(k, pw) {
   const z = (x) => String(x ?? '').replace(/[\r\n]/g, '');
@@ -296,16 +314,99 @@ async function fernzugriff() {
   return { ok: true, ssh: (ssh.aus || '').trim() === 'active', nurTailscale: /ListenAddress 100\./.test(lies('/etc/ssh/sshd_config.d/zentraleos.conf')), tailscaleIp: (ts.aus || '').trim().split('\n')[0] || '', benutzer: os.userInfo().username, rechner: os.hostname(), rustdesk: rd.ok };
 }
 
+// ---------- Wächter (eigener Systemdienst, siehe shell/waechter) ----------
+const waechter = () => { try { const d = JSON.parse(fs.readFileSync('/run/zentraleos/waechter.json', 'utf8')); return Date.now() - d.zeit < 60_000 ? d : null; } catch { return null; } };
+function meldungen() { let l = []; try { l = JSON.parse(fs.readFileSync('/var/lib/zentraleos/ereignisse.json', 'utf8')); } catch {} return { ok: true, liste: l.slice(0, 150), waechter: !!waechter() }; }
+const waechterStand = () => ({ ok: true, ...(waechter() || { laeuft: false }) });
+
+// ---------- Nachtlicht (wlsunset) ----------
+let nachtlichtProzess = null;
+function nachtlicht() {
+  const n = (einstellungen.alle().nachtlicht) || {};
+  if (nachtlichtProzess) { try { nachtlichtProzess.kill(); } catch {} nachtlichtProzess = null; }
+  if (!n.an || process.platform !== 'linux') return { ok: true, an: false };
+  const z = (t) => (/^\d{1,2}:\d{2}$/.test(String(t)) ? String(t).padStart(5, '0') : null);
+  const args = ['-t', String(Math.max(2500, Math.min(6000, Number(n.temperatur) || 3800))), '-T', '6500'];
+  if (n.immer) args.push('-S', '00:00', '-s', '00:01'); else if (z(n.ab) && z(n.bis)) args.push('-s', z(n.ab), '-S', z(n.bis)); else args.push('-s', '20:00', '-S', '07:00');
+  nachtlichtProzess = spawn('wlsunset', args, { stdio: 'ignore' }); nachtlichtProzess.on('error', () => { nachtlichtProzess = null; });
+  return { ok: true, an: true };
+}
+
+// ---------- Standardprogramme ----------
+const STANDARD_TYPEN = [['x-scheme-handler/http', 'Webbrowser'], ['application/pdf', 'PDF'], ['image/png', 'Bilder'], ['text/plain', 'Text'], ['video/mp4', 'Video'], ['audio/mpeg', 'Musik'], ['inode/directory', 'Ordner']];
+async function standardApps() {
+  const liste = [];
+  for (const [typ, name] of STANDARD_TYPEN) { const r = await lauf('xdg-mime', ['query', 'default', typ], { timeout: 4000 }); liste.push({ typ, name, app: (r.aus || '').trim() }); }
+  return { ok: true, liste };
+}
+async function standardAppSetzen(typ, app) {
+  if (!STANDARD_TYPEN.some(([t]) => t === typ) || !/^[\w.-]+\.desktop$/.test(String(app))) return { ok: false, fehler: 'Ungültig' };
+  const typen = typ === 'x-scheme-handler/http' ? ['x-scheme-handler/http', 'x-scheme-handler/https', 'text/html'] : typ === 'image/png' ? ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] : typ === 'video/mp4' ? ['video/mp4', 'video/x-matroska', 'video/webm'] : typ === 'audio/mpeg' ? ['audio/mpeg', 'audio/flac', 'audio/ogg'] : [typ];
+  for (const t of typen) { const r = await lauf('xdg-mime', ['default', app, t], { timeout: 4000 }); if (!r.ok) return r; }
+  return { ok: true };
+}
+
+// ---------- Rechte der Flatpak-Programme ----------
+const RECHTE = { netz: ['--share=network', '--unshare=network'], ton: ['--socket=pulseaudio', '--nosocket=pulseaudio'], kamera: ['--device=all', '--nodevice=all'], dateien: ['--filesystem=home', '--nofilesystem=home'] };
+async function appRechte() {
+  const l = await lauf('flatpak', ['list', '--app', '--columns=application,name'], { timeout: 15000 });
+  if (l.fehlt) return { ok: false, fehler: 'Flatpak fehlt' };
+  const liste = [];
+  for (const z of l.aus.split('\n').filter(Boolean)) {
+    const [id, name] = z.split('\t'); const i = await lauf('flatpak', ['info', '--show-permissions', id], { timeout: 8000 }); const t = i.aus;
+    liste.push({ id, name: name || id, netz: /shared=.*network/.test(t), ton: /sockets=.*pulseaudio/.test(t), kamera: /devices=.*(all|webcam)/.test(t), dateien: /filesystems=.*(home|host)/.test(t) });
+  }
+  return { ok: true, liste };
+}
+async function appRechtSetzen(id, recht, an) {
+  if (!/^[\w.-]+$/.test(String(id)) || !RECHTE[recht]) return { ok: false, fehler: 'Ungültig' };
+  return lauf('flatpak', ['override', '--user', RECHTE[recht][an ? 0 : 1], id], { timeout: 15000 });
+}
+
+// ---------- Lautstärke pro Programm (PipeWire) ----------
+async function tonProgramme() {
+  const r = await lauf('pw-dump', [], { timeout: 6000 }); let d = []; try { d = JSON.parse(r.aus); } catch {}
+  const liste = d.filter((x) => x.type === 'PipeWire:Interface:Node' && x.info && x.info.props && x.info.props['media.class'] === 'Stream/Output/Audio').map((x) => {
+    const p = x.info.props; const prm = (x.info.params && x.info.params.Props && x.info.params.Props[0]) || {};
+    const vol = Array.isArray(prm.channelVolumes) && prm.channelVolumes.length ? Math.cbrt(prm.channelVolumes[0]) : 1;
+    return { id: x.id, name: p['application.name'] || p['node.name'] || 'Programm', medien: p['media.name'] || '', lautstaerke: Math.round(vol * 100), stumm: !!prm.mute };
+  });
+  return { ok: true, liste };
+}
+const tonProgrammSetzen = (id, prozent) => (Number.isInteger(Number(id)) ? lauf('wpctl', ['set-volume', String(Number(id)), String(Math.max(0, Math.min(150, Number(prozent))) / 100)], { timeout: 4000 }) : { ok: false });
+
+// ---------- Anonymität ----------
+async function anonymCheck() {
+  const holeJson = async (url) => { try { const r = await fetch(url, { signal: AbortSignal.timeout(10000), headers: { 'User-Agent': 'curl/8' } }); return r.ok ? await r.json() : null; } catch { return null; } };
+  const [a, t] = await Promise.all([holeJson('https://am.i.mullvad.net/json'), system.tailscale().catch(() => ({}))]);
+  const exit = ((t && t.geraete) || []).find((g) => g.exitAktiv) || null;
+  const v6 = await holeJson('https://ipv6.am.i.mullvad.net/json');
+  let resolv = ''; try { resolv = fs.readFileSync('/etc/resolv.conf', 'utf8'); } catch {}
+  const dns = (resolv.match(/^nameserver\s+(\S+)/gm) || []).map((z) => z.split(/\s+/)[1]);
+  return { ok: true, ip: a ? a.ip : null, land: a ? a.country : null, stadt: a ? a.city : null, anbieter: a ? a.organization : null, exitNode: exit ? exit.name : null, ipv6: v6 ? v6.ip : null, dns };
+}
+
+// ---------- Metadaten entfernen (mat2) ----------
+async function metadatenWeg(pfad) {
+  const p = String(pfad || ''); if (!path.isAbsolute(p) || !fs.existsSync(p)) return { ok: false, fehler: 'Datei nicht gefunden' };
+  const r = await lauf('mat2', ['--inplace', p], { timeout: 60000 });
+  return r.fehlt ? { ok: false, fehler: 'mat2 ist nicht installiert' } : r.ok ? { ok: true } : { ok: false, fehler: r.fehler || 'Nicht möglich (Dateityp?)' };
+}
+
 function starten({ hinweis }) {
   sag = hinweis || sag;
   ablageStarten();
-  setInterval(() => netzPruefen().catch(() => {}), 30_000); setTimeout(() => netzPruefen().catch(() => {}), 8000);
-  setInterval(() => botPruefen().catch(() => {}), 30_000); setTimeout(() => botPruefen().catch(() => {}), 15_000);
-  setInterval(() => backupPlan(), 10 * 60_000);
+  // Läuft der Wächter-Dienst, macht er das – sonst (z. B. Vorschau unter Windows) die Oberfläche selbst.
+  const ohneWaechter = (fn) => () => { if (!waechter()) fn(); };
+  setInterval(ohneWaechter(() => netzPruefen().catch(() => {})), 30_000); setTimeout(ohneWaechter(() => netzPruefen().catch(() => {})), 20_000);
+  setInterval(ohneWaechter(() => botPruefen().catch(() => {})), 30_000); setTimeout(ohneWaechter(() => botPruefen().catch(() => {})), 25_000);
+  setInterval(ohneWaechter(() => backupPlan()), 10 * 60_000);
+  nachtlicht();
 }
 
 module.exports = {
   starten, socketStarten, ablageListe, ablageNehmen, ablageLeeren, papierkorb, papierkorbZurueck, papierkorbLeeren, fotos,
   datentraeger, ordnerAnalyse, einhaengen, aushaengen, smart, sicherheit, netz, netzVergessen, botStand, botPruefen, melden,
   backupSchluessel, backupJetzt, allesBeenden, fokusStart, fokusEnde, fokusStand, installPlatten, installieren, installStand, energie, fernzugriff,
+  meldungen, waechterStand, nachtlicht, standardApps, standardAppSetzen, appRechte, appRechtSetzen, tonProgramme, tonProgrammSetzen, anonymCheck, metadatenWeg,
 };

@@ -52,6 +52,33 @@ case "${1:-}" in
   protokoll) journalctl -b -n "${2:-200}" --no-pager -o short-iso ;;
   energie) case "$2" in neustart) systemctl reboot;; aus) systemctl poweroff;; firmware) systemctl reboot --firmware-setup;; esac ;;
   installieren) exec /usr/libexec/zentraleos/installieren ;;
+  usb-erlauben|usb-sperren)
+    case "${2:-}" in ''|*[!0-9]*) exit 2;; esac
+    if [ "$1" = usb-erlauben ]; then usbguard allow-device -p "$2"; else usbguard block-device -p "$2"; fi ;;
+  schnappschuss-liste) timeshift --list --scripted 2>&1 | tail -n +1 ;;
+  schnappschuss-erstellen)
+    k="$(printf '%s' "${2:-von Hand}" | tr -cd 'A-Za-z0-9 äöüÄÖÜ._-' | cut -c1-60)"
+    timeshift --create --comments "$k" --tags O --scripted 2>&1 | tail -5 ;;
+  schnappschuss-loeschen|schnappschuss-zurueck)
+    echo "${2:-}" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}$' || exit 2
+    if [ "$1" = schnappschuss-loeschen ]; then timeshift --delete --snapshot "$2" --scripted 2>&1 | tail -3
+    else timeshift --restore --snapshot "$2" --scripted --yes --skip-grub 2>&1 | tail -8; fi ;;
+  firmware-suchen) fwupdmgr refresh --force >/dev/null 2>&1; fwupdmgr get-updates --no-unreported-check 2>&1 | tail -40 ;;
+  firmware-einspielen) fwupdmgr update -y --no-reboot-check 2>&1 | tail -15 ;;
+  aufraeumen)
+    vorher=$(df --output=avail -B1 / | tail -1)
+    apt-get clean; journalctl --vacuum-size=200M >/dev/null 2>&1; flatpak uninstall --unused -y >/dev/null 2>&1
+    rm -rf /var/tmp/*.tmp 2>/dev/null; nachher=$(df --output=avail -B1 / | tail -1)
+    echo $(( (nachher - vorher) / 1048576 )) ;;
+  tpm-binden)
+    # Verschlüsselte Systemplatte an den TPM-Chip binden (Wiederherstellungs-Passwort kommt über die Standardeingabe).
+    dev="$(awk '!/^#/ && NF {print $2; exit}' /etc/crypttab)"; dev="${dev#UUID=}"; [ -n "$dev" ] || { echo "Keine verschlüsselte Platte" >&2; exit 3; }
+    pw="$(cat)"; for s in $(clevis luks list -d "/dev/disk/by-uuid/$dev" 2>/dev/null | cut -d: -f1); do clevis luks unbind -d "/dev/disk/by-uuid/$dev" -s "$s" -f; done
+    printf '%s' "$pw" | clevis luks bind -y -k - -d "/dev/disk/by-uuid/$dev" tpm2 '{"pcr_bank":"sha256","pcr_ids":"7"}' && update-initramfs -u >/dev/null 2>&1 && echo gebunden ;;
+  pruefung-jetzt) systemctl start --no-block zentraleos-pruefung.service; echo gestartet ;;
+  ip-entsperren)
+    echo "${2:-}" | grep -Eq '^[0-9a-fA-F:.]{3,45}$' || exit 2
+    case "$2" in *:*) nft delete element inet zentraleos gesperrt6 "{ $2 }";; *) nft delete element inet zentraleos gesperrt4 "{ $2 }";; esac ;;
   smart)
     case "$2" in /dev/sd[a-z]|/dev/nvme[0-9]n[0-9]|/dev/vd[a-z]|/dev/mmcblk[0-9]) smartctl -H -A -i "$2" 2>&1 | head -80 ;; *) exit 2;; esac ;;
   fokus-sperre)

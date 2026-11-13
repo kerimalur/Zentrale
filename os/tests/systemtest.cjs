@@ -13,7 +13,7 @@ const json = (url) => new Promise((ok, nein) => { http.get(url, (r) => { let t =
 
 async function verbinden() {
   for (let n = 0; n < 60; n++) {
-    try { const z = (await json(`http://127.0.0.1:${CDP}/json`)).find((x) => x.type === 'page' && x.url.includes('index.html')); if (z) return z; } catch {}
+    try { const z = (await json(`http://127.0.0.1:${CDP}/json`)).find((x) => x.type === 'page' && x.url.includes('index.html') && !x.url.includes('ebene=1')); if (z) return z; } catch {}
     await new Promise((r) => setTimeout(r, 5000));
   }
   throw new Error('DevTools der Shell nicht erreichbar');
@@ -145,6 +145,20 @@ async function verbinden() {
   r = await js(`const a = await Z.mehr.rootMehr('update-fenster', ['Sun', '9'], '${PW}'); const b = await Z.mehr.botStand(); await Einst.setzenAsync({ bot: { an: true, name: 'Testbot', muster: 'zos-testbot-gibt-es-nicht', start: 'touch /tmp/zos-bot-gestartet' } }); const c = await Z.mehr.botPruefen(); await warte(1500); const d = await Z.lokal.liste('/tmp', true); await Einst.setzenAsync({ bot: { an: false, start: '' } }); return { fenster: a.ok, fehler: a.fehler, stand: b.ok, laeuft: c.laeuft, gestartet: JSON.stringify(d).includes('zos-bot-gestartet') }`);
   pruefe('Update-Fenster setzbar; Bot-Wächter erkennt fehlenden Bot und startet ihn', r.fenster && r.stand && r.laeuft === false && r.gestartet, JSON.stringify(r));
 
+  // --- Bilder, Wächter, Portscan, Ebene (13.11.) ---
+  r = await js(`const f = await Z.sys.bildschirmfoto(false); if (!f.ok) return { f }; const u = await Z.lokal.url(f.pfad); const img = new Image(); const w = await new Promise((ok) => { img.onload = () => ok(img.naturalWidth); img.onerror = () => ok(-1); img.src = u.url; setTimeout(() => ok(-2), 8000); }); return { f: f.ok, breite: w }`);
+  pruefe('Bilder und Bildschirmfotos werden angezeigt (nicht schwarz)', r.f === true && r.breite > 100, JSON.stringify(r));
+  r = await js(`for (let n = 0; n < 30; n++) { const w = await Z.mehr.waechterStand(); if (w.laeuft) return { laeuft: true, system: w.system || null }; await warte(2000); } return { laeuft: false }`);
+  pruefe('Wächter läuft als eigener Dienst', r.laeuft === true, JSON.stringify(r).slice(0, 300));
+  hinweis('Systemstand laut Wächter (live)', JSON.stringify(r.system || {}));
+  r = await js(`await Z.lokal.neu('/tmp', 'zos-test-portscan', false, 'x'); for (let n = 0; n < 20; n++) { await warte(2000); const m = await Z.mehr.meldungen(); const e = m.liste.find((x) => /Portscan von 192\\.0\\.2\\.77/.test(x.text)); if (e) { await warte(3000); const n2 = await Z.mehr.netz(); const w = await Z.mehr.waechterStand(); return { meldung: e.text, art: e.art, gesperrt: (n2.gesperrt || []).map((x) => x.ip), gesendet: w.gesendet || null }; } } return { meldung: null }`);
+  pruefe('Wächter erkennt einen Portscan, sperrt die Adresse und meldet es', !!r.meldung && r.art === 'alarm' && (r.gesperrt || []).includes('192.0.2.77'), JSON.stringify(r));
+  pruefe('Meldung geht an die Zentrale (Demo-Zentrale nimmt sie an)', !!(r.gesendet && r.gesendet.ziel === 'zentrale' && r.gesendet.ok), JSON.stringify(r.gesendet));
+  r = await js(`FM.schliessenAlle(); await Z.sys.programmStarten('foot'); for (let n = 0; n < 10 && !Dock.fremde.length; n++) await warte(1000); const fremde = Dock.fremde.length; await Startmenue.oeffnen(); await warte(1500); const imHaupt = !!document.querySelector('#startmenue'); await Z.ebene.fertig(); return { fremde, imHaupt }`);
+  pruefe('Mit offenem Programm erscheint das Startmenü in der Ebene darüber', r.fremde >= 1 && r.imHaupt === false, JSON.stringify(r));
+  r = await js(`const e = []; for (const b of ['schnappschuesse', 'anonym', 'standardapps', 'rechte']) { Apps.einstellungen.oeffnen(b); await warte(${2000 * LANGSAM}); const t = FM.finden('einstellungen').wurzel.querySelector('.ein-haupt').innerText; if (t.length < 60) e.push(b); } document.querySelectorAll('#ebenen > *').forEach((x) => x.remove()); FM.schliessenAlle(); const f = document.querySelector('.ein-suche'); return { leer: e }`);
+  pruefe('Einstellungen: Schnappschüsse, Anonymität, Standardprogramme, Rechte', r.leer && r.leer.length === 0, JSON.stringify(r));
+
   // --- Schlafen gehen: Programme zu (ausser Ausnahmen), gesperrt, Bildschirm aus; Wecken entsperrt nicht ---
   r = await js(`FM.schliessenAlle(); await Z.sys.programmStarten('foot'); await warte(${4000 * LANGSAM}); Apps.finder.oeffnen(); const vorher = (await Z.sys.fremdeFenster()).liste.length; const s = await Z.mehr.schlafen(); await warte(${3500 * LANGSAM}); const nachher = (await Z.sys.fremdeFenster()).liste.length; const gesperrt = !document.querySelector('#sperre').hidden; const offen = FM.liste.length; await Z.system.bildschirmAn(); await warte(1500); const nochGesperrt = !document.querySelector('#sperre').hidden; const an = await Z.anmelden('1234', null, 'pin'); await warte(1500); return { vorher, nachher, gesperrt, offen, nochGesperrt, an: an.ok, s }`);
   pruefe('Schlafen gehen: schliesst Programme, sperrt; Wecken entsperrt nicht', r.vorher >= 1 && r.nachher === 0 && r.gesperrt && r.offen === 0 && r.nochGesperrt && r.an, JSON.stringify(r)); await foto('28-nach-schlafen');
@@ -154,7 +168,7 @@ async function verbinden() {
   hinweis('Installation: erkannte Platten', JSON.stringify(r));
   if (r.live && r.uefi && r.platten.includes('/dev/vda')) {
     const t0 = Date.now();
-    r = await js(`const a = await Z.mehr.installieren({ geraet: '/dev/vda', name: 'kerim', passwort: 'testpasswort', verschluesselung: '', code: '4711' }, '${PW}'); const s = await Z.mehr.installStand(); return { ok: a.ok, fehler: a.fehler, ende: s.zeilen.slice(-3) }`);
+    r = await js(`const a = await Z.mehr.installieren({ geraet: '/dev/vda', name: 'kerim', passwort: 'testpasswort', verschluesselung: 'wiederherstellung-123', code: '4711' }, '${PW}'); const s = await Z.mehr.installStand(); return { ok: a.ok, fehler: a.fehler, ende: s.zeilen.slice(-3) }`);
     pruefe('Installation auf die Platte läuft durch', r.ok === true && /FERTIG/.test(JSON.stringify(r.ende)), JSON.stringify(r) + ` ${Math.round((Date.now() - t0) / 1000)} s`);
     fs.writeFileSync(path.join(AUS, 'installiert'), r.ok ? 'ja' : 'nein');
   } else hinweis('Installation NICHT geprüft (kein UEFI-Live-System mit /dev/vda)', JSON.stringify(r));

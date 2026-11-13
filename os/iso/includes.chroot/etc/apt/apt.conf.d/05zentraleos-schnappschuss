@@ -1,0 +1,1 @@
+DPkg::Pre-Invoke { "/usr/libexec/zentraleos/schnappschuss-vor-update || true"; };

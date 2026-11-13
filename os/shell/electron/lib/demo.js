@@ -10,7 +10,8 @@ const os = require('node:os');
 let server = null;
 let adresse = null;
 let wurzel = null;          // Ordner, der im Demo-Modus «die Laufwerke des Pi» spielt
-const befehle = [];         // Fernsteuer-Befehle an diesen Rechner (sperren usw.)
+const befehle = [];
+const hpMeldungen = [];         // Fernsteuer-Befehle an diesen Rechner (sperren usw.)
 let letzteMeldung = null;
 const freigaben = {};
 
@@ -173,6 +174,9 @@ async function bedienen(req, res) {
     if (p === '/api/geraet/sitzung' && m === 'POST') return json(200, { ok: true, name: 'Demo' });
     if (p === '/api/geraete') return json(200, { geraete: [{ id: 'demo', name: os.hostname() + ' (ZentraleOS)', art: 'desktop', erstellt: jetzt() - 86400e3, zuletzt: jetzt(), bis: jetzt() + 364 * 86400e3 }] });
     if (p === '/api/geraete/weg') return json(200, { ok: true });
+    // Meldungen des Wächters (wie bei der echten Zentrale: Gerätetoken im Kopf) – zum Testen gesammelt
+    if (p === '/api/hp/meldung' && m === 'POST') { if (!req.headers['x-geraet-token']) return json(401, { fehler: 'Gerät nicht gekoppelt' }); const b = await koerper(req); hpMeldungen.unshift({ ...b, zeit: jetzt() }); hpMeldungen.length = Math.min(hpMeldungen.length, 50); return json(200, { ok: true }); }
+    if (p === '/api/hp/meldungen' && m === 'GET') return json(200, { liste: hpMeldungen });
     if (p === '/api/hp/abholen' && m === 'POST') { letzteMeldung = { ...(await koerper(req)), zeit: jetzt() }; return json(200, { ok: true, befehle: befehle.splice(0) }); }
     if (p === '/api/hp' && m === 'GET') return json(200, { ok: true, meldung: letzteMeldung, erreichbar: !!letzteMeldung && jetzt() - letzteMeldung.zeit < 120e3 });
     if (p === '/api/hp/befehl' && m === 'POST') { const b = await koerper(req); if (!['sperren', 'bildschirmAus', 'bildschirmAn', 'schlafen'].includes(b.befehl)) return json(400, { fehler: 'Unbekannter Befehl' }); befehle.push(b.befehl); return json(200, { ok: true, befehl: b.befehl }); }

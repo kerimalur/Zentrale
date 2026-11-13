@@ -78,8 +78,9 @@ async function senden(art, text) {
   if (pi && pi.basis && pi.token) {
     try {
       const r = await fetch(pi.basis.replace(/\/$/, '') + '/api/hp/meldung', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Geraet-Token': pi.token }, body: JSON.stringify({ art: art === 'alarm' ? 'fehler' : 'warnung', text, rechner: titel }), signal: AbortSignal.timeout(10000) });
+      zustand.gesendet = { zeit: Date.now(), ziel: 'zentrale', ok: r.ok, status: r.status };
       if (!r.ok) log('pi', r.status);
-    } catch (f) { log('pi', f.message); }
+    } catch (f) { zustand.gesendet = { zeit: Date.now(), ziel: 'zentrale', ok: false, fehler: f.message }; log('pi', f.message); }
   }
   // 2. Eigene Adresse (z. B. ntfy), falls eingetragen
   const e = einstellungen(); const adr = String((e.meldung && e.meldung.adresse) || (e.bot && e.bot.meldeAdresse) || '');
@@ -317,7 +318,8 @@ async function systemStand() {
   try { const d = fs.readdirSync('/sys/firmware/efi/efivars').find((x) => x.startsWith('SecureBoot-')); s.secureBoot = d ? fs.readFileSync('/sys/firmware/efi/efivars/' + d)[4] === 1 : null; } catch { s.secureBoot = null; }
   const ts = await lauf('timeshift', ['--list', '--scripted'], { timeout: 30000 });
   const schnapp = (ts.aus.match(/\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d/g) || []);
-  s.schnappschuesse = ts.fehlt ? null : { anzahl: schnapp.length, letzter: schnapp.sort().pop() || null, eingerichtet: fs.existsSync('/etc/timeshift/timeshift.json') };
+  const liste = ts.aus.split('\n').map((z) => z.match(/^\s*\d+\s+>\s+(\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d)\s+(\S*)\s*(.*)$/)).filter(Boolean).map(([, name, tags, kommentar]) => ({ name, tags, kommentar: kommentar.trim() }));
+  s.schnappschuesse = ts.fehlt ? null : { anzahl: schnapp.length, letzter: schnapp.sort().pop() || null, eingerichtet: fs.existsSync('/etc/timeshift/timeshift.json'), liste };
   s.live = /boot=live/.test(lies('/proc/cmdline'));
   zustand.system = s;
 }
@@ -329,7 +331,8 @@ function zustandSchreiben() { zustand.zeit = Date.now(); zustand.ziele = ziele; 
 async function start() {
   for (let n = 0; !B && n < 60; n++) { await new Promise((r) => setTimeout(r, 5000)); B = benutzer(); }
   if (!B) { log('kein Benutzer gefunden'); process.exit(1); }
-  fs.mkdirSync(RUN, { recursive: true }); fs.mkdirSync(EINGANG_ROOT, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(RUN, { recursive: true }); fs.mkdirSync(VAR, { recursive: true }); try { fs.chmodSync(VAR, 0o755); fs.chmodSync(RUN, 0o755); } catch {}
+  fs.mkdirSync(EINGANG_ROOT, { recursive: true, mode: 0o700 });
   log('läuft für', B.name);
   melden('info', 'system', 'Wächter gestartet.');
   folgen('journalctl', ['-k', '-f', '-n', '0', '-o', 'cat', '--grep', 'ZOS-VERWORFEN'], kernelZeile);

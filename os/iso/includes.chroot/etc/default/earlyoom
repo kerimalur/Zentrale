@@ -1,0 +1,2 @@
+# Speicher-Notbremse: unter 4 % freiem Arbeitsspeicher wird ein Programm beendet – zuerst Browser, nie der Bot.
+EARLYOOM_ARGS="-r 3600 -m 4 -s 10 -n --avoid (^|/)(labwc|greetd|Xwayland|wineserver|wine64-preload|terminal64[.]exe|electron|sshd|tailscaled|systemd|usbguard-daemon)$ --prefer (^|/)(brave|chrome|chromium|firefox|obsidian)$"

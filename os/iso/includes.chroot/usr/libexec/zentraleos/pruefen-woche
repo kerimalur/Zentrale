@@ -1,0 +1,19 @@
+#!/bin/bash
+# Wöchentliche Sicherheitsprüfung. Ergebnisse gehen als Meldung an den Wächter (/var/lib/zentraleos/meldungen).
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+M=/var/lib/zentraleos/meldungen; mkdir -p "$M"; chmod 700 "$M"
+melde() { printf '{"art":"%s","quelle":"pruefung","text":"%s"}' "$1" "$(echo "$2" | tr '"\n' "' " | cut -c1-400)" > "$M/$(date +%s%N).json"; }
+erg=/var/lib/zentraleos/pruefung.json; lynis_punkte=""; rk=""; aide=""
+if command -v lynis >/dev/null; then lynis audit system --quick --no-colors >/dev/null 2>&1; lynis_punkte=$(awk -F= '/^hardening_index=/{print $2}' /var/log/lynis-report.dat 2>/dev/null); fi
+if command -v rkhunter >/dev/null; then rkhunter --update >/dev/null 2>&1; rkhunter --propupd --quiet >/dev/null 2>&1 || true
+  if [ -f /var/lib/zentraleos/rkhunter-basis ]; then rkhunter --check --sk --rwo --nocolors > /tmp/zos-rk.txt 2>&1; rk=$(grep -c Warning /tmp/zos-rk.txt); [ "$rk" -gt 0 ] && melde warnung "rkhunter: $rk Warnungen – $(head -c 250 /tmp/zos-rk.txt)"; else touch /var/lib/zentraleos/rkhunter-basis; rk=0; fi; fi
+if command -v aide >/dev/null; then
+  if [ ! -f /var/lib/aide/aide.db ]; then aideinit -y -f >/dev/null 2>&1; aide="Grundlage erstellt"
+  else aide --config /etc/aide/aide.conf --check > /tmp/zos-aide.txt 2>&1; rc=$?
+    if [ $rc -ge 1 ] && [ $rc -lt 8 ]; then aide="Änderungen"; melde alarm "AIDE: Systemdateien wurden verändert – $(grep -E '^(changed|added|removed)' /tmp/zos-aide.txt | head -5 | tr '\n' ' ')"
+    else aide="unverändert"; fi
+    aideinit -y -f >/dev/null 2>&1   # neuen Stand als Grundlage (Updates gehören dazu)
+  fi
+fi
+printf '{"zeit":%s,"lynis":"%s","rkhunter":"%s","aide":"%s"}' "$(date +%s000)" "$lynis_punkte" "$rk" "$aide" > "$erg"; chmod 644 "$erg"
+melde info "Wochenprüfung fertig: Lynis-Härte ${lynis_punkte:-?}/100, rkhunter ${rk:-?} Warnungen, AIDE ${aide:-?}."
