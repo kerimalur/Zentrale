@@ -5,7 +5,7 @@ systemd-detect-virt -q --vm || exit 0
 [ -c /dev/ttyS0 ] || exit 0
 # Nur im Test: im installierten System einmal einen Schnappschuss anlegen, damit der Test sieht, dass Timeshift geht
 if ! grep -qw boot=live /proc/cmdline && [ -f /etc/timeshift/timeshift.json ] && [ ! -e /var/lib/zentraleos/test-schnappschuss ]; then
-  mkdir -p /var/lib/zentraleos; touch /var/lib/zentraleos/test-schnappschuss; timeshift --create --comments Test --tags O --scripted >/dev/null 2>&1
+  mkdir -p /var/lib/zentraleos; timeout 300 timeshift --create --comments Test --scripted > /var/lib/zentraleos/test-schnappschuss 2>&1; echo "ende=$?" >> /var/lib/zentraleos/test-schnappschuss
 fi
 {
   echo "=== ZOS-DIAGNOSE $(date -Is) ${1:-} ==="
@@ -18,5 +18,6 @@ fi
   echo "terminaltest: $(cat /tmp/zos-terminal 2>/dev/null)"
   echo "nft: $(nft list ruleset 2>/dev/null | grep -c .) Zeilen; sudo-ohne-passwort: $(su zentrale -c 'sudo -n true' 2>&1 | head -1)"
   echo "sicherheit: wurzel=$(findmnt -no FSTYPE /) luks=$(lsblk -rno TYPE | grep -c crypt) tpm=$(d=$(awk '!/^#/ && NF {print $2; exit}' /etc/crypttab 2>/dev/null); [ -n "$d" ] && clevis luks list -d "/dev/disk/by-uuid/${d#UUID=}" 2>/dev/null | grep -c tpm2 || echo 0) lockdown=$(grep -o '\[[a-z]*\]' /sys/kernel/security/lockdown 2>/dev/null) waechter=$(systemctl is-active zentraleos-waechter) usbguard=$(systemctl is-active usbguard) earlyoom=$(systemctl is-active earlyoom) schnapp=$(timeshift --list --scripted 2>/dev/null | grep -cE '^[[:space:]]*[0-9]+[[:space:]]+>')"
+  [ -f /var/lib/zentraleos/test-schnappschuss ] && tail -n 12 /var/lib/zentraleos/test-schnappschuss | cut -c1-200 | sed "s/^/timeshift: /"
   echo "=== ENDE ==="
 } > /dev/ttyS0 2>&1

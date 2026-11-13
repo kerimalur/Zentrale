@@ -58,7 +58,7 @@ case "${1:-}" in
   schnappschuss-liste) timeshift --list --scripted 2>&1 | tail -n +1 ;;
   schnappschuss-erstellen)
     k="$(printf '%s' "${2:-von Hand}" | tr -cd 'A-Za-z0-9 äöüÄÖÜ._-' | cut -c1-60)"
-    timeshift --create --comments "$k" --tags O --scripted 2>&1 | tail -5 ;;
+    timeshift --create --comments "$k" --scripted 2>&1 | tail -5 ;;
   schnappschuss-loeschen|schnappschuss-zurueck)
     echo "${2:-}" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}_[0-9]{2}-[0-9]{2}-[0-9]{2}$' || exit 2
     if [ "$1" = schnappschuss-loeschen ]; then timeshift --delete --snapshot "$2" --scripted 2>&1 | tail -3
