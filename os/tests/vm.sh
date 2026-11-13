@@ -19,7 +19,7 @@ fi
 # TPM-Chip (swtpm), falls vorhanden – der Zustand bleibt zwischen den Starts erhalten (für die Platte, die an ihn gebunden wird)
 TPM=()
 if command -v swtpm >/dev/null; then
-  mkdir -p "$ORT/tpm"; pkill -f "swtpm socket --tpmstate dir=$ORT/tpm" 2>/dev/null; sleep 0.5
+  mkdir -p "$ORT/tpm"; pkill -f "swtpm socket --tpmstate dir=$ORT/tpm" 2>/dev/null || true; sleep 0.5
   swtpm socket --tpmstate dir="$ORT/tpm" --ctrl type=unixio,path="$ORT/tpm/sock" --tpm2 --daemon
   for _ in 1 2 3 4 5 6 7 8 9 10; do [ -S "$ORT/tpm/sock" ] && break; sleep 0.3; done
   TPM=(-chardev "socket,id=chrtpm,path=$ORT/tpm/sock" -tpmdev emulator,id=tpm0,chardev=chrtpm -device tpm-tis,tpmdev=tpm0)

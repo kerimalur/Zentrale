@@ -38,16 +38,16 @@ im Tailscale-Netz sein (Einstellungen → Tailscale → «Link erzeugen»). **Ge
 
 ## Installieren auf die SSD
 
-**In der virtuellen Maschine getestet (installieren, von der Platte starten, anmelden). Auf dem HP noch nicht.**
+Einstellungen → Installation. Platte wählen, Benutzername, Passwort, Code für die Sperre und – empfohlen –
+Verschlüsselung mit Wiederherstellungs-Passwort, dann `LÖSCHEN` tippen. Gefragt wird nach dem
+Administrator-Passwort des Live-Systems: `zentrale`.
 
-Einstellungen → Installation. Platte wählen, Benutzername, Passwort und Code für die Sperre eingeben, `LÖSCHEN` tippen.
-Gefragt wird nach dem Administrator-Passwort des Live-Systems: `zentrale`.
-
-- **Die gewählte Platte wird vollständig gelöscht**, auch Windows. Eine Installation neben Windows gibt es nicht.
-- Der Stick, von dem das System läuft, wird nicht als Ziel angeboten.
-- Nur UEFI. Dauer in der VM: rund zwei Minuten.
-- Verschlüsselung ist wählbar, aber **ungetestet**, und sie verlangt das Passwort bei jedem Start am Gerät.
-- Danach herunterfahren, Stick abziehen, einschalten. Das System startet im Demo-Modus; es gilt dein eigener Code.
+- **Die gewählte Platte wird vollständig gelöscht**, auch Windows. Neben Windows wird nicht installiert.
+- Aufbau: EFI, /boot (ext4), System in Btrfs (Schnappschüsse), auf Wunsch in LUKS2.
+- Mit TPM-Chip: beim **ersten** Start einmal das Verschlüsselungs-Passwort eingeben, danach entsperrt der Chip von
+  selbst. Ändert sich Secure Boot oder die Firmware, fragt der Start wieder nach dem Passwort; dann unter
+  Sicherheit → Plattenverschlüsselung neu binden.
+- Danach in der Firmware: BIOS-Passwort, Start von USB aus, Secure Boot an, «After Power Loss: Power On».
 
 ## Wartung und Zurücksetzen
 

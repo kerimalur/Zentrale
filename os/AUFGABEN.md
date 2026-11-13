@@ -1,4 +1,4 @@
-# ZentraleOS – Aufgabenliste (Stand 12.11.2026, abends)
+# ZentraleOS – Aufgabenliste (Stand 13.11.2026)
 
 Von Kerim am 12.11. bestellt. Alles aus den Blöcken A bis F ist gebaut. Was davon geprüft ist, steht pro Zeile.
 
@@ -78,3 +78,27 @@ Auf dem HP ist von dieser Liste noch **nichts** bestätigt.
 ## Zurückgestellt oder gestrichen
 
 Im Moment nicht: Trading-Cockpit, Wirtschaftskalender, Journal, Modi. Gestrichen: Design-Pakete.
+
+
+## Runde 13.11. (aus dem HP-Test und ANALYSE.md)
+
+| Aufgabe | Stand |
+|---------|-------|
+| Bilder, Fotos, Bildschirmfotos schwarz | behoben (Ursache: Datei-Schema galt nur in der falschen Sitzung) – VM-Test prüft es |
+| Fenster mit Zentrale-Seite ruckelt beim Ziehen | behoben (Seite bekommt beim Ziehen keine Maus, Glas pausiert) – lokal geprüft, auf dem HP offen |
+| Startmenü erscheint hinter Brave | behoben: eigene Ebene über allen Programmen für Startmenü, Suche, Alt+Tab, Übersicht, Zwischenablage, Kontrollzentrum, Mitteilungen. Öffnest du ein Programm der Oberfläche, gehen fremde Fenster in die Taskleiste. Mit labwc lokal geprüft, VM-Test prüft die Logik |
+| Doppelte Einträge (Brave/Chromium/Web, Fokus, Trading) | behoben: «Brave» statt Web, Chromium versteckt, «Fokuszeit» für den PC-Fokus, Zentrale-Seiten nicht mehr unter «Alle Programme» |
+| Einstellungen durchsuchen | gebaut (Suchfeld oben, mit Stichwörtern) |
+| Ohne Akku | Energie zeigt «Netzbetrieb», Akku-Symbol verschwindet |
+| Schnappschüsse | Btrfs + Timeshift: täglich, wöchentlich, vor jedem Update; zurücksetzen in den Einstellungen. Nur im installierten System |
+| Verschlüsselung | LUKS2; mit TPM-Chip entsperrt die Platte nach dem ersten Start automatisch (auch nach Stromausfall) |
+| Echte Sperre | Notfall-Sperre (swaylock, ext-session-lock) springt ein, wenn die Oberfläche abstürzt; Code der Oberfläche oder Passwort. Ungetestet |
+| Wächter als Systemdienst | Bot, Netz, Portscans (Sperre 24 h), Anmeldungen, USB, Köder-Datei, Viren in Downloads (wenn ClamAV installiert), SMART, Speicher, Hitze. Meldungen über die Zentrale (Telegram/ntfy) |
+| Speicher-Notbremse | earlyoom: zuerst Browser, nie Bot oder Oberfläche |
+| USB-Schutz | USBGuard: angeschlossene Geräte beim ersten Start erlaubt, reine Speichersticks immer, alles andere gesperrt bis erlaubt |
+| Kern-Härtung | Lockdown, Speicherschutz-Optionen, abgeschaltete Alt-Treiber, strengere sysctl-Werte |
+| Anonymität | Prüfung (IP, Exit-Node, IPv6, DNS), Kill-Switch, Tor/Mullvad Browser, Metadaten entfernen |
+| Kleine Lücken | Nachtlicht, Lautstärke pro Programm, Standardprogramme, Rechte der Programme, Aufräumen, Firmware-Updates, Wochenprüfung (Lynis, rkhunter, AIDE) |
+| Zentrale (Pi) | Endpunkt für Meldungen des HP in PR #2 |
+
+Was der VM-Test davon wirklich prüft, steht im Ergebnis des GitHub-Laufs (vm-test → ergebnis.txt und systemtest.txt).
