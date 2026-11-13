@@ -4,7 +4,8 @@ import type { Zustand } from '@/lib/types';
 import { senden } from '@/lib/api';
 import { datumLang, komma } from '@/lib/format';
 import { Icon } from '@/components/ui';
-import { Uebersicht, SZENE_STIL } from '@/components/Uebersicht';
+import { Uebersicht, UebersichtKompakt, SZENE_STIL } from '@/components/Uebersicht';
+import { CloudMedien } from '@/components/CloudMedien';
 import { System } from '@/components/System';
 import { Netz } from '@/components/Netz';
 import { Speicher } from '@/components/Speicher';
@@ -19,22 +20,40 @@ import { KursdatenLeiste } from '@/components/KursdatenLeiste';
 import { Heute } from '@/components/Heute';
 import { Fokus } from '@/components/Fokus';
 
-const TABS = ['Übersicht', 'Heute', 'Gesundheit', 'Fokus', 'Trading', 'System', 'Netz', 'Speicher', 'Cloud', 'Medien', 'Gäste', 'Konsole', 'Einstellungen'] as const;
+// Alle Seiten. ZentraleOS (nackt=1) öffnet jede davon in einem eigenen Fenster.
+const TABS = ['Übersicht', 'Heute', 'Gesundheit', 'Fokus', 'Trading', 'System', 'Netz', 'Speicher', 'Cloud', 'Medien', 'Cloud & Medien', 'Gäste', 'Konsole', 'Einstellungen'] as const;
 type Tab = (typeof TABS)[number];
+// Im Browser und auf dem Handy nur das Nötige. Heute, Gesundheit, Trading und Netz gibt es nur noch in ZentraleOS.
+const APP_TABS: readonly Tab[] = ['Übersicht', 'Fokus', 'System', 'Speicher', 'Cloud & Medien', 'Gäste', 'Konsole', 'Einstellungen'];
+const erlaubt = (t: string): t is Tab => (istNackt() ? (TABS as readonly string[]) : (APP_TABS as readonly string[])).includes(t);
 
 function gespeicherterTab(): Tab {
   try {
     const h = decodeURIComponent(location.hash.slice(1));
-    if ((TABS as readonly string[]).includes(h)) return h as Tab;
+    if (erlaubt(h)) return h;
+    // Im nackten Modus (Desktop-App) zählt nur die Adresse, nicht der zuletzt benutzte Tab.
+    if (istNackt()) return 'Übersicht';
     const s = localStorage.getItem('zentrale-tab');
-    if (s && (TABS as readonly string[]).includes(s)) return s as Tab;
+    if (s && erlaubt(s)) return s;
   } catch {}
   return 'Übersicht';
+}
+
+// «Nackt»: ohne Kopfzeile und Tab-Leiste. Dafür sorgt die Desktop-App auf dem HP,
+// die jeden Tab in einem eigenen Fenster zeigt und den Rahmen selbst mitbringt.
+// Im Browser und auf dem Handy ändert sich dadurch nichts.
+function istNackt(): boolean {
+  try {
+    return new URLSearchParams(location.search).get('nackt') === '1';
+  } catch {
+    return false;
+  }
 }
 
 export default function Seite() {
   const [z, setZ] = useState<Zustand | null>(null);
   const [tab, setTab] = useState<Tab>('Übersicht');
+  const [nackt, setNackt] = useState(false);
   const [verbindungFehlt, setVerbindungFehlt] = useState(false);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -51,6 +70,7 @@ export default function Seite() {
   }, []);
 
   useEffect(() => {
+    setNackt(istNackt());
     setTab(gespeicherterTab());
     laden();
     const start = () => { if (!timer.current) timer.current = setInterval(laden, 5000); };
@@ -58,7 +78,9 @@ export default function Seite() {
     const sicht = () => (document.hidden ? stopp() : (laden(), start()));
     start();
     document.addEventListener('visibilitychange', sicht);
-    return () => { stopp(); document.removeEventListener('visibilitychange', sicht); };
+    const hash = () => { const t = decodeURIComponent(location.hash.slice(1)); if (erlaubt(t)) setTab(t); };
+    window.addEventListener('hashchange', hash);
+    return () => { stopp(); document.removeEventListener('visibilitychange', sicht); window.removeEventListener('hashchange', hash); };
   }, [laden]);
 
   function waehle(t: Tab) {
@@ -73,7 +95,7 @@ export default function Seite() {
 
   if (!z) {
     return (
-      <main className="seite" style={{ alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <main className={istNackt() ? 'seite nackt' : 'seite'} style={{ alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
         <div className="pop" style={{ textAlign: 'center' }}>
           <div className="dreh" style={{ width: 36, height: 36, border: '4px solid #dfe4ee', borderTopColor: 'var(--accent)', borderRadius: '50%', margin: '0 auto 14px' }} />
           <div className="leise">{verbindungFehlt ? 'Pi nicht erreichbar – versuche weiter …' : 'Lade Zentrale …'}</div>
@@ -89,8 +111,8 @@ export default function Seite() {
   const titel = notbetrieb && !stoerungen.length ? 'Notbetrieb' : stoerungen.length ? (stoerungen.length === 1 ? `${stoerungen[0].name} gestört` : 'Störungen') : z.szene.id === 'normal' ? 'Alles läuft' : z.szene.id === 'film' ? 'Filmabend' : 'Ruhemodus';
 
   return (
-    <main className="seite">
-      <header className="kopf">
+    <main className={nackt ? 'seite nackt' : 'seite'}>
+      {!nackt && <header className="kopf">
         <div>
           <div className="kopf-zeile">
             <span>{datumLang()} · {z.uhrzeit}</span>
@@ -99,7 +121,7 @@ export default function Seite() {
               Szene {z.szene.name} · {komma(z.energie.watt)} W
             </button>
             {vpn && (
-              <button className="press szene-chip" onClick={() => waehle('Medien')} style={{ border: 0, cursor: 'pointer', color: vpn.farbe === '#15803d' ? 'var(--ink)' : vpn.farbe, fontWeight: vpn.farbe === '#15803d' ? 400 : 700 }}>
+              <button className="press szene-chip" onClick={() => waehle('Cloud & Medien')} style={{ border: 0, cursor: 'pointer', color: vpn.farbe === '#15803d' ? 'var(--ink)' : vpn.farbe, fontWeight: vpn.farbe === '#15803d' ? 400 : 700 }}>
                 <span className={vpn.farbe === '#15803d' ? 'punkt' : 'punkt live'} style={{ background: vpn.farbe }} />
                 {vpn.kurz}
               </button>
@@ -116,17 +138,17 @@ export default function Seite() {
         </div>
         <div className="kopf-aktionen" style={{ maxWidth: '100%' }}>
           <nav className="tabs" aria-label="Bereiche">
-            {TABS.map((t) => (
+            {APP_TABS.map((t) => (
               <button key={t} className="press tab" aria-pressed={t === tab} onClick={() => waehle(t)}>{t}</button>
             ))}
           </nav>
           <button className="press icon-knopf" onClick={abmelden} aria-label="Abmelden" title="Abmelden"><Icon name="abmelden" size={20} /></button>
         </div>
-      </header>
+      </header>}
 
-      <KursdatenLeiste onOeffnen={() => waehle('Trading')} />
+      {nackt && tab === 'Trading' && <KursdatenLeiste onOeffnen={() => waehle('Trading')} />}
 
-      {tab === 'Übersicht' && <Uebersicht z={z} aktualisieren={laden} />}
+      {tab === 'Übersicht' && (nackt ? <Uebersicht z={z} aktualisieren={laden} /> : <UebersichtKompakt z={z} aktualisieren={laden} />)}
       {tab === 'Heute' && <Heute />}
       {tab === 'Gesundheit' && <Gesundheit />}
       {tab === 'Fokus' && <Fokus />}
@@ -136,9 +158,10 @@ export default function Seite() {
       {tab === 'Speicher' && <Speicher z={z} />}
       {tab === 'Cloud' && <Cloud z={z} aktualisieren={laden} />}
       {tab === 'Medien' && <Medien z={z} />}
+      {tab === 'Cloud & Medien' && <CloudMedien z={z} />}
       {tab === 'Gäste' && <Gaeste z={z} aktualisieren={laden} />}
       {tab === 'Konsole' && <Konsole z={z} />}
-      {tab === 'Einstellungen' && <Einstellungen z={z} aktualisieren={laden} />}
+      {tab === 'Einstellungen' && <Einstellungen z={z} aktualisieren={laden} kompakt={!nackt} />}
     </main>
   );
 }

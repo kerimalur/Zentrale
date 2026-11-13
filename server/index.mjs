@@ -4,11 +4,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config, ensureDataDir } from './config.mjs';
 import { load, db, save } from './store.mjs';
-import { istAngemeldet, login, logout, sitzungenZustand, andereAbmelden } from './auth.mjs';
+import { istAngemeldet, login, logout, sitzungenZustand, andereAbmelden, sitzungAbmelden } from './auth.mjs';
+
+// Tailscale-Adresse → Gerätename (z. B. 100.101.2.3 → pixel-8), für die Liste der angemeldeten Geräte.
+const tsName = (ip) => { if (!ip) return ''; const p = tsPeers().find((x) => x.ip === ip); return p ? p.name : ''; };
+import { tokenAusstellen, sitzungFuerToken, geraeteListe, geraetEntkoppeln } from './geraete.mjs';
+import { befehlSenden as hpBefehl, hpZustand, abholen as hpAbholen, geraetAusAnfrage } from './hp.mjs';
 import { zweifaktorZustand, einrichtungStarten, einrichtungBestaetigen, ausschalten as zweifaktorAus, notfallNeu } from './zweifaktor.mjs';
 import { terminalUpgrade } from './terminal.mjs';
 import { schnell, mittel, langsam, sehrLangsam, speicherLauf, zeitplan, snapshot, sshNurSchluesselSetzen, manuelleSzene, laufwerkeListe, cloudJetzt, tsPeers } from './monitor.mjs';
 import { ordnerLesen, ordnerGroessen } from './explorer.mjs';
+import { listen as dateienListen, dateiInfo, textLesen, textSchreiben, neueDatei, neuerOrdner, umbenennen as dateiUmbenennen, verschieben as dateiVerschieben, loeschen as dateiLoeschen, papierkorbLeeren, uploadZiel, teilen as dateiTeilen, freigabenListe, freigabeLoeschen, freigabeAufloesen } from './dateien.mjs';
 import { szeneSetzen, standardGovernorMerken, hddTimerSetzen } from './szenen.mjs';
 import { neustarten } from './collect/docker.mjs';
 import { backupStarten, backupEingerichtet } from './backup.mjs';
@@ -92,6 +98,14 @@ async function api(req, res, url) {
   }
   if (p === '/api/me') return json(res, 200, { angemeldet: istAngemeldet(req) });
 
+  // ---------- Gekoppelte Geräte (Desktop-App auf dem HP) ----------
+  // Token gegen eine frische Sitzung tauschen – ohne Anmeldung, dafür mit Bremse.
+  if (p === '/api/geraet/sitzung' && m === 'POST') {
+    const b = await body(req);
+    const r = sitzungFuerToken(req, b.token);
+    return json(res, 200, { ok: true, name: r.name }, { 'Set-Cookie': r.cookie });
+  }
+
   // ---------- Fokus-Agenten (Geräte-Token statt Anmeldung) ----------
   if (p === '/api/fokus/agent/koppeln' && m === 'POST') {
     const b = await body(req);
@@ -109,11 +123,19 @@ async function api(req, res, url) {
     return json(res, 200, fokusBericht(g, await body(req), req));
   }
 
+  // ---------- Desktop-App auf dem HP: Befehle abholen und Zustand melden ----------
+  // Ausweis ist das Geräte-Token im Kopf X-Geraet-Token, keine Sitzung nötig.
+  if (p === '/api/hp/abholen' && m === 'POST') {
+    const g = geraetAusAnfrage(req);
+    if (!g) return json(res, 401, { fehler: 'Gerät nicht gekoppelt' });
+    return json(res, 200, hpAbholen(g, await body(req)));
+  }
+
   // ---------- Google-Anmeldung: Rückkehr von Google (ohne Cookie, weil die Weiterleitung von accounts.google.com kommt; geschützt über «state») ----------
   if (p === '/api/google/zurueck' && m === 'GET') {
     try {
       await rueckkehr(url);
-      res.writeHead(302, { Location: '/#Heute' });
+      res.writeHead(302, { Location: '/?nackt=1#Heute' });   // «Heute» gibt es nur noch in ZentraleOS (nackte Ansicht)
       return res.end();
     } catch (e) {
       const text = String(e.message).replace(/[<>&"]/g, '');
@@ -127,6 +149,20 @@ async function api(req, res, url) {
   if (m !== 'GET' && req.headers['x-zentrale'] !== '1') return json(res, 403, { fehler: 'Verboten' });
 
   if (p === '/api/logout' && m === 'POST') return json(res, 200, { ok: true }, { 'Set-Cookie': logout(req) });
+  if (p === '/api/geraet/token' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, tokenAusstellen(req, { name: b.name, art: b.art }));
+  }
+  if (p === '/api/geraete' && m === 'GET') return json(res, 200, { geraete: geraeteListe() });
+  if (p === '/api/hp' && m === 'GET') return json(res, 200, hpZustand());
+  if (p === '/api/hp/befehl' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, { ...hpBefehl(b.befehl), zustand: hpZustand() });
+  }
+  if (p === '/api/geraete/weg' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, geraetEntkoppeln(String(b.id || '')));
+  }
   if (p === '/api/state' && m === 'GET') return json(res, 200, snapshot());
 
   // ---------- Fokus (Tab «Fokus») ----------
@@ -194,7 +230,7 @@ async function api(req, res, url) {
   }
 
   // ---------- Sicherheit: Zwei-Faktor und Sitzungen (Einstellungen) ----------
-  if (p === '/api/sicherheit' && m === 'GET') return json(res, 200, { zweifaktor: zweifaktorZustand(), sitzungen: sitzungenZustand(req) });
+  if (p === '/api/sicherheit' && m === 'GET') return json(res, 200, { zweifaktor: zweifaktorZustand(), sitzungen: sitzungenZustand(req, tsName) });
   if (p === '/api/zweifaktor/start' && m === 'POST') return json(res, 200, einrichtungStarten());
   if (p === '/api/zweifaktor/bestaetigen' && m === 'POST') {
     const r = einrichtungBestaetigen((await body(req)).code);
@@ -203,7 +239,8 @@ async function api(req, res, url) {
   }
   if (p === '/api/zweifaktor/aus' && m === 'POST') return json(res, 200, zweifaktorAus((await body(req)).code));
   if (p === '/api/zweifaktor/notfall' && m === 'POST') return json(res, 200, notfallNeu((await body(req)).code));
-  if (p === '/api/sitzungen/andere-abmelden' && m === 'POST') return json(res, 200, andereAbmelden(req));
+  if (p === '/api/sitzungen/andere-abmelden' && m === 'POST') return json(res, 200, andereAbmelden(req, tsName));
+  if (p === '/api/sitzungen/abmelden' && m === 'POST') return json(res, 200, sitzungAbmelden(req, (await body(req)).id, tsName));
 
   // ---------- Heute (Mail aufräumen, Kalender, Aufgaben über Google) ----------
   if (p === '/api/heute' && m === 'GET') return json(res, 200, await heuteZustand(url.searchParams.get('frisch') === '1'));
@@ -407,6 +444,78 @@ async function api(req, res, url) {
     return json(res, 200, await ordnerGroessen(laufwerkeListe(), url.searchParams.get('wurzel') || '', url.searchParams.get('pfad') || '/'));
   }
 
+  // ---------- Dateien (Finder der Desktop-App) ----------
+  if (p === '/api/dateien/laufwerke' && m === 'GET') {
+    return json(res, 200, { laufwerke: laufwerkeListe().map((l) => ({ mount: l.mount, name: l.name, groesse: l.groesse ?? null, frei: l.frei ?? null, benutzt: l.benutzt ?? null })) });
+  }
+  if (p === '/api/dateien' && m === 'GET') {
+    return json(res, 200, await dateienListen(laufwerkeListe(), url.searchParams.get('wurzel') || '', url.searchParams.get('pfad') || '/', { versteckte: url.searchParams.get('versteckte') === '1' }));
+  }
+  if (p === '/api/dateien/inhalt' && m === 'GET') {
+    const info = await dateiInfo(laufwerkeListe(), url.searchParams.get('wurzel') || '', url.searchParams.get('pfad') || '');
+    return dateiAusliefern(req, res, info, url.searchParams.get('download') === '1');
+  }
+  if (p === '/api/dateien/text' && m === 'GET') {
+    return json(res, 200, await textLesen(laufwerkeListe(), url.searchParams.get('wurzel') || '', url.searchParams.get('pfad') || ''));
+  }
+  if (p === '/api/dateien/text' && (m === 'POST' || m === 'PUT')) {
+    const b = await body(req, 5 * 1024 * 1024);
+    return json(res, 200, await textSchreiben(laufwerkeListe(), String(b.wurzel || ''), String(b.pfad || ''), b.inhalt));
+  }
+  if (p === '/api/dateien/neu' && m === 'POST') {
+    const b = await body(req);
+    const lw = laufwerkeListe();
+    const r = b.ordner
+      ? await neuerOrdner(lw, String(b.wurzel || ''), String(b.pfad || ''))
+      : await neueDatei(lw, String(b.wurzel || ''), String(b.pfad || ''), String(b.inhalt || ''));
+    return json(res, 200, r);
+  }
+  if (p === '/api/dateien/umbenennen' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await dateiUmbenennen(laufwerkeListe(), String(b.wurzel || ''), String(b.pfad || ''), String(b.name || '')));
+  }
+  if (p === '/api/dateien/verschieben' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await dateiVerschieben(laufwerkeListe(), { wurzel: String(b.wurzel || ''), pfad: String(b.pfad || '') }, { wurzel: String(b.zielWurzel || b.wurzel || ''), pfad: String(b.zielPfad || '/') }, { kopieren: !!b.kopieren }));
+  }
+  if (p === '/api/dateien/loeschen' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await dateiLoeschen(laufwerkeListe(), String(b.wurzel || ''), String(b.pfad || ''), { endgueltig: !!b.endgueltig }));
+  }
+  if (p === '/api/dateien/papierkorb' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await papierkorbLeeren(laufwerkeListe(), String(b.wurzel || '')));
+  }
+  if (p === '/api/dateien/upload' && m === 'POST') {
+    const ziel = await uploadZiel(laufwerkeListe(), url.searchParams.get('wurzel') || '', url.searchParams.get('pfad') || '/', url.searchParams.get('name') || '');
+    const max = 4 * 1024 * 1024 * 1024; // 4 GB
+    let gesamt = 0;
+    const strom = fs.createWriteStream(ziel.tmp);
+    try {
+      await new Promise((ok, schief) => {
+        req.on('data', (c) => { gesamt += c.length; if (gesamt > max) { schief(new Error('Datei zu gross (max. 4 GB)')); req.destroy(); } });
+        req.on('error', schief);
+        strom.on('error', schief);
+        strom.on('finish', ok);
+        req.pipe(strom);
+      });
+    } catch (e) {
+      try { fs.unlinkSync(ziel.tmp); } catch {}
+      return json(res, 413, { fehler: e.message });
+    }
+    fs.renameSync(ziel.tmp, ziel.host);
+    return json(res, 200, { ok: true, name: ziel.name, pfad: ziel.pfad, groesse: gesamt });
+  }
+  if (p === '/api/dateien/teilen' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, await dateiTeilen(laufwerkeListe(), String(b.wurzel || ''), String(b.pfad || ''), { tage: b.tage, hostName: config.hostName }));
+  }
+  if (p === '/api/dateien/teilen' && m === 'GET') return json(res, 200, { freigaben: freigabenListe(), host: config.hostName });
+  if (p === '/api/dateien/teilen/weg' && m === 'POST') {
+    const b = await body(req);
+    return json(res, 200, freigabeLoeschen(String(b.token || '')));
+  }
+
   // ---------- Möbel-Lüfter ----------
   if (p === '/api/luefter' && m === 'POST') {
     const b = await body(req);
@@ -503,6 +612,44 @@ function agentDatei(res, pfad) {
   res.end(inhalt);
 }
 
+// Datei ausliefern, mit Unterstuetzung fuer Teil-Anfragen (Range) - noetig fuer Video und PDF.
+function dateiAusliefern(req, res, info, download = false) {
+  const kopf = {
+    'Content-Type': download ? 'application/octet-stream' : info.mime,
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'private, no-cache',
+    'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(info.name)}`,
+  };
+  const bereich = String(req.headers.range || '').match(/^bytes=(\d*)-(\d*)$/);
+  if (bereich && info.groesse > 0) {
+    let von = bereich[1] === '' ? null : Number(bereich[1]);
+    let bis = bereich[2] === '' ? null : Number(bereich[2]);
+    if (von === null) { von = Math.max(info.groesse - (bis || 0), 0); bis = info.groesse - 1; }
+    if (bis === null || bis >= info.groesse) bis = info.groesse - 1;
+    if (von > bis || von >= info.groesse) {
+      res.writeHead(416, { 'Content-Range': `bytes */${info.groesse}` });
+      return res.end();
+    }
+    res.writeHead(206, { ...kopf, 'Content-Range': `bytes ${von}-${bis}/${info.groesse}`, 'Content-Length': bis - von + 1 });
+    return fs.createReadStream(info.host, { start: von, end: bis }).pipe(res);
+  }
+  res.writeHead(200, { ...kopf, 'Content-Length': info.groesse });
+  if (req.method === 'HEAD') return res.end();
+  return fs.createReadStream(info.host).pipe(res);
+}
+
+// Oeffentlicher Teilen-Link: /teilen/<token> - ohne Anmeldung, laeuft ab.
+async function teilenAusliefern(req, res, pfad) {
+  const token = decodeURIComponent(pfad.slice('/teilen/'.length)).split('/')[0];
+  const info = await freigabeAufloesen(laufwerkeListe(), token);
+  if (!info) {
+    res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end('<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;padding:40px;text-align:center"><h2>Link ungültig oder abgelaufen</h2>');
+  }
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  return dateiAusliefern(req, res, info, false);
+}
+
 const server = http.createServer(async (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -510,6 +657,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
     if (url.pathname.startsWith('/agent/') && req.method === 'GET') return agentDatei(res, url.pathname);
+    if (url.pathname.startsWith('/teilen/') && (req.method === 'GET' || req.method === 'HEAD')) return await teilenAusliefern(req, res, url.pathname);
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
     if (!OEFFENTLICH.some((r) => r.test(url.pathname)) && !istAngemeldet(req)) {
       res.writeHead(302, { Location: '/login/' });

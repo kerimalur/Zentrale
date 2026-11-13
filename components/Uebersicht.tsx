@@ -5,6 +5,7 @@ import { senden } from '@/lib/api';
 import { komma, uhr, zahl } from '@/lib/format';
 import { Icon, Ring, Verlauf, type IconName } from './ui';
 import { PcKarte } from './Pc';
+import { HpKarte } from './Hp';
 import { FernseherKarte } from './Fernseher';
 
 export const APP_FARBE: Record<Dienst['id'], string> = {
@@ -87,6 +88,7 @@ export function Uebersicht({ z, aktualisieren }: { z: Zustand; aktualisieren: ()
 
       <div className="rechts">
         <PcKarte z={z} aktualisieren={aktualisieren} />
+        <HpKarte />
         <FernseherKarte z={z} aktualisieren={aktualisieren} />
         <section className="karte in" style={{ animationDelay: '180ms', flex: 1 }} aria-label="Ereignisse">
           <h2 className="karte-titel">Ereignisse & Fehler</h2>
@@ -103,6 +105,66 @@ export function Uebersicht({ z, aktualisieren }: { z: Zustand; aktualisieren: ()
           })}
         </section>
       </div>
+    </div>
+  );
+}
+
+// Kompakte Übersicht für Browser und Handy: läuft alles? Wenn nicht, was? Dazu die Fernsteuerung.
+// Ereignisse und Fehlerprotokoll gibt es nur noch in ZentraleOS.
+export function UebersichtKompakt({ z, aktualisieren }: { z: Zustand; aktualisieren: () => void }) {
+  const probleme = z.dienste.filter((d) => d.status === 'gestoert' || (d.status === 'offline' && !d.ausGrund));
+  const laufen = z.dienste.filter((d) => d.status === 'online').length;
+  const nb = z.steuerung?.notbetrieb.an;
+  const temp = z.pi?.temp;
+  return (
+    <div className="ueb-kompakt">
+      <section className={`karte in ueb-status${probleme.length ? ' problem' : ''}`} aria-label="Zustand">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span className="ueb-ampel" style={{ background: probleme.length ? 'var(--orange)' : 'var(--gruen)' }}><Icon name={probleme.length ? 'warn' : 'ok'} size={20} stroke={2.4} /></span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <b style={{ fontSize: 19, display: 'block', letterSpacing: '-0.02em' }}>{probleme.length ? (probleme.length === 1 ? `${probleme[0].name} läuft nicht` : `${probleme.length} Dienste laufen nicht`) : 'Alles läuft'}</b>
+            <span className="leise" style={{ fontSize: 13 }}>
+              {laufen} von {z.dienste.length} Diensten · Pi {temp === null || temp === undefined ? '—' : Math.round(temp)} °C · {komma(z.energie.watt)} W · Tailscale {z.netz.tailscale.aktiv ? 'aktiv' : 'unbekannt'}
+            </span>
+          </span>
+        </div>
+        {probleme.map((d) => <ProblemZeile key={d.id} d={d} aktualisieren={aktualisieren} />)}
+        {nb && <div className="hinweisbox" style={{ margin: 0 }}>Notbetrieb ist an – nur das Wichtigste läuft.</div>}
+        <div className="dienst-chips">
+          {z.dienste.filter((d) => !probleme.includes(d)).map((d) => {
+            const farbe = d.status === 'online' ? 'var(--gruen)' : d.status === 'gestoert' || (d.status === 'offline' && !d.ausGrund) ? 'var(--fehler)' : '#b8bfce';
+            return (
+              <a key={d.id} className="dienst-chip" href={d.url} target="_blank" rel="noreferrer" title={d.status === 'online' ? `${d.kennzahl} ${d.label}` : d.ausGrund || STATUS_TEXT[d.status]}>
+                <span className={d.status === 'online' ? 'punkt' : 'punkt live'} style={{ width: 8, height: 8, background: farbe }} />
+                {d.name}
+                {d.status !== 'online' && <small>{STATUS_TEXT[d.status]}</small>}
+              </a>
+            );
+          })}
+        </div>
+      </section>
+      <div className="ueb-geraete">
+        <HpKarte immer />
+        <PcKarte z={z} aktualisieren={aktualisieren} />
+        <FernseherKarte z={z} aktualisieren={aktualisieren} />
+      </div>
+    </div>
+  );
+}
+
+function ProblemZeile({ d, aktualisieren }: { d: Dienst; aktualisieren: () => void }) {
+  const [frage, setFrage] = useState(false);
+  const [laedt, setLaedt] = useState(false);
+  async function neustart() {
+    if (!frage) { setFrage(true); setTimeout(() => setFrage(false), 4000); return; }
+    setLaedt(true);
+    try { await senden(`/api/dienst/${d.id}/neustart`); } catch {} finally { setLaedt(false); setFrage(false); aktualisieren(); }
+  }
+  return (
+    <div className="ueb-problem">
+      <span className="ereignis-ico" style={{ background: '#fdecea', color: '#b42318' }}><Icon name={d.id} size={16} /></span>
+      <span style={{ flex: 1, minWidth: 0 }}><b>{d.name}</b><span className="leise" style={{ display: 'block', fontSize: 12.5 }}>{STATUS_TEXT[d.status]}{d.ausGrund ? ` · ${d.ausGrund}` : ''}</span></span>
+      <button className={`press knopf-klein${frage ? ' bestaetigen' : ''}`} onClick={neustart} disabled={laedt}>{laedt ? 'Startet …' : frage ? 'Neu starten?' : 'Neu starten'}</button>
     </div>
   );
 }

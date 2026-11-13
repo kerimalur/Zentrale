@@ -5,7 +5,9 @@ import qrcode from 'qrcode-generator';
 import { holen, senden, kopieren } from '@/lib/api';
 import { relativ } from '@/lib/format';
 
-interface SicherheitZustand { zweifaktor: { aktiv: boolean; seit: number | null; notfallUebrig: number }; sitzungen: { anzahl: number; andere: number } }
+interface Sitzung { id: string; eigene: boolean; art: 'login' | 'geraet' | 'alt'; name: string; geraet: string; ip: string; erstellt: number; zuletzt: number | null; bis: number }
+interface SitzungenZustand { anzahl: number; andere: number; liste: Sitzung[] }
+interface SicherheitZustand { zweifaktor: { aktiv: boolean; seit: number | null; notfallUebrig: number }; sitzungen: SitzungenZustand }
 
 function Qr({ text }: { text: string }) {
   const q = qrcode(0, 'M');
@@ -22,6 +24,7 @@ export function SicherheitKarte() {
   const [modus, setModus] = useState<null | 'aus' | 'notfall'>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [laeuft, setLaeuft] = useState(false);
+  const [listeOffen, setListeOffen] = useState(false);
 
   const laden = useCallback(async () => { try { setD(await holen<SicherheitZustand>('/api/sicherheit')); } catch {} }, []);
   useEffect(() => { laden(); }, [laden]);
@@ -105,9 +108,33 @@ export function SicherheitKarte() {
       )}
 
       <div style={{ borderTop: '1px solid var(--line)', paddingTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span className="leise" style={{ fontSize: 13.5, flex: 1 }}>Angemeldet auf {d.sitzungen.anzahl} {d.sitzungen.anzahl === 1 ? 'Gerät' : 'Geräten'} · Anmeldung gilt 7 Tage</span>
-        {d.sitzungen.andere > 0 && <button className="knopf-klein press" disabled={laeuft} onClick={() => los(() => senden('/api/sitzungen/andere-abmelden'), () => setInfo('Alle anderen Geräte sind abgemeldet.'))}>Andere {d.sitzungen.andere} abmelden</button>}
+        <span className="leise" style={{ fontSize: 13.5, flex: 1 }}>Angemeldet: {d.sitzungen.anzahl} {d.sitzungen.anzahl === 1 ? 'Sitzung' : 'Sitzungen'} · eine Anmeldung gilt 7 Tage</span>
+        <button className="knopf-klein press" onClick={() => setListeOffen(!listeOffen)}>{listeOffen ? 'Liste schliessen' : 'Geräte zeigen'}</button>
+        {d.sitzungen.andere > 0 && <button className="knopf-klein press" disabled={laeuft} onClick={() => los(() => senden('/api/sitzungen/andere-abmelden'), () => setInfo('Alle anderen Geräte sind abgemeldet.'))}>Alle anderen abmelden</button>}
       </div>
+      {listeOffen && (
+        <div className="sh-sitzungen">
+          {d.sitzungen.liste.map((s) => (
+            <div key={s.id} className="sh-sitzung">
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <b style={{ fontSize: 14 }}>
+                  {s.eigene ? 'Dieses Gerät' : s.name || s.geraet || 'Unbekanntes Gerät'}
+                  {s.art === 'geraet' && <span className="pille" style={{ marginLeft: 6 }}>gekoppelt</span>}
+                </b>
+                <span className="leise" style={{ display: 'block', fontSize: 12.5 }}>
+                  {[s.eigene && (s.name || s.geraet), !s.eigene && s.name && s.geraet, s.ip, s.zuletzt ? `zuletzt ${relativ(s.zuletzt)}` : `angemeldet ${relativ(s.erstellt)}`, s.art === 'alt' ? 'ältere Anmeldung ohne Geräteangaben' : null].filter(Boolean).join(' · ')}
+                </span>
+              </span>
+              {!s.eigene && (
+                <button className="knopf-klein press" disabled={laeuft} onClick={() => los(() => senden('/api/sitzungen/abmelden', { id: s.id }), () => setInfo('Abgemeldet.'))}>Abmelden</button>
+              )}
+            </div>
+          ))}
+          <p className="leise" style={{ fontSize: 12, margin: '4px 0 0' }}>
+            Jede Anmeldung im Browser oder in der App zählt einzeln, bis sie nach 7 Tagen abläuft oder du dich abmeldest. Die Desktop-App auf dem HP hat früher alle 30 Minuten eine neue Sitzung angelegt – das ist behoben, sie hat jetzt nur noch eine.
+          </p>
+        </div>
+      )}
       {info && <div className="leise" style={{ fontSize: 13 }}>{info}</div>}
     </section>
   );
