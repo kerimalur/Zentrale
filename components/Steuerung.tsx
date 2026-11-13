@@ -7,7 +7,8 @@ import { Icon, Schalter } from './ui';
 
 type Frage = null | 'notbetrieb' | 'neustart' | 'aus';
 
-export function Steuerung({ z, aktualisieren }: { z: Zustand; aktualisieren: () => void }) {
+// nurPi: nur Notbetrieb und Pi neu starten/ausschalten (für Browser und Handy).
+export function Steuerung({ z, aktualisieren, nurPi = false }: { z: Zustand; aktualisieren: () => void; nurPi?: boolean }) {
   const s: SteuerungTyp | undefined = z.steuerung;
   const [laedt, setLaedt] = useState<string | null>(null);
   const [frage, setFrage] = useState<Frage>(null);
@@ -39,8 +40,8 @@ export function Steuerung({ z, aktualisieren }: { z: Zustand; aktualisieren: () 
   const gruppen = [...new Set(s.dienste.map((d) => d.gruppe))];
 
   return (
-    <section className="karte steuerung in" style={{ animationDelay: '220ms' }} aria-label="Steuerung">
-      <h2 className="karte-titel">Steuerung <small>wichtige Dienste sind geschützt</small></h2>
+    <section className={`karte steuerung in${nurPi ? ' nur-pi' : ''}`} style={{ animationDelay: '220ms' }} aria-label="Steuerung">
+      <h2 className="karte-titel">{nurPi ? 'Pi' : 'Steuerung'} <small>{nurPi ? 'Notbetrieb, neu starten, ausschalten' : 'wichtige Dienste sind geschützt'}</small></h2>
       {fehler && <div className="fehlerbox" role="alert">{fehler}</div>}
       {meldung && <div className="hinweisbox" role="status">{meldung}</div>}
 
@@ -67,7 +68,7 @@ export function Steuerung({ z, aktualisieren }: { z: Zustand; aktualisieren: () 
         </div>
 
         {/* Einzelne Dienste */}
-        <div>
+        {!nurPi && <div>
           <div className="steuerung-dienste">
             {gruppen.map((g) => (
               <div key={g}>
@@ -105,11 +106,11 @@ export function Steuerung({ z, aktualisieren }: { z: Zustand; aktualisieren: () 
               </span>
             ))}
           </div>
-        </div>
+        </div>}
 
         {/* Pi */}
         <div className="pi-steuerung">
-          <div className="leise steuerung-gruppe">Raspberry Pi</div>
+          {!nurPi && <div className="leise steuerung-gruppe">Raspberry Pi</div>}
           <button
             className={`press pi-knopf${frage === 'neustart' ? ' bestaetigen' : ''}`}
             disabled={laedt !== null}

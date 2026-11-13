@@ -10,7 +10,16 @@ import { Steuerung } from './Steuerung';
 import { EinstellungenKarte } from './Konsole';
 import { SicherheitKarte } from './Sicherheit';
 
-export function Einstellungen({ z, aktualisieren }: { z: Zustand; aktualisieren: () => void }) {
+// kompakt (Browser und Handy): nur Szenen, Pi (Notbetrieb, neu starten, ausschalten) und Sicherheit.
+// Backup, Konsole-Einstellungen und das Schalten einzelner Dienste gibt es in ZentraleOS.
+export function Einstellungen({ z, aktualisieren, kompakt = false }: { z: Zustand; aktualisieren: () => void; kompakt?: boolean }) {
+  if (kompakt) return (
+    <div className="einst kompakt">
+      <SzenenKarte z={z} aktualisieren={aktualisieren} />
+      <SicherheitKarte />
+      <Steuerung z={z} aktualisieren={aktualisieren} nurPi />
+    </div>
+  );
   return (
     <div className="einst">
       <SzenenKarte z={z} aktualisieren={aktualisieren} />

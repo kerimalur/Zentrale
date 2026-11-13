@@ -159,6 +159,13 @@ cd /mnt/daten/zentrale && git pull && docker compose up -d --build
 
 ---
 
+## Zwei Ansichten: Browser/Handy und ZentraleOS
+Im **Browser und auf dem Handy** zeigt die Zentrale nur das Nötige: Übersicht (läuft alles? sonst was – dazu Fernsteuerung von HP, Windows-PC und Fernseher), Fokus, System, Speicher, Cloud & Medien (einfache Übersicht), Gäste, Konsole und Einstellungen (Szenen, Sicherheit mit Liste der angemeldeten Geräte, Notbetrieb, Pi neu starten/ausschalten).
+
+**ZentraleOS** auf dem HP öffnet jede Seite einzeln mit `?nackt=1` und bekommt alles wie bisher, zusätzlich Heute, Gesundheit, Trading und Netz, die ausführlichen Seiten Cloud und Medien, Ereignisse & Fehler in der Übersicht und die vollen Einstellungen (Backup, Konsole-Einstellungen, einzelne Dienste schalten).
+
+**HP fernsteuern** (Übersicht): Bildschirm aus (sperrt mit), Bildschirm einschalten, Sperren, Schlafen gehen (schliesst alle Programme ausser dem Bot, sperrt, Bildschirm aus). Entsperren geht nur am HP selbst.
+
 ## Einstellungen (Tab „Einstellungen")
 Alles, was man schalten kann, an einem Ort: Szenen, Backup (automatisch ein/aus + „jetzt starten"), allgemeine Einstellungen (Nacht-Szene, Telegram, Lüfter, HDD-Schlaf, SSH) und die Steuerung unten.
 
@@ -317,3 +324,77 @@ Die Zentrale liest nur, und nur solange der Tab offen ist (jede Minute, Zwischen
 ```
 
 `.env` der Zentrale: `GARMIN_INFLUX_PASSWORD=` (gleicher Wert wie `INFLUXDB_PASSWORD` in garmin-grafana). Optional: `GARMIN_INFLUX_PORT` (8086), `GARMIN_GRAFANA_PORT` (3020), `GARMIN_GRAFANA_URL`, `GARMIN_SCHRITTE_ZIEL` (10000).
+
+## Desktop-App für den HP (`desktop/`)
+
+Der HP, auf dem der Trading-Bot läuft, bekommt eine eigene Oberfläche: Anmeldebildschirm wie bei Windows, macOS-artiger Schreibtisch mit Dock, ein Finder für die Dateien auf dem Pi **und** auf dem HP, eine Steuerung für PC/Fernseher/Szenen – und die Zentrale selbst als Fenster mittendrin. «Ausschalten» schaltet nur den Monitor ab, der HP läuft weiter.
+
+Bauen (auf Windows, braucht Node.js 20+):
+
+```powershell
+cd desktop
+npm install
+npm run dist
+```
+
+Alles Weitere steht in [`desktop/README.md`](desktop/README.md).
+
+## Datei-API (für den Finder der Desktop-App)
+
+Der bisherige Explorer (`/api/explorer`) kann nur lesen. Für den Finder gibt es `server/dateien.mjs` mit Schreibzugriff – nur für angemeldete Sitzungen, und mit denselben Schutzregeln wie der Explorer: nur echte Laufwerks-Einhängepunkte als Wurzel, kein `..`, keine Symlinks im Pfad, nichts ausserhalb des Laufwerks.
+
+| Route | Was |
+|---|---|
+| `GET /api/dateien/laufwerke` | Laufwerke mit Namen und freiem Platz |
+| `GET /api/dateien?wurzel=&pfad=` | Ordner auflisten (`versteckte=1` für Punktdateien) |
+| `GET /api/dateien/inhalt?wurzel=&pfad=` | Datei ausliefern, mit Range (Video, PDF) |
+| `GET /api/dateien/text` · `POST /api/dateien/text` | Textdatei lesen / schreiben (max. 4 MB) |
+| `POST /api/dateien/neu` | Datei oder Ordner anlegen |
+| `POST /api/dateien/umbenennen` | umbenennen |
+| `POST /api/dateien/verschieben` | verschieben oder kopieren (auch über Laufwerke) |
+| `POST /api/dateien/loeschen` | in den Papierkorb des Laufwerks (`endgueltig: true` löscht wirklich) |
+| `POST /api/dateien/papierkorb` | Papierkorb eines Laufwerks leeren |
+| `POST /api/dateien/upload?wurzel=&pfad=&name=` | Datei hochladen (bis 4 GB, gestreamt) |
+| `POST /api/dateien/teilen` | Link mit Ablaufdatum erzeugen |
+| `GET /api/dateien/teilen` · `POST /api/dateien/teilen/weg` | Links auflisten / löschen |
+| `GET /teilen/<token>` | **öffentlich**, ohne Anmeldung – gibt genau diese eine Datei heraus |
+
+Gelöschtes landet unter `<Laufwerk>/.Papierkorb/<Zeitstempel>__<Name>` und bleibt dort, bis du den Papierkorb leerst. Geteilte Links stehen in `data/zentrale.json` und laufen nach 1–90 Tagen ab (Standard 7). Erreichbar sind sie trotzdem nur über Tailscale – `tailscale serve` lässt niemanden sonst an Port 8443.
+
+Nach dem Einspielen auf dem Pi:
+
+```bash
+cd /mnt/daten/zentrale && docker compose up -d --build
+```
+
+## HP fernsteuern und Geräte koppeln
+
+Die Desktop-App auf dem HP meldet sich einmal mit Passwort und 2FA an und bekommt
+dann ein **Geräte-Token** (`server/geraete.mjs`). Damit holt sie sich jederzeit eine
+frische Sitzung, ohne dass Passwort oder 2FA-Geheimnis auf dem HP liegen. Das Token
+steht nur gehasht in `data/zentrale.json` und läuft nach einem Jahr ab.
+
+| Route | Was |
+|---|---|
+| `POST /api/geraet/token` | neues Token ausstellen (nur aus angemeldeter Sitzung) |
+| `POST /api/geraet/sitzung` | **ohne Anmeldung** – Token gegen eine frische Sitzung tauschen |
+| `GET /api/geraete` · `POST /api/geraete/weg` | gekoppelte Geräte anzeigen und entkoppeln |
+
+Darauf setzt die Fernsteuerung des HP auf (`server/hp.mjs`). Der HP ist von aussen
+nicht erreichbar, darum holt die App die Befehle selbst ab:
+
+| Route | Was |
+|---|---|
+| `POST /api/hp/abholen` | **Geräte-Token im Kopf `X-Geraet-Token`** – Zustand melden, offene Befehle holen |
+| `GET /api/hp` | Zustand für die Oberfläche |
+| `POST /api/hp/befehl` | `sperren`, `bildschirmAus` oder `bildschirmAn` |
+
+Die HP-Karte steht im Tab **Übersicht**. Entsperren aus der Ferne gibt es bewusst
+nicht – wer Zugriff auf die Zentrale hat, soll damit nicht am PIN vorbeikommen.
+
+## Nackter Modus (`?nackt=1`)
+
+Mit `?nackt=1` lässt die Zentrale ihre eigene Kopfzeile und Tab-Leiste weg und zeigt
+nur den Inhalt des Tabs aus dem Hash (`…/?nackt=1#Trading`). Die Desktop-App auf dem
+HP nutzt das, um jeden Tab in einem eigenen Fenster wie eine native App zu zeigen.
+Im Browser und auf dem Handy ändert sich nichts.
