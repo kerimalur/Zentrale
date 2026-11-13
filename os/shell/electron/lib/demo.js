@@ -175,7 +175,7 @@ async function bedienen(req, res) {
     if (p === '/api/geraete/weg') return json(200, { ok: true });
     if (p === '/api/hp/abholen' && m === 'POST') { letzteMeldung = { ...(await koerper(req)), zeit: jetzt() }; return json(200, { ok: true, befehle: befehle.splice(0) }); }
     if (p === '/api/hp' && m === 'GET') return json(200, { ok: true, meldung: letzteMeldung, erreichbar: !!letzteMeldung && jetzt() - letzteMeldung.zeit < 120e3 });
-    if (p === '/api/hp/befehl' && m === 'POST') { const b = await koerper(req); if (!['sperren', 'bildschirmAus', 'bildschirmAn'].includes(b.befehl)) return json(400, { fehler: 'Unbekannter Befehl' }); befehle.push(b.befehl); return json(200, { ok: true, befehl: b.befehl }); }
+    if (p === '/api/hp/befehl' && m === 'POST') { const b = await koerper(req); if (!['sperren', 'bildschirmAus', 'bildschirmAn', 'schlafen'].includes(b.befehl)) return json(400, { fehler: 'Unbekannter Befehl' }); befehle.push(b.befehl); return json(200, { ok: true, befehl: b.befehl }); }
     if (p === '/api/state') return json(200, state());
     if (p === '/api/trading') return json(200, trading());
     if (p === '/api/heute') return json(200, heute());
