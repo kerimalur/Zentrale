@@ -24,9 +24,9 @@ async function verbinden() {
   const ws = new WebSocket(ziel.webSocketDebuggerUrl.replace(/127\.0\.0\.1:\d+|localhost:\d+/, `127.0.0.1:${CDP}`)); let nr = 0; const offen = new Map();
   ws.onmessage = (m) => { const d = JSON.parse(m.data); if (offen.has(d.id)) { offen.get(d.id)(d.result || d.error); offen.delete(d.id); } };
   await new Promise((r, n) => { ws.onopen = r; ws.onerror = n; });
-  const ruf = (method, params = {}) => new Promise((ok) => { const id = ++nr; offen.set(id, ok); ws.send(JSON.stringify({ id, method, params })); });
+  const ruf = (method, params = {}, ms = 600_000) => new Promise((ok) => { const id = ++nr; const t = setTimeout(() => { if (offen.has(id)) { offen.delete(id); ok({ exceptionDetails: { exception: { description: `Zeitüberschreitung (${method})` } } }); } }, ms); offen.set(id, (x) => { clearTimeout(t); ok(x); }); ws.send(JSON.stringify({ id, method, params })); });
   const js = async (code) => { const a = await ruf('Runtime.evaluate', { expression: `(async () => { ${code} })()`, awaitPromise: true, returnByValue: true }); if (a.exceptionDetails) return { ausnahme: a.exceptionDetails.exception?.description || 'Fehler' }; return a.result?.value; };
-  const foto = async (name) => { await warte(900); const b = await ruf('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(path.join(AUS, name + '.png'), Buffer.from(b.data, 'base64')); };
+  const foto = async (name) => { await warte(900); const b = await ruf('Page.captureScreenshot', { format: 'png' }, 60_000); if (!b?.data) { console.log('INFO    Bildschirmfoto ' + name + ' nicht möglich'); return; } fs.writeFileSync(path.join(AUS, name + '.png'), Buffer.from(b.data, 'base64')); };
 
   // --- Anmeldung ---
   for (let n = 0; n < 40; n++) { const bereit = await js(`return typeof Schreibtisch !== 'undefined' && !!Schreibtisch.zustand.version && !!document.querySelector('#menueleiste').children.length`); if (bereit === true) break; await warte(1500); }
