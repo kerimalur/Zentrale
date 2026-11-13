@@ -131,6 +131,18 @@ async function api(req, res, url) {
     return json(res, 200, hpAbholen(g, await body(req)));
   }
 
+  // Meldungen des Wächters auf dem HP (Portscan, USB, Fehlversuche, Bot weg …) – landen bei den Ereignissen
+  // und gehen wie die eigenen Meldungen der Zentrale per Telegram/ntfy hinaus (gleiche Meldung höchstens alle 30 Min).
+  if (p === '/api/hp/meldung' && m === 'POST') {
+    const g = geraetAusAnfrage(req);
+    if (!g) return json(res, 401, { fehler: 'Gerät nicht gekoppelt' });
+    const b = await body(req);
+    const art = b.art === 'fehler' ? 'fehler' : b.art === 'info' ? 'info' : 'warnung';
+    const text = `${String(b.rechner || g.name || 'HP').slice(0, 40)}: ${String(b.text || '').replace(/\s+/g, ' ').slice(0, 400)}`;
+    ereignis(art, text, { telegram: art !== 'info', schluessel: 'hp:' + text.slice(0, 120) });
+    return json(res, 200, { ok: true });
+  }
+
   // ---------- Google-Anmeldung: Rückkehr von Google (ohne Cookie, weil die Weiterleitung von accounts.google.com kommt; geschützt über «state») ----------
   if (p === '/api/google/zurueck' && m === 'GET') {
     try {
