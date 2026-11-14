@@ -57,11 +57,11 @@ kill "$(cat "$VM/qemu.pid" 2>/dev/null)" 2>/dev/null; sleep 3; cp "$VM/seriell.l
 trap 'cp "$VM/seriell.log" "$AUS/seriell.log" 2>/dev/null; kill $(cat "$VM/qemu.pid" 2>/dev/null) 2>/dev/null' EXIT
 ZOS_VM_DIREKT=1 tests/vm.sh "$ISO" "$VM" || exit 3
 for _ in $(seq 1 $(( 40 * LANGSAM ))); do sleep 5; diag "prozesse:" | grep -q electron && break; done; warte 3
-LANGSAM=$([ $LANGSAM = 1 ] && echo 1 || echo 3) node tests/systemtest.cjs "$AUS" 2>&1 | tee "$AUS/systemtest-ausgabe.txt"
+LANGSAM=$([ $LANGSAM = 1 ] && echo 1 || echo 3) timeout 2700 node tests/systemtest.cjs "$AUS" 2>&1 | tee "$AUS/systemtest-ausgabe.txt"
 ST=${PIPESTATUS[0]}; [ "$ST" = 0 ] || FEHLER=$((FEHLER+1))
 echo "Systemtests: $([ "$ST" = 0 ] && echo alle bestanden || echo "nicht alle bestanden (siehe systemtest.txt)")" | tee -a "$ERG"
 # Gewollter Neustart der Oberfläche (wie nach einem ZentraleOS-Update)
-node tests/neustarttest.cjs 2>&1 | tee -a "$ERG"; [ "${PIPESTATUS[0]}" = 0 ] || FEHLER=$((FEHLER+1))
+timeout 480 node tests/neustarttest.cjs 2>&1 | tee -a "$ERG"; [ "${PIPESTATUS[0]}" = 0 ] || FEHLER=$((FEHLER+1))
 if [ "$(cat "$AUS/installiert" 2>/dev/null)" = ja ]; then
   echo "== Teil 3: Start von der installierten Platte (ohne ISO) =="
   kill "$(cat "$VM/qemu.pid" 2>/dev/null)" 2>/dev/null; sleep 4; cp "$VM/seriell.log" "$AUS/seriell-teil2.log" 2>/dev/null; : > "$VM/seriell.log"

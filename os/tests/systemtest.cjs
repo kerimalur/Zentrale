@@ -35,6 +35,8 @@ async function verbinden() {
   pruefe('Nach dem Start gesperrt (Anmeldebildschirm)', r.gesperrt === true); await foto('10-sperrbildschirm');
   r = await js(`const a = await Z.anmelden('0000', null, 'pin'); const b = await Z.anmelden('1234', null, 'pin'); await warte(2500); return { falsch: a.ok, richtig: b.ok, gesperrt: !document.querySelector('#sperre').hidden }`);
   pruefe('Falscher PIN wird abgelehnt', r.falsch === false); pruefe('Anmeldung per PIN', r.richtig === true && r.gesperrt === false); await foto('11-schreibtisch');
+  // Der Test gibt keine echte Eingabe: sonst schaltet «Bildschirm aus nach 10 Minuten» mitten im Test ab und sperrt
+  await js(`await Einst.setzenAsync({ ruhe: { bildschirmAusMin: 0 }, anmeldung: { autoSperrenMin: 0 } }); return 1`);
 
   // --- Zentrale-App (Demo) im Fenster ---
   r = await js(`FM.schliessenAlle(); for (const t of ['Übersicht', 'Trading']) ZentraleFenster.oeffnen(t); await warte(${4000 * LANGSAM}); return [...ZentraleFenster.offen.entries()].map(([k, e]) => k + ':' + e.rahmen.classList.contains('da'))`);
@@ -184,6 +186,7 @@ async function verbinden() {
   if (r.ok && r.anzahl > 0) pruefe('Software: Flathub-Suche liefert Treffer', true, r.anzahl + ' Treffer'); else hinweis('Software: Flathub-Suche NICHT geprüft (kein Internet in der Test-VM?)', JSON.stringify(r));
 
   // --- Updates von ZentraleOS selbst (aus GitHub, ohne Stick) ---
+  await js(`if (!document.querySelector('#sperre').hidden) { await Z.anmelden('1234', null, 'pin'); await warte(2000); } return 1`);
   r = await js(`const s = await Z.mehr.osStand(); const a = await Z.sys.root('updates-suchen', [], '${PW}'); return { s, aus: String(a.aus || a.fehler || '').slice(0, 500) }`);
   pruefe('ZentraleOS-Version bekannt (Stand vom Bau)', /^[0-9a-f]{7}$/.test(r.s?.kennung || ''), JSON.stringify(r.s));
   pruefe('«Nach Updates suchen» fragt auch GitHub nach ZentraleOS', /ZentraleOS (ist .*aktuell|: neue Version)/.test(r.aus), r.aus);
