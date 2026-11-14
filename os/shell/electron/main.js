@@ -539,6 +539,11 @@ function systemIpc() {
 // ---------------------------------------------------------------- Start
 
 app.whenReady().then(async () => {
+  // Nach einem Neustart der Oberfläche (z. B. nach einem Update): Helfer der vorigen Shell beenden,
+  // sonst liefen Leerlauf-Wächter, Nachtlicht und Zwischenablage-Wache doppelt.
+  if (process.env.ZOS_SHELL_SKRIPT === '1') {
+    await new Promise((fertig) => require('node:child_process').execFile('sh', ['-c', 'pkill -u "$(id -u)" -x swayidle; pkill -u "$(id -u)" -x wlsunset; pkill -u "$(id -u)" -f "^wl-paste --type text --watch"; true'], { timeout: 4000 }, () => fertig()));
+  }
   einstellungen.laden();
   const e = einstellungen.alle();
 

@@ -1,0 +1,11 @@
+#!/bin/bash
+# Startet ein Programm ohne die offenen Dateien der Oberfläche (Sockets, Pipes, Wayland-Verbindung).
+# Sonst erbt jedes gestartete Programm diese Kanäle und hält sie auch nach einem Neustart der Oberfläche offen.
+# Aufruf: frei <programm> [argumente…]   (ZOS_FD_BEHALTEN=3 lässt zusätzlich fd 3 offen)
+behalten=${ZOS_FD_BEHALTEN:-2}; unset ZOS_FD_BEHALTEN
+for f in /proc/$$/fd/*; do
+  n=${f##*/}
+  case "$n" in ''|*[!0-9]*) continue;; esac
+  [ "$n" -gt "$behalten" ] && eval "exec $n>&-" 2>/dev/null
+done
+exec "$@"

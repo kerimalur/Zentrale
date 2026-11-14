@@ -4,6 +4,7 @@
 // Helfer /usr/libexec/zentraleos/helfer und verlangt das Administrator-Passwort.
 const fs = require('node:fs');
 const os = require('node:os');
+const frei = require('./frei');
 const path = require('node:path');
 const { execFile, spawn } = require('node:child_process');
 
@@ -283,12 +284,12 @@ function programme() {
 function programmStarten(id) {
   const p = programme().liste.find((x) => x.id === id);
   if (!p) return { ok: false, fehler: 'Programm nicht gefunden' };
-  const k = spawn('sh', ['-c', p.terminal ? `foot -e ${p.exec}` : p.exec], { detached: true, stdio: 'ignore', cwd: os.homedir() });
+  const k = spawn(...frei('sh', ['-c', p.terminal ? `foot -e ${p.exec}` : p.exec]), { detached: true, stdio: 'ignore', cwd: os.homedir() });
   k.on('error', () => {}); k.unref();
   return { ok: true };
 }
 function befehlStarten(zeile) {
-  const k = spawn('sh', ['-c', String(zeile)], { detached: true, stdio: 'ignore', cwd: os.homedir() });
+  const k = spawn(...frei('sh', ['-c', String(zeile)]), { detached: true, stdio: 'ignore', cwd: os.homedir() });
   k.on('error', () => {}); k.unref();
   return { ok: true };
 }
@@ -346,7 +347,7 @@ function terminalStarten(id, senden, { shell = null, befehl = null } = {}) {
   terminalBeenden(id);
   const sh = shell || process.env.SHELL || '/bin/bash';
   const args = [path.join(__dirname, 'zos_pty.py'), ...(befehl ? [sh, '-c', befehl] : [sh, '-l'])];
-  const k = spawn('python3', args, { stdio: ['pipe', 'pipe', 'pipe', 'pipe'], cwd: os.homedir(), env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' } });
+  const k = spawn(...frei('python3', args), { stdio: ['pipe', 'pipe', 'pipe', 'pipe'], cwd: os.homedir(), env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor', ZOS_FD_BEHALTEN: '3' } });
   terminals.set(id, k);
   k.stdout.on('data', (d) => senden({ id, daten: d.toString('utf8') }));
   k.stderr.on('data', (d) => senden({ id, daten: d.toString('utf8') }));
@@ -365,7 +366,7 @@ async function bildschirmfoto(bereich) {
   const d = new Date(); const z = (n) => String(n).padStart(2, '0');
   const ziel = path.join(ordner, `Bildschirmfoto ${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())} ${z(d.getHours())}.${z(d.getMinutes())}.${z(d.getSeconds())}.png`);
   const r = bereich ? await lauf('sh', ['-c', 'grim -g "$(slurp)" "$0"', ziel], { timeout: 60000 }) : await lauf('grim', [ziel], { timeout: 10000 });
-  if (r.ok) lauf('sh', ['-c', 'wl-copy -t image/png < "$0"', ziel], { timeout: 8000 }).catch(() => {});   // gleich in die Zwischenablage
+  if (r.ok) lauf(...frei('sh', ['-c', 'wl-copy -t image/png < "$0"', ziel]), { timeout: 8000 }).catch(() => {});   // gleich in die Zwischenablage
   return r.ok ? { ok: true, pfad: ziel } : { ok: false, fehler: r.fehler || 'Bildschirmfoto fehlgeschlagen' };
 }
 

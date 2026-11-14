@@ -3,6 +3,7 @@
 // Installation auf die Platte. Wie in system.js: bewährte Werkzeuge aufrufen, Root nur über den Helfer.
 const fs = require('node:fs');
 const os = require('node:os');
+const frei = require('./frei');
 const net = require('node:net');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
@@ -37,7 +38,7 @@ function ablageMerken(text) {
 function ablageStarten() {
   if (ablageWache || process.platform !== 'linux') return;
   try {
-    ablageWache = spawn('wl-paste', ['--type', 'text', '--watch', 'sh', '-c', 'echo x'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    ablageWache = spawn(...frei('wl-paste', ['--type', 'text', '--watch', 'sh', '-c', 'echo x']), { stdio: ['ignore', 'pipe', 'ignore'] });
     ablageWache.stdout.on('data', async () => { const r = await lauf('wl-paste', ['-n', '--type', 'text'], { timeout: 3000 }); if (r.ok) ablageMerken(r.aus); });
     ablageWache.on('error', () => { ablageWache = null; }); ablageWache.on('exit', () => { ablageWache = null; });
   } catch { ablageWache = null; }
@@ -328,7 +329,7 @@ function nachtlicht() {
   const z = (t) => (/^\d{1,2}:\d{2}$/.test(String(t)) ? String(t).padStart(5, '0') : null);
   const args = ['-t', String(Math.max(2500, Math.min(6000, Number(n.temperatur) || 3800))), '-T', '6500'];
   if (n.immer) args.push('-S', '00:00', '-s', '00:01'); else if (z(n.ab) && z(n.bis)) args.push('-s', z(n.ab), '-S', z(n.bis)); else args.push('-s', '20:00', '-S', '07:00');
-  nachtlichtProzess = spawn('wlsunset', args, { stdio: 'ignore' }); nachtlichtProzess.on('error', () => { nachtlichtProzess = null; });
+  nachtlichtProzess = spawn(...frei('wlsunset', args), { stdio: 'ignore' }); nachtlichtProzess.on('error', () => { nachtlichtProzess = null; });
   return { ok: true, an: true };
 }
 

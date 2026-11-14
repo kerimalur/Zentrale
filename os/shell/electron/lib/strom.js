@@ -3,6 +3,7 @@
 // Der Rechner soll als Dauerläufer taugen: Standard ist «nie in den Ruhezustand»
 // (systemd-Konfiguration im Image), der Bildschirm darf ausgehen.
 const { spawn } = require('node:child_process');
+const frei = require('./frei');
 const { powerSaveBlocker, powerMonitor } = require('electron');
 const system = require('./system');
 
@@ -44,7 +45,7 @@ function leerlaufWaechter(sperrMin, ausMin) {
   // Bildschirm aus (und sperren); jede Eingabe weckt den Bildschirm wieder – entsperrt aber nicht.
   if (aus > 0) args.push('timeout', String(Math.round(aus * 60)), 'zos bildschirmAus', 'resume', 'zos bildschirmAn');
   if (args.length === 1) return;
-  waechter = spawn('swayidle', args, { stdio: 'ignore' });
+  waechter = spawn(...frei('swayidle', args), { stdio: 'ignore' });
   waechter.on('error', () => { waechter = null; });
 }
 
