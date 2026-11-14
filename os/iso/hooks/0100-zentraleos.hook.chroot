@@ -11,7 +11,8 @@ echo zentraleos > /etc/hostname
 # Benutzer der Live-Sitzung. Kein Root ohne Passwort: sudo fragt immer nach.
 if ! id zentrale >/dev/null 2>&1; then
   useradd -m -s /bin/bash -c "ZentraleOS" -G sudo,audio,video,netdev,plugdev,bluetooth,input,adm,systemd-journal zentrale
-  echo 'zentrale:zentrale' | chpasswd
+  # Live-System: Administrator-Passwort 1234 (gleich wie der Demo-Code). Bei der Installation legst du ein eigenes fest.
+  echo 'zentrale:1234' | chpasswd
 fi
 passwd -l root
 

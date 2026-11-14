@@ -21,6 +21,7 @@ cp /quelle/iso/hooks/*.hook.chroot config/hooks/normal/
 mkdir -p config/includes.chroot/opt/zentraleos
 cp -a /quelle/shell config/includes.chroot/opt/zentraleos/shell
 cp -a /quelle/erweiterungen config/includes.chroot/opt/zentraleos/erweiterungen 2>/dev/null || true
+[ -n "${ZOS_STAND:-}" ] && printf '%s\n' "$ZOS_STAND" > config/includes.chroot/opt/zentraleos/stand
 # Eigenes Bootmenü (Start, sicherer Grafikmodus, Wartung)
 cp -a /usr/share/live/build/bootloaders config/
 cp /quelle/iso/grub.cfg config/bootloaders/grub-pc/grub.cfg

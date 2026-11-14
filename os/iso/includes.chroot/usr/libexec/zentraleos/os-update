@@ -1,0 +1,144 @@
+#!/bin/bash
+# Aktualisiert ZentraleOS selbst (Oberfläche, Wächter, Helfer, eigene Dienste, Fensterregeln) aus GitHub –
+# ohne neuen Stick und ohne Neustart des Rechners. Läuft nur über den Root-Helfer (Administrator-Passwort).
+#   os-update suchen              zeigt, ob es eine neuere Version gibt
+#   os-update einspielen          lädt sie, prüft sie und spielt sie ein (vorheriger Stand bleibt als Sicherung)
+#   os-update einspielen neu      lädt den neuesten Stand auch dann, wenn er schon installiert ist
+#   os-update zurueck             stellt den Stand vor dem letzten Update wieder her
+# Im Live-System vom Stick gilt ein Update nur bis zum Ausschalten.
+set -uo pipefail
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+REPO=kerimalur/zentrale
+ZWEIG=os-nacht
+[ -f /etc/zentraleos/update.conf ] && . /etc/zentraleos/update.conf
+case "$ZWEIG" in *[!A-Za-z0-9._/-]*|'') echo "Ungültiger Zweig in /etc/zentraleos/update.conf"; exit 2;; esac
+OPT=/opt/zentraleos
+STAND="$OPT/stand"
+SICHERUNG=/var/lib/zentraleos/os-update-vorher
+E="$OPT/shell/node_modules/electron/dist/electron"
+API="https://api.github.com/repos/$REPO"
+hol() { curl -fsSL --proto '=https' --tlsv1.2 --max-time "${2:-30}" -H 'Accept: application/vnd.github+json' "$1"; }
+stand() { head -n1 "$STAND" 2>/dev/null | tr -cd '0-9a-f' | cut -c1-40; }
+kurz() { printf '%s' "${1:0:7}"; }
+
+# Neuester Stand des Zweigs: Kennung, Datum, erste Zeile der Beschreibung
+neuester() {
+  hol "$API/commits/$ZWEIG" | python3 -c 'import json,sys; d=json.load(sys.stdin); c=d["commit"]; print(d["sha"]); print(c["committer"]["date"][:10]); print(c["message"].splitlines()[0][:120])' 2>/dev/null
+}
+
+# Welche Dateien von ZentraleOS haben sich seit dem installierten Stand geändert? (nur was dieses Update einspielt)
+aenderungen() {
+  hol "$API/compare/$1...$2" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+pre = ("os/shell/", "os/erweiterungen/", "os/iso/includes.chroot/usr/libexec/zentraleos/", "os/iso/includes.chroot/usr/bin/zentraleos-", "os/iso/includes.chroot/etc/systemd/system/zentraleos-", "os/iso/includes.chroot/etc/xdg/labwc/")
+f = [x["filename"] for x in d.get("files", []) if x["filename"].startswith(pre)]
+print(len(f)); print(d.get("status", "")); print(d.get("ahead_by", 0))
+for x in f[:12]: print("  " + x[3:])
+if len(f) > 12: print("  … und %d weitere" % (len(f) - 12))' 2>/dev/null
+}
+
+suchen() {
+  local n s; n="$(neuester)" || { echo "ZentraleOS: GitHub nicht erreichbar – später nochmals versuchen."; return 1; }
+  local neu datum text; neu="$(sed -n 1p <<<"$n")"; datum="$(sed -n 2p <<<"$n")"; text="$(sed -n 3p <<<"$n")"
+  s="$(stand)"
+  if [ -z "$s" ]; then echo "ZentraleOS: installierter Stand unbekannt. Neuester Stand $(kurz "$neu") vom $datum: $text"; echo "ZOS-UPDATE-DA"; return 0; fi
+  if [ "$s" = "$neu" ]; then echo "ZentraleOS ist aktuell ($(kurz "$s"), $datum)."; return 0; fi
+  local a; a="$(aenderungen "$s" "$neu")" || { echo "ZentraleOS: Vergleich mit GitHub fehlgeschlagen."; return 1; }
+  if [ "$(sed -n 1p <<<"$a")" = 0 ]; then echo "ZentraleOS ist aktuell ($(kurz "$s")) – neuere Änderungen betreffen das System nicht."; return 0; fi
+  echo "ZentraleOS: neue Version $(kurz "$neu") vom $datum – $text"
+  echo "Installiert: $(kurz "$s"). Geänderte Dateien: $(sed -n 1p <<<"$a")"
+  sed -n '4,$p' <<<"$a"
+  echo "ZOS-UPDATE-DA"
+}
+
+# Prüft den heruntergeladenen Stand, bevor etwas ersetzt wird
+pruefen() {
+  local q="$1" f
+  [ -f "$q/os/shell/package.json" ] && [ -f "$q/os/shell/electron/main.js" ] && [ -f "$q/os/shell/renderer/index.html" ] || { echo "Download unvollständig."; return 1; }
+  # Braucht die neue Version andere Bausteine (z. B. eine neue Electron-Fassung), reicht ein Update ohne Stick nicht.
+  python3 - "$OPT/shell/package.json" "$q/os/shell/package.json" <<'PY' || return 1
+import json, sys
+a, b = (json.load(open(p)).get("dependencies", {}) for p in sys.argv[1:3])
+if a != b:
+    print("Diese Version braucht andere Bausteine (%s). Dafür ist ein neuer Stick bzw. eine Neuinstallation nötig." % ", ".join(sorted(set(a) ^ set(b) | {k for k in a if k in b and a[k] != b[k]})))
+    sys.exit(1)
+PY
+  for f in $(find "$q/os/shell/electron" "$q/os/shell/waechter" "$q/os/shell/renderer/js" -name '*.js'); do
+    ELECTRON_RUN_AS_NODE=1 "$E" --check "$f" 2>/dev/null || { echo "Fehler in ${f#$q/os/} – Update abgebrochen, nichts geändert."; return 1; }
+  done
+  for f in "$q"/os/iso/includes.chroot/usr/libexec/zentraleos/* "$q"/os/iso/includes.chroot/usr/bin/zentraleos-*; do
+    [ -f "$f" ] || continue
+    if head -1 "$f" | grep -q python; then python3 -m py_compile "$f" 2>/dev/null || { echo "Fehler in ${f#$q/os/}."; return 1; }
+    elif head -1 "$f" | grep -qE 'sh$'; then bash -n "$f" 2>/dev/null || { echo "Fehler in ${f#$q/os/} – Update abgebrochen, nichts geändert."; return 1; }; fi
+  done
+}
+
+# Kopiert einen Stand nach / (Quelle: Wurzel mit os/…). Ersetzt Dateien per Umbenennen, laufende Skripte bleiben heil.
+einspielenAus() {
+  local q="$1" c="$1/os/iso/includes.chroot"
+  rsync -rlt --delete --exclude node_modules --chmod=D755,F644 "$q/os/shell/" "$OPT/shell/" || return 1
+  if [ -d "$q/os/erweiterungen" ]; then rsync -rlt --delete --chmod=D755,F755 "$q/os/erweiterungen/" "$OPT/erweiterungen/" || return 1; fi
+  rsync -rlt --chmod=D755,F755 "$c/usr/libexec/zentraleos/" /usr/libexec/zentraleos/ || return 1
+  for f in "$c"/usr/bin/zentraleos-*; do [ -f "$f" ] && install -m 0755 "$f" "/usr/bin/.$(basename "$f").neu" && mv -f "/usr/bin/.$(basename "$f").neu" "/usr/bin/$(basename "$f")"; done
+  for f in "$c"/etc/systemd/system/zentraleos-*; do [ -f "$f" ] && install -m 0644 "$f" /etc/systemd/system/; done
+  [ -d "$c/etc/xdg/labwc" ] && rsync -rlt --chmod=D755,F644 "$c/etc/xdg/labwc/" /etc/xdg/labwc/
+  return 0
+}
+
+sichern() {
+  rm -rf "$SICHERUNG"; mkdir -p "$SICHERUNG/os/iso/includes.chroot/usr/bin" "$SICHERUNG/os/iso/includes.chroot/etc/systemd/system" "$SICHERUNG/os/iso/includes.chroot/etc/xdg"
+  rsync -a --exclude node_modules "$OPT/shell/" "$SICHERUNG/os/shell/"
+  [ -d "$OPT/erweiterungen" ] && rsync -a "$OPT/erweiterungen/" "$SICHERUNG/os/erweiterungen/"
+  mkdir -p "$SICHERUNG/os/iso/includes.chroot/usr/libexec"; rsync -a /usr/libexec/zentraleos/ "$SICHERUNG/os/iso/includes.chroot/usr/libexec/zentraleos/"
+  cp -a /usr/bin/zentraleos-* "$SICHERUNG/os/iso/includes.chroot/usr/bin/" 2>/dev/null
+  cp -a /etc/systemd/system/zentraleos-* "$SICHERUNG/os/iso/includes.chroot/etc/systemd/system/" 2>/dev/null
+  rsync -a /etc/xdg/labwc "$SICHERUNG/os/iso/includes.chroot/etc/xdg/" 2>/dev/null
+  cp -a "$STAND" "$SICHERUNG/stand" 2>/dev/null
+  return 0
+}
+
+nachher() {
+  systemctl daemon-reload
+  systemctl try-restart zentraleos-waechter.service 2>/dev/null
+  pkill -HUP -x labwc 2>/dev/null   # Fensterregeln und Tastenkürzel neu laden
+  return 0
+}
+
+einspielen() {
+  local n neu datum text s
+  n="$(neuester)" || { echo "GitHub nicht erreichbar – nichts geändert."; return 1; }
+  neu="$(sed -n 1p <<<"$n")"; datum="$(sed -n 2p <<<"$n")"; text="$(sed -n 3p <<<"$n")"; s="$(stand)"
+  case "$neu" in *[!0-9a-f]*|'') echo "Unerwartete Antwort von GitHub – nichts geändert."; return 1;; esac
+  if [ "$s" = "$neu" ] && [ "${1:-}" != neu ]; then echo "ZentraleOS ist schon aktuell ($(kurz "$s"))."; return 0; fi
+  tmp="$(mktemp -d)"; trap 'rm -rf "${tmp:-/nichts}"' EXIT
+  echo "Lade ZentraleOS $(kurz "$neu") vom $datum …"
+  hol "https://codeload.github.com/$REPO/tar.gz/$neu" 600 > "$tmp/stand.tgz" || { echo "Download fehlgeschlagen – nichts geändert."; return 1; }
+  mkdir "$tmp/q" && tar -xzf "$tmp/stand.tgz" -C "$tmp/q" --strip-components=1 --wildcards '*/os/shell' '*/os/erweiterungen' '*/os/iso/includes.chroot' 2>/dev/null
+  pruefen "$tmp/q" || return 1
+  sichern
+  if ! einspielenAus "$tmp/q"; then
+    echo "Einspielen fehlgeschlagen – stelle den vorherigen Stand wieder her."; einspielenAus "$SICHERUNG"; cp -a "$SICHERUNG/stand" "$STAND" 2>/dev/null; nachher; return 1
+  fi
+  printf '%s\n%s\n%s\n' "$neu" "$datum" "$text" > "$STAND"; chmod 0644 "$STAND"
+  nachher
+  logger -t zentraleos "ZentraleOS aktualisiert: ${s:0:7} -> ${neu:0:7}"
+  echo "ZentraleOS aktualisiert auf $(kurz "$neu") ($datum): $text"
+  grep -qw boot=live /proc/cmdline && echo "Hinweis: Im Live-System vom Stick gilt das nur bis zum Ausschalten."
+  echo "ZOS-NEUSTART"
+}
+
+zurueck() {
+  [ -d "$SICHERUNG/os/shell" ] || { echo "Keine Sicherung vorhanden."; return 1; }
+  einspielenAus "$SICHERUNG" || { echo "Zurücksetzen fehlgeschlagen."; return 1; }
+  cp -a "$SICHERUNG/stand" "$STAND" 2>/dev/null
+  nachher; echo "Vorheriger Stand ($(kurz "$(stand)")) wiederhergestellt."; echo "ZOS-NEUSTART"
+}
+
+case "${1:-}" in
+  suchen) suchen ;;
+  einspielen) einspielen "${2:-}" ;;
+  zurueck) zurueck ;;
+  stand) s="$(stand)"; [ -n "$s" ] && echo "$(kurz "$s") vom $(sed -n 2p "$STAND")" || echo unbekannt ;;
+  *) echo "Aufruf: os-update suchen|einspielen [neu]|zurueck|stand"; exit 2 ;;
+esac

@@ -26,12 +26,14 @@ const balken = (p, farbe = 'var(--akzent)') => el('div', { klasse: 'sy-balken' }
 
 // Führt eine Root-Aktion aus. Fehlt das Administrator-Passwort, wird im Look des Systems
 // danach gefragt (kein Root ohne Passwort; es wird höchstens 5 Minuten im Speicher gehalten).
+let istLiveSystem = null;
 async function alsAdmin(aufruf, grund = 'Diese Aktion ändert das System.') {
   let r = await aufruf(null);
+  if (r && r.passwortNoetig && istLiveSystem === null) { try { istLiveSystem = !!(await Z.sys.info()).live; } catch { istLiveSystem = false; } }
   let versuch = 0;
   while (r && r.passwortNoetig && versuch < 3) {
     versuch++;
-    const a = await dialog({ titel: 'Administrator-Passwort', text: (r.falsch ? 'Das Passwort war falsch. ' : '') + grund, felder: [{ type: 'password', platzhalter: 'Passwort' }], okText: 'Freigeben' });
+    const a = await dialog({ titel: 'Administrator-Passwort', text: (r.falsch ? 'Das Passwort war falsch. ' : '') + grund + (istLiveSystem ? '\n\nLive-System vom USB-Stick: Das Passwort ist 1234.' : ''), felder: [{ type: 'password', platzhalter: 'Passwort' }], okText: 'Freigeben' });
     if (!a || !a[0]) return { ok: false, abgebrochen: true, fehler: 'Abgebrochen' };
     r = await aufruf(a[0]);
   }
@@ -197,12 +199,27 @@ const Software = {
   mt5() { TerminalApp.oeffnen({ titel: 'MetaTrader 5 installieren', befehl: '/opt/zentraleos/erweiterungen/mt5-installieren.sh' }); },
   updates(i) {
     const E = EinstellungenApp; const aus = el('pre', { klasse: 'sy-aus', text: 'Noch nicht gesucht.' });
-    const tun = async (text, fn) => { aus.textContent = text + ' …'; const r = await fn(); aus.textContent = r.abgebrochen ? 'Abgebrochen.' : (r.aus || r.fehler || (r.ok ? 'Alles aktuell.' : 'Fehler')).trim() || 'Alles aktuell.'; };
-    i.append(el('h2', { text: 'Updates' }), E.block('System (apt)', E.karte(
-      E.reihe('Nach Updates suchen', 'Braucht das Administrator-Passwort.', el('button', { klasse: 'knopf haupt', onclick: () => tun('Suche', () => root('updates-suchen', [], 'Paketlisten werden aktualisiert.')) }, 'Suchen')),
-      E.reihe('Updates einspielen', 'Lädt und installiert alle verfügbaren Systemupdates.', el('button', { klasse: 'knopf', onclick: () => tun('Installiere', () => root('updates-einspielen', [], 'Systemupdates werden installiert.')) }, 'Einspielen')))),
-    E.block('Programme (Flatpak)', E.karte(E.reihe('Programme aktualisieren', 'Ohne Passwort, nur dein Konto.', el('button', { klasse: 'knopf', onclick: () => tun('Aktualisiere', () => Z.sys.flatpakAktualisieren()) }, 'Aktualisieren')))), aus,
-    el('p', { klasse: 'unter', text: 'Rollback (zurück zum Stand vor einem Update) gibt es in dieser Version noch nicht – siehe LIESMICH, Abschnitt Ausbaupfad.' }));
+    const standText = el('span', { text: '…' });
+    Z.mehr.osStand().then((s) => { standText.textContent = s && s.kennung ? `${s.kennung} vom ${s.datum}${s.text ? ' – ' + s.text : ''}` : 'unbekannt'; });
+    const tun = async (text, fn) => {
+      aus.textContent = text + ' …'; const r = await fn();
+      let t = r.abgebrochen ? 'Abgebrochen.' : (r.aus || r.fehler || (r.ok ? 'Alles aktuell.' : 'Fehler')).trim() || 'Alles aktuell.';
+      const neustart = t.includes('ZOS-NEUSTART'); t = t.split('\n').filter((z) => !/^ZOS-(NEUSTART|UPDATE-DA)$/.test(z.trim())).join('\n');
+      aus.textContent = t;
+      if (neustart) {
+        let n = 5; aus.textContent = t + `\n\nDie Oberfläche startet in ${n} Sekunden neu (der Rechner nicht). Danach den Code eingeben.`;
+        const uhr = setInterval(() => { n--; aus.textContent = t + `\n\nDie Oberfläche startet in ${n} Sekunden neu (der Rechner nicht). Danach den Code eingeben.`; if (n <= 0) { clearInterval(uhr); Z.system.neustart(); } }, 1000);
+      }
+    };
+    i.append(el('h2', { text: 'Updates' }), E.block('ZentraleOS und System', E.karte(
+      E.reihe('Installierte Version', 'ZentraleOS (Oberfläche, Wächter, Helfer).', standText),
+      E.reihe('Nach Updates suchen', 'Neue Versionen von ZentraleOS (aus GitHub) und Debian-Pakete. Braucht das Administrator-Passwort.', el('button', { klasse: 'knopf haupt', onclick: () => tun('Suche', () => root('updates-suchen', [], 'Es wird nach Updates für ZentraleOS und die Pakete gesucht.')) }, 'Suchen')),
+      E.reihe('Updates einspielen', 'Spielt beides ein. Danach startet nur die Oberfläche kurz neu, der Rechner nicht.', el('button', { klasse: 'knopf', onclick: () => tun('Installiere', () => root('updates-einspielen', [], 'ZentraleOS und die Systempakete werden aktualisiert.')) }, 'Einspielen')))),
+    E.block('Programme (Flatpak)', E.karte(E.reihe('Programme aktualisieren', 'Ohne Passwort, nur dein Konto.', el('button', { klasse: 'knopf', onclick: () => tun('Aktualisiere', () => Z.sys.flatpakAktualisieren()) }, 'Aktualisieren')))),
+    E.block('Bei Problemen', E.karte(
+      E.reihe('ZentraleOS neu laden', 'Lädt den neuesten Stand nochmals, auch wenn er schon installiert ist.', el('button', { klasse: 'knopf', onclick: () => tun('Lade', () => root('zos-neu-laden', [], 'ZentraleOS wird neu geladen.')) }, 'Neu laden')),
+      E.reihe('Zurück zur vorherigen Version', 'Macht das letzte ZentraleOS-Update rückgängig.', el('button', { klasse: 'knopf', onclick: async () => { if (await fragen('Zur vorherigen Version zurück?', 'Das letzte Update von ZentraleOS wird rückgängig gemacht. Die Oberfläche startet danach neu.', 'Zurück')) tun('Setze zurück', () => root('zos-zurueck', [], 'Das letzte ZentraleOS-Update wird rückgängig gemacht.')); } }, 'Zurück')))), aus,
+    el('p', { klasse: 'unter', text: 'Im Live-System vom Stick gilt ein Update nur bis zum Ausschalten. Im installierten System bleibt es; vor jedem Paket-Update entsteht zusätzlich ein Schnappschuss.' }));
   },
 };
 
@@ -426,7 +443,7 @@ Object.assign(EinstellungenApp, {
   },
   async benutzer(i) {
     this.kopf(i, 'Benutzer & Passwort', 'Du bist kein Administrator im Alltag: Alles, was das System ändert, fragt nach deinem Passwort.'); const inf = await Z.sys.info();
-    i.append(this.block(null, this.karte(this.reihe('Angemeldet als', inf.live ? 'Live-System vom USB-Stick: Benutzer «zentrale», Passwort «zentrale».' : null, this.wert(inf.benutzer)),
+    i.append(this.block(null, this.karte(this.reihe('Angemeldet als', inf.live ? 'Live-System vom USB-Stick: Benutzer «zentrale», Administrator-Passwort «1234».' : null, this.wert(inf.benutzer)),
       this.reihe('Passwort ändern', 'Das Administrator-Passwort deines Kontos.', el('button', { klasse: 'knopf', onclick: async () => {
         const a = await dialog({ titel: 'Passwort ändern', text: 'Neues Passwort zweimal eingeben. Danach wirst du nach dem bisherigen gefragt.', felder: [{ type: 'password', platzhalter: 'Neues Passwort' }, { type: 'password', platzhalter: 'Nochmal' }], okText: 'Weiter' });
         if (!a) return; if (a[0] !== a[1] || a[0].length < 6) return hinweis('Die Eingaben stimmen nicht überein oder sind kürzer als 6 Zeichen.', 'fehler');

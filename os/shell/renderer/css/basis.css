@@ -57,6 +57,9 @@ img { -webkit-user-drag: none; }
   background-size: cover; background-position: center;
 }
 .fensterflaeche { position: absolute; left: 0; right: 0; top: var(--menue-h); bottom: 0; z-index: 10; }
+/* Die Fensterfläche liegt über dem Schreibtisch: nur die Fenster selbst fangen die Maus, sonst kämen Klicks nie bei Symbolen und Widgets an */
+.fensterflaeche { pointer-events: none; }
+.fensterflaeche > .fenster { pointer-events: auto; }
 
 /* ---------- Menüleiste ---------- */
 .menueleiste {

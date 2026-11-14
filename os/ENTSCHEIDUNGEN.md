@@ -41,7 +41,7 @@ am Sperrbildschirm festhinge. Demo-PIN 1234, Demo-Passwort «demo».
 Die Shell läuft als normaler Benutzer. Systemänderungen gehen über `sudo -k -S /usr/libexec/zentraleos/helfer
 <aktion>` mit fest verdrahteten Aktionen; das Administrator-Passwort fragt ein Dialog der Shell ab (höchstens
 5 Minuten im Speicher). Kein polkit-Agent im eigenen Look – das wäre der sauberere Weg (Ausbaupfad).
-Live-System: Benutzer `zentrale`, Passwort `zentrale`, `sudo` fragt immer nach; live-config legt **kein**
+Live-System: Benutzer `zentrale`, Passwort `1234`, `sudo` fragt immer nach; live-config legt **kein**
 passwortloses sudo an (`nocomponents=user-setup,sudo,policykit`), Root ist gesperrt.
 
 ## 6. Anmeldung: automatische Sitzung + Sperrbildschirm der Shell

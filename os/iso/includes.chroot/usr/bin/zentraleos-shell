@@ -9,8 +9,11 @@ grep -qw zos.test /proc/cmdline && systemd-detect-virt -q --vm && ARGS="$ARGS --
 while true; do
   n=0; anfang=$(date +%s)
   while [ $n -lt 6 ]; do
-    "$E" /opt/zentraleos/shell $ARGS >>"${XDG_RUNTIME_DIR:-/tmp}/shell.log" 2>&1
-    [ $? -eq 0 ] && exit 0
+    ZOS_SHELL_SKRIPT=1 "$E" /opt/zentraleos/shell $ARGS >>"${XDG_RUNTIME_DIR:-/tmp}/shell.log" 2>&1
+    rc=$?
+    [ $rc -eq 0 ] && exit 0
+    # 75 = gewollter Neustart (z. B. nach einem Update der Oberfläche): sofort wieder starten, zählt nicht als Absturz
+    [ $rc -eq 75 ] && { anfang=$(date +%s); continue; }
     # Lief sie länger als zwei Minuten, zählt der Absturz neu.
     jetzt=$(date +%s); [ $((jetzt - anfang)) -gt 120 ] && n=0; anfang=$jetzt
     n=$((n+1))

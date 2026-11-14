@@ -428,7 +428,8 @@ function ipcEinrichten() {
   ipcMain.handle('strom:bildschirmAus', sicher(async () => strom.bildschirmAus()));
   ipcMain.handle('strom:bildschirmAn', sicher(async () => wecken()));
   ipcMain.handle('app:beenden', sicher(async () => { app.exit(0); return { ok: true }; }));
-  ipcMain.handle('app:neustart', sicher(async () => { app.relaunch(); app.exit(0); return { ok: true }; }));
+  // Unter dem Wächter-Skript zentraleos-shell: Code 75 heisst «sofort neu starten» (kein Absturz, keine Notfall-Sperre).
+  ipcMain.handle('app:neustart', sicher(async () => { if (process.env.ZOS_SHELL_SKRIPT === '1') { setTimeout(() => app.exit(75), 150); return { ok: true }; } app.relaunch(); app.exit(0); return { ok: true }; }));
   ipcMain.handle('app:linkOeffnen', sicher(async (_e, url) => {
     if (!/^https?:/i.test(String(url))) return { ok: false, fehler: 'Nur http/https' };
     await shell.openExternal(url);
@@ -484,7 +485,7 @@ function systemIpc() {
   h('firewall', system.firewallLesen);
   h('firewallSetzen', nurOffen(async (k, pw) => klein(await system.firewallSetzen(k, { passwort: pw }))));
   // Feste Root-Aktionen; alles andere lehnt der Helfer ab.
-  const ROOT = ['pruefen', 'firewall-bestaetigen', 'firewall-zuruecknehmen', 'firewall-zustand', 'firewall-protokoll', 'ports', 'ssh', 'zeitzone', 'ntp', 'hostname', 'tastatur', 'updates-suchen', 'updates-einspielen', 'auto-updates', 'paket-installieren', 'protokoll', 'tailscale-anmelden', 'energie'];
+  const ROOT = ['pruefen', 'firewall-bestaetigen', 'firewall-zuruecknehmen', 'firewall-zustand', 'firewall-protokoll', 'ports', 'ssh', 'zeitzone', 'ntp', 'hostname', 'tastatur', 'updates-suchen', 'updates-einspielen', 'zos-neu-laden', 'zos-zurueck', 'zos-stand', 'auto-updates', 'paket-installieren', 'protokoll', 'tailscale-anmelden', 'energie'];
   h('root', nurOffen(async (aktion, args, pw) => (ROOT.includes(aktion) ? klein(await system.alsRoot(aktion, args || [], { passwort: pw, timeout: 30 * 60_000 })) : { ok: false, fehler: 'Nicht erlaubt' })));
   h('passwortAendern', nurOffen(async (neu, pw) => klein(await system.alsRoot('passwort', [], { passwort: pw, eingabe: `${require('node:os').userInfo().username}:${String(neu).replace(/[\r\n]/g, '')}\n` }))));
   h('rootVergessen', async () => { system.rootVergessen(); return { ok: true }; });
@@ -528,7 +529,7 @@ function systemIpc() {
   m('standardApps', mehr.standardApps); m('standardAppSetzen', nurOffen(mehr.standardAppSetzen));
   m('appRechte', mehr.appRechte); m('appRechtSetzen', nurOffen(async (id, r, an) => klein(await mehr.appRechtSetzen(id, r, an))));
   m('tonProgramme', mehr.tonProgramme); m('tonProgrammSetzen', async (id, p) => klein(await mehr.tonProgrammSetzen(id, p)));
-  m('anonymCheck', nurOffen(mehr.anonymCheck)); m('metadatenWeg', nurOffen(mehr.metadatenWeg));
+  m('osStand', mehr.osStand); m('anonymCheck', nurOffen(mehr.anonymCheck)); m('metadatenWeg', nurOffen(mehr.metadatenWeg));
   m('rootMehr', nurOffen(async (aktion, args, pw) => (['ssh-fern', 'update-fenster', 'usb-erlauben', 'usb-sperren', 'schnappschuss-liste', 'schnappschuss-erstellen', 'schnappschuss-loeschen', 'schnappschuss-zurueck', 'firmware-suchen', 'firmware-einspielen', 'aufraeumen', 'pruefung-jetzt', 'ip-entsperren'].includes(aktion) ? klein(await system.alsRoot(aktion, args || [], { passwort: pw, timeout: 30 * 60_000 })) : { ok: false, fehler: 'Nicht erlaubt' })));
   m('tpmBinden', nurOffen(async (wiederherstellung, pw) => klein(await system.alsRoot('tpm-binden', [], { passwort: pw, eingabe: String(wiederherstellung || ''), timeout: 5 * 60_000 }))));
   m('desktopTaste', nurOffen(async (richtung) => klein(await system.lauf('wtype', ['-M', 'ctrl', '-M', 'logo', '-k', richtung === 'links' ? 'Left' : 'Right'], { timeout: 4000 }))));

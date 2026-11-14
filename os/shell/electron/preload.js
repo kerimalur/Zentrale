@@ -89,7 +89,7 @@ contextBridge.exposeInMainWorld('zentrale', {
   mehr: Object.fromEntries(['ablageListe', 'ablageNehmen', 'ablageLeeren', 'papierkorb', 'papierkorbZurueck', 'papierkorbLeeren', 'fotos', 'datentraeger', 'ordnerAnalyse', 'einhaengen', 'aushaengen', 'smart',
     'sicherheit', 'netz', 'netzVergessen', 'botStand', 'botPruefen', 'meldeTest', 'backupSchluessel', 'backupJetzt', 'schlafen', 'fokusStart', 'fokusEnde', 'fokusStand',
     'installPlatten', 'installieren', 'installStand', 'energie', 'fernzugriff', 'rootMehr', 'desktopTaste', 'fensterKlein', 'tpmBinden',
-    'meldungen', 'waechterStand', 'nachtlicht', 'standardApps', 'standardAppSetzen', 'appRechte', 'appRechtSetzen', 'tonProgramme', 'tonProgrammSetzen', 'anonymCheck', 'metadatenWeg'].map((name) => [name, (...args) => r('mehr:' + name, ...args)])),
+    'meldungen', 'waechterStand', 'nachtlicht', 'standardApps', 'standardAppSetzen', 'appRechte', 'appRechtSetzen', 'tonProgramme', 'tonProgrammSetzen', 'anonymCheck', 'metadatenWeg', 'osStand'].map((name) => [name, (...args) => r('mehr:' + name, ...args)])),
 
   // System
   system: {

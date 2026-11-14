@@ -3,7 +3,7 @@
 //   node systemtest.cjs <ausgabeordner>      (CDP_PORT, HTTP_PORT, ADMIN_PW, LANGSAM über Umgebungsvariablen)
 const http = require('http'); const fs = require('fs'); const path = require('path');
 const AUS = process.argv[2] || '.'; const CDP = process.env.CDP_PORT || 9223; const HTTP_PORT = process.env.HTTP_PORT || 8099;
-const PW = process.env.ADMIN_PW || 'zentrale'; const LANGSAM = Number(process.env.LANGSAM || 1);
+const PW = process.env.ADMIN_PW || '1234'; const LANGSAM = Number(process.env.LANGSAM || 1);
 const warte = (ms) => new Promise((r) => setTimeout(r, ms * LANGSAM));
 const zeilen = []; let fehler = 0;
 function pruefe(name, ok, detail = '') { if (!ok) fehler++; const z = `${ok ? 'OK     ' : 'FEHLER '} ${name}${detail ? '  [' + String(detail).replace(/\s+/g, ' ').slice(0, 160) + ']' : ''}`; zeilen.push(z); console.log(z); }
@@ -121,6 +121,8 @@ async function verbinden() {
     f.leiste.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, clientX: l.left + 300, clientY: l.top + 10 })); document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: l.left + 340, clientY: l.top + 90 })); const geloest = !f.gezoomt; document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: window.innerWidth - 3, clientY: 400 })); document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: window.innerWidth - 3, clientY: 400 })); await warte(300);
     const rechts = f.eingerastet === 'rechts' && Math.abs(f.breite - window.innerWidth / 2) < 30; Einrasten.setzen(f, 'd2'); const drittel = Math.abs(f.breite - window.innerWidth / 3) < 30; return { offen: true, voll, geloest, rechts, drittel }`);
   pruefe('Ein Klick auf ein Schreibtisch-Symbol öffnet das Programm', r.offen === true);
+  r = await js(`FM.schliessenAlle(); await warte(300); const z = [...document.querySelectorAll('.fl-symbol, .fl-widget')].filter((e) => e.getBoundingClientRect().width); return { anzahl: z.length, verdeckt: z.filter((e) => { const b = e.getBoundingClientRect(); const t = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return !e.contains(t); }).map((e) => e.className.slice(0, 30) + ' unter ' + String((document.elementFromPoint(e.getBoundingClientRect().left + 5, e.getBoundingClientRect().top + 5) || {}).className || '?').slice(0, 30)) }`);
+  pruefe('Symbole und Widgets liegen frei (die Maus erreicht sie, nichts liegt darüber)', r.anzahl > 0 && r.verdeckt.length === 0, JSON.stringify(r));
   pruefe('Fenster: aus dem Vollbild ziehen, am Rand einrasten (Hälfte), Drittel', r.voll && r.geloest && r.rechts && r.drittel, JSON.stringify(r));
 
   // --- Neue Programme und Funktionen (Aufgabenliste vom 12.11.) ---
@@ -180,6 +182,15 @@ async function verbinden() {
   // --- Flatpak (braucht Internet) ---
   r = await js(`const a = await Z.sys.flatpakSuche('calculator'); return { ok: a.ok, anzahl: (a.liste || []).length, fehler: a.fehler }`);
   if (r.ok && r.anzahl > 0) pruefe('Software: Flathub-Suche liefert Treffer', true, r.anzahl + ' Treffer'); else hinweis('Software: Flathub-Suche NICHT geprüft (kein Internet in der Test-VM?)', JSON.stringify(r));
+
+  // --- Updates von ZentraleOS selbst (aus GitHub, ohne Stick) ---
+  r = await js(`const s = await Z.mehr.osStand(); const a = await Z.sys.root('updates-suchen', [], '${PW}'); return { s, aus: String(a.aus || a.fehler || '').slice(0, 500) }`);
+  pruefe('ZentraleOS-Version bekannt (Stand vom Bau)', /^[0-9a-f]{7}$/.test(r.s?.kennung || ''), JSON.stringify(r.s));
+  pruefe('«Nach Updates suchen» fragt auch GitHub nach ZentraleOS', /ZentraleOS (ist .*aktuell|: neue Version)/.test(r.aus), r.aus);
+  r = await js(`const a = await Z.sys.root('zos-neu-laden', [], '${PW}'); const s = await Z.mehr.osStand(); return { aus: String(a.aus || a.fehler || ''), s }`);
+  pruefe('ZentraleOS-Update: lädt aus GitHub, prüft und spielt ein', /ZentraleOS aktualisiert auf/.test(r.aus) && /ZOS-NEUSTART/.test(r.aus), String(r.aus || JSON.stringify(r)).slice(-300));
+  r = await js(`const a = await Z.sys.root('zos-zurueck', [], '${PW}'); return String(a.aus || a.fehler || '')`);
+  pruefe('ZentraleOS-Update rückgängig machen', /wiederhergestellt/.test(String(r)), String(r).slice(-200));
 
   // --- Sperren, Fernbefehl ---
   r = await js(`await fetchSperre(); async function fetchSperre() { await Z.sperren({ bildschirmAus: false }); } await warte(1500); return { gesperrt: !document.querySelector('#sperre').hidden, fremdSichtbar: (await Z.sys.fremdeFenster()).liste.length }`);

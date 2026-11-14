@@ -404,7 +404,14 @@ function starten({ hinweis }) {
   nachtlicht();
 }
 
+// Welche Version von ZentraleOS läuft (wird beim Bauen und bei jedem Update geschrieben)
+async function osStand() {
+  const z = lies('/opt/zentraleos/stand').split('\n');
+  return { ok: true, kennung: (z[0] || '').slice(0, 7), datum: z[1] || '', text: z[2] || '' };
+}
+
 module.exports = {
+  osStand,
   starten, socketStarten, ablageListe, ablageNehmen, ablageLeeren, papierkorb, papierkorbZurueck, papierkorbLeeren, fotos,
   datentraeger, ordnerAnalyse, einhaengen, aushaengen, smart, sicherheit, netz, netzVergessen, botStand, botPruefen, melden,
   backupSchluessel, backupJetzt, allesBeenden, fokusStart, fokusEnde, fokusStand, installPlatten, installieren, installStand, energie, fernzugriff,

@@ -35,8 +35,16 @@ case "${1:-}" in
   tastatur)
     case "$2" in *[!a-z]*) exit 2;; esac
     sed -i "s/^XKBLAYOUT=.*/XKBLAYOUT=\"$2\"/" /etc/default/keyboard ;;
-  updates-suchen) apt-get update -q 2>&1 | tail -3; apt list --upgradable 2>/dev/null | tail -n +2 ;;
-  updates-einspielen) DEBIAN_FRONTEND=noninteractive apt-get -y -q dist-upgrade 2>&1 | tail -15 ;;
+  updates-suchen)
+    /usr/libexec/zentraleos/os-update suchen; echo
+    echo "Debian-Pakete:"; apt-get update -q >/dev/null 2>&1 || echo "  Paketquellen nicht erreichbar"
+    p="$(apt list --upgradable 2>/dev/null | tail -n +2)"; [ -n "$p" ] && echo "$p" | head -40 || echo "  alle aktuell" ;;
+  updates-einspielen)
+    /usr/libexec/zentraleos/os-update einspielen; echo
+    echo "Debian-Pakete:"; DEBIAN_FRONTEND=noninteractive apt-get -y -q dist-upgrade 2>&1 | tail -8 ;;
+  zos-neu-laden) /usr/libexec/zentraleos/os-update einspielen neu ;;
+  zos-zurueck) /usr/libexec/zentraleos/os-update zurueck ;;
+  zos-stand) /usr/libexec/zentraleos/os-update stand ;;
   auto-updates)
     printf 'APT::Periodic::Update-Package-Lists "%s";\nAPT::Periodic::Unattended-Upgrade "%s";\n' "$2" "$2" > /etc/apt/apt.conf.d/20auto-upgrades ;;
   paket-installieren)

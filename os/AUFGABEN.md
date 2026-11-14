@@ -102,3 +102,11 @@ Im Moment nicht: Trading-Cockpit, Wirtschaftskalender, Journal, Modi. Gestrichen
 | Zentrale (Pi) | Endpunkt für Meldungen des HP in PR #2 |
 
 Was der VM-Test davon wirklich prüft, steht im Ergebnis des GitHub-Laufs (vm-test → ergebnis.txt und systemtest.txt).
+
+## Runde 14.11. (Live-Test vom Stick)
+
+| # | Wunsch / Fehler | Stand |
+|---|---|---|
+| 1 | Symbole und Widgets auf dem Schreibtisch reagieren nicht auf die Maus | Ursache: die Fensterfläche lag unsichtbar darüber. Behoben; der Test prüft jetzt mit echter Treffererkennung (nicht mehr mit einem künstlichen Klick aufs Element). |
+| 2 | Updates ohne neuen Stick | «Nach Updates suchen» und «Updates einspielen» holen jetzt auch ZentraleOS selbst aus GitHub (Oberfläche, Wächter, Helfer, eigene Dienste, Fensterregeln). Vor dem Einspielen: Syntaxprüfung aller Dateien, Sicherung des alten Stands; danach startet nur die Oberfläche neu. Dazu «Neu laden» und «Zurück zur vorherigen Version». Braucht eine neue Version andere Bausteine (z. B. Electron), sagt das Update das und ändert nichts. Live vom Stick gilt ein Update nur bis zum Ausschalten. |
+| 3 | Administrator-Passwort im Live-System unbekannt | Live-System: jetzt **1234** (wie der Demo-Code), der Passwort-Dialog sagt es im Live-System dazu. Nach der Installation gilt das Passwort, das du bei der Installation festlegst. |

@@ -143,7 +143,7 @@ nach Hause telefoniert, auch ein Schadprogramm oder ein Windows-Programm unter W
 
 ### 3.6 Admin-Rechte nur mit Sicherheitsschlüssel *(S, wenn du einen YubiKey kaufst)*
 `pam-u2f`: Root-Rechte und die Entsperrung nach einem Neustart zusätzlich nur mit eingestecktem YubiKey. Das
-Live-Passwort `zentrale` gilt nach der Installation nicht mehr – dort setzt du dein eigenes.
+Live-Passwort `1234` gilt nach der Installation nicht mehr – dort setzt du dein eigenes.
 
 ### 3.7 Programme einsperren *(M)*
 AppArmor-Profile für Brave, die Oberfläche und **besonders für MT5 unter Wine** (Windows-Programme sollen nicht

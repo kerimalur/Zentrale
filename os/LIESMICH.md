@@ -25,7 +25,7 @@ Die ehrliche Liste steht unten.
 2. Im Bootmenü startet nach 5 Sekunden «ZentraleOS starten». Bleibt der Bildschirm schwarz: neu starten und
    «sicherer Grafikmodus» wählen.
 3. Anmeldebildschirm: Taste drücken, PIN **1234** (Demo-Modus). Passwort-Rückfall im Demo-Modus: `demo`.
-4. Systembenutzer im Live-System: `zentrale`, Administrator-Passwort `zentrale`.
+4. Systembenutzer im Live-System: `zentrale`, Administrator-Passwort `1234`.
 
 Vom Stick gestartet wird die SSD nicht angefasst. Alles, was du änderst, ist nach dem Neustart weg.
 
