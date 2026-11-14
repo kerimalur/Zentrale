@@ -9,6 +9,9 @@ grep -qw zos.test /proc/cmdline && systemd-detect-virt -q --vm && ARGS="$ARGS --
 while true; do
   n=0; anfang=$(date +%s)
   while [ $n -lt 6 ]; do
+    # Testmodus: nach einem gewollten Neustart warten, bis der DevTools-Port frei ist (sonst ist die neue Shell für Tests unsichtbar)
+    case "$ARGS" in *remote-debugging-port*) for _ in $(seq 1 40); do ss -ltnH 'sport = :9222' 2>/dev/null | grep -q . || break; sleep 0.5; done
+      ss -ltnpH 'sport = :9222' 2>/dev/null | sed 's/^/port-9222 noch belegt: /' >>"${XDG_RUNTIME_DIR:-/tmp}/shell.log";; esac
     ZOS_SHELL_SKRIPT=1 "$E" /opt/zentraleos/shell $ARGS >>"${XDG_RUNTIME_DIR:-/tmp}/shell.log" 2>&1
     rc=$?
     [ $rc -eq 0 ] && exit 0

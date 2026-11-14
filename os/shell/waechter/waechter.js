@@ -171,7 +171,7 @@ async function sperren(ip, dauer = '24h') {
   const set = ip.includes(':') ? 'gesperrt6' : 'gesperrt4';
   const r = await lauf('nft', ['add', 'element', 'inet', 'zentraleos', set, `{ ${ip} timeout ${dauer} }`]);
   if (r.ok) { zustand.gesperrt = [{ ip, bis: Date.now() + 24 * 3600_000 }, ...zustand.gesperrt.filter((x) => x.ip !== ip && x.bis > Date.now())].slice(0, 50); }
-  return r.ok;
+  return r.ok ? true : String(r.fehler || r.aus || 'nft-Fehler').trim().split('\n')[0].slice(0, 160);
 }
 function kernelZeile(z) {
   const m = z.match(/ZOS-VERWORFEN .*?SRC=(\S+) .*?PROTO=(\w+)(?:.*?DPT=(\d+))?/); if (!m) return;
@@ -181,8 +181,10 @@ function kernelZeile(z) {
   if (ports.size >= 8 && !liste.gemeldet) {
     liste.gemeldet = true;
     const aus = istAusgenommen(ip);
-    melden('alarm', 'firewall', `Portscan von ${ip}: ${ports.size} Ports in einer Minute probiert${aus ? ' (Adresse ist ausgenommen, nicht gesperrt)' : ' – für 24 Stunden gesperrt'}.`, { schluessel: 'scan:' + ip });
-    if (!aus) sperren(ip);
+    (aus ? Promise.resolve(null) : sperren(ip).then(async (e) => (e === true ? e : (await new Promise((w) => setTimeout(w, 2000)), sperren(ip))))).then((e) => {
+      const wie = aus ? ' (Adresse ist ausgenommen, nicht gesperrt)' : e === true ? ' – für 24 Stunden gesperrt' : ` – Sperren fehlgeschlagen: ${e}`;
+      melden('alarm', 'firewall', `Portscan von ${ip}: ${ports.size} Ports in einer Minute probiert${wie}.`, { schluessel: 'scan:' + ip });
+    });
   }
   if (proSender.size > 2000) proSender.clear();
 }
